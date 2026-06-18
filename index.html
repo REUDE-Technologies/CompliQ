@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complique | Wind Turbine Inspection AI Platform</title>
+  <meta name="description" content="Complique Technologies — AI-driven drone inspection platform for wind turbine blade defect detection, fleet management, and predictive maintenance.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing.css">
+</head>
+<body>
+
+  <!-- SPLASH SCREEN INTRO -->
+  <div class="splash-screen" id="splash-screen">
+    <div class="splash-content">
+      <img src="images/complique_logo.png" alt="Complique Logo" class="splash-logo">
+      <h1 class="splash-title">COMPLIQUE</h1>
+      <p class="splash-subtitle">Blade Inspect AI</p>
+      <div class="splash-loader">
+        <div class="loader-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PARTICLE CANVAS BACKGROUND -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- AUTH MODAL OVERLAY -->
+  <div class="auth-overlay" id="auth-overlay">
+    <div class="auth-modal" id="auth-modal">
+      <button class="auth-close" id="auth-close">✕</button>
+      
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" data-tab="login">Sign In</button>
+        <button class="auth-tab" id="tab-register" data-tab="register">Create Account</button>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <div class="auth-form active" id="form-login">
+        <div class="auth-brand">
+          <div class="auth-logo">
+            <svg viewBox="0 0 40 40" fill="none">
+              <path d="M20 4 L32 16 L26 16 L26 36 L14 36 L14 16 L8 16 Z" fill="none" stroke="url(#ag1)" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="20" cy="20" r="4" fill="#964734"/>
+              <defs>
+                <linearGradient id="ag1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#0FA4AF"/>
+                  <stop offset="100%" stop-color="#AFDDE5"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div>
+            <h2>Welcome Back</h2>
+            <p>Sign in to Complique Inspection Platform</p>
+          </div>
+        </div>
+        <form id="login-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="login-email" placeholder="operator@reude.com" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="login-password" placeholder="Enter password" required>
+              <button type="button" class="pwd-toggle" onclick="togglePwd('login-password')">👁</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="remember-me"> Remember me
+            </label>
+            <a href="#" class="forgot-link">Forgot password?</a>
+          </div>
+          <button type="submit" class="auth-btn primary">
+            <span>Sign In to Dashboard</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+          <p class="auth-switch">Don't have an account? <a href="#" onclick="switchAuthTab('register')">Register here</a></p>
+        </form>
+        <!-- Demo credentials hint -->
+        <div class="demo-hint">
+          <span>Demo:</span> admin@reude.com / password123
+        </div>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div class="auth-form" id="form-register">
+        <div class="auth-brand">
+          <div class="auth-logo">
+            <svg viewBox="0 0 40 40" fill="none">
+              <path d="M20 4 L32 16 L26 16 L26 36 L14 36 L14 16 L8 16 Z" fill="none" stroke="url(#ag2)" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="20" cy="20" r="4" fill="#964734"/>
+              <defs>
+                <linearGradient id="ag2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#0FA4AF"/>
+                  <stop offset="100%" stop-color="#AFDDE5"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div>
+            <h2>Join Complique</h2>
+            <p>Create your operator account</p>
+          </div>
+        </div>
+        <form id="register-form" onsubmit="handleRegister(event)">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>First Name</label>
+              <input type="text" id="reg-fname" placeholder="John" required>
+            </div>
+            <div class="form-group">
+              <label>Last Name</label>
+              <input type="text" id="reg-lname" placeholder="Smith" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Organisation / Wind Farm</label>
+            <input type="text" id="reg-org" placeholder="Green Energy Ltd." required>
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="reg-email" placeholder="you@company.com" required>
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <select id="reg-role">
+              <option>Fleet Operator</option>
+              <option>Maintenance Engineer</option>
+              <option>Data Analyst</option>
+              <option>Site Manager</option>
+              <option>Administrator</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="reg-password" placeholder="Min 8 characters" required minlength="8">
+              <button type="button" class="pwd-toggle" onclick="togglePwd('reg-password')">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" required> I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+            </label>
+          </div>
+          <button type="submit" class="auth-btn primary">
+            <span>Create Account</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+          <p class="auth-switch">Already have an account? <a href="#" onclick="switchAuthTab('login')">Sign in</a></p>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <svg class="nav-logo-svg" viewBox="0 0 40 40" fill="none">
+          <path d="M20 4 L32 16 L26 16 L26 36 L14 36 L14 16 L8 16 Z" fill="none" stroke="url(#navgrad)" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="20" cy="20" r="4" fill="#964734"/>
+          <defs>
+            <linearGradient id="navgrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0FA4AF"/>
+              <stop offset="100%" stop-color="#AFDDE5"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="nav-brand-text">
+          <span class="brand-title">COMPLIQUE</span>
+          <span class="brand-sub">BLADE INSPECT AI</span>
+        </div>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#home" class="nav-link active">Home</a></li>
+        <li><a href="#about" class="nav-link">About</a></li>
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#contact" class="nav-link">Contact</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="btn-outline" onclick="openAuth('login')">Sign In</button>
+        <button class="btn-primary" onclick="openAuth('register')">Get Started</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ============================
+       HERO SECTION
+  ============================= -->
+  <section class="hero-section" id="home">
+    <div class="hero-bg">
+      <img src="images/hero_bg.png" alt="Wind farm aerial view" class="hero-bg-img" id="hero-parallax">
+      <div class="hero-overlay"></div>
+      <!-- Animated grid overlay -->
+      <div class="hero-grid"></div>
+    </div>
+
+    <!-- Floating turbine silhouettes -->
+    <div class="turbine-float float-left">
+      <div class="turbine-mini" style="--speed:8s">
+        <div class="t-mast"></div>
+        <div class="t-hub"><div class="t-blade"></div><div class="t-blade"></div><div class="t-blade"></div></div>
+      </div>
+    </div>
+    <div class="turbine-float float-right">
+      <div class="turbine-mini" style="--speed:12s">
+        <div class="t-mast"></div>
+        <div class="t-hub"><div class="t-blade"></div><div class="t-blade"></div><div class="t-blade"></div></div>
+      </div>
+    </div>
+
+    <div class="hero-content">
+      <div class="hero-badge animate-fade-up">
+        <span class="badge-dot"></span>
+        AI-Powered Industrial Inspection Platform
+      </div>
+      <h1 class="hero-title animate-fade-up" style="animation-delay:0.15s">
+        From Raw Data to<br>
+        <span class="title-gradient">Decision-Ready</span><br>
+        Dashboards
+      </h1>
+      <p class="hero-desc animate-fade-up" style="animation-delay:0.3s">
+        Complique's end-to-end wind turbine blade inspection platform transforms drone imagery into actionable maintenance intelligence — with computer vision, real-time telemetry, and AI-assisted analysis.
+      </p>
+      <div class="hero-actions animate-fade-up" style="animation-delay:0.45s">
+        <button class="btn-hero-primary" onclick="openAuth('register')">
+          Launch Platform
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+        <a href="#features" class="btn-hero-outline">
+          Explore Features
+        </a>
+      </div>
+
+      <!-- Animated Stats Row -->
+      <div class="hero-stats animate-fade-up" style="animation-delay:0.6s">
+        <div class="stat-item">
+          <span class="stat-number" data-target="98.2">0</span><span>%</span>
+          <span class="stat-label">Fleet Coverage</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number" data-target="1000">0</span><span>+</span>
+          <span class="stat-label">Annotated Images</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number" data-target="200">0</span><span>ms</span>
+          <span class="stat-label">P95 API Latency</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-number" data-target="6">0</span>
+          <span class="stat-label">Active Turbines</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-scroll-indicator">
+      <div class="scroll-mouse"><div class="scroll-dot"></div></div>
+      <span>Scroll to Explore</span>
+    </div>
+  </section>
+
+  <!-- ============================
+       ABOUT SECTION
+  ============================= -->
+  <section class="about-section" id="about">
+    <div class="section-container">
+      <div class="section-label">Who We Are</div>
+      <h2 class="section-title">Powering the Future of<br><span class="accent-text">Wind Energy Inspection</span></h2>
+
+      <div class="about-grid">
+        <div class="about-visual">
+          <div class="about-image-stack">
+            <img src="images/turbine_teal.png" alt="Wind Turbine" class="about-img-main reveal-left">
+            <div class="about-img-card reveal-right">
+              <img src="images/turbine_inspect_rgb.png" alt="Blade Inspection">
+              <div class="card-label">RGB Inspection Mode</div>
+            </div>
+            <div class="about-img-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9.09 9 1-1a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/></svg>
+              AI-Powered
+            </div>
+          </div>
+        </div>
+
+        <div class="about-content reveal-right">
+          <p class="about-lead">Complique Technologies is an AI-driven hardware-software company with a mission: make the invisible visible, faster and safer than ever before.</p>
+          <p class="about-text">Our wind turbine blade inspection platform bridges the gap between drone-captured raw imagery and actionable operator intelligence. We combine computer vision, edge AI, and structured telemetry pipelines to surface defects at scale — before they become failures.</p>
+
+          <div class="about-pillars">
+            <div class="pillar">
+              <div class="pillar-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6s+.5-2 2.5-4l3.5 3.5-1.5 1.5L8 9l2-1 1.5 1.5-1 1L12 12l2.5-1.5L16 12l2-2-1.5-1.5 1.5-1.5L21.5 10.5"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+              <div>
+                <h4>Autonomous UAV Systems</h4>
+                <p>Fully automated inspection campaigns with sub-10mm resolution imagery.</p>
+              </div>
+            </div>
+            <div class="pillar">
+              <div class="pillar-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div>
+                <h4>Edge Intelligence</h4>
+                <p>Onboard AI model inference with < 200ms decision latency at the edge.</p>
+              </div>
+            </div>
+            <div class="pillar">
+              <div class="pillar-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <div>
+                <h4>Predictive Analytics</h4>
+                <p>Temporal defect progression modeling and maintenance prioritization.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================
+       FEATURES SECTION
+  ============================= -->
+  <section class="features-section" id="features">
+    <div class="features-bg-img">
+      <img src="images/drone_inspection.png" alt="Drone Inspection">
+    </div>
+    <div class="section-container">
+      <div class="section-label">Platform Capabilities</div>
+      <h2 class="section-title">Everything You Need to<br><span class="accent-text">Inspect, Analyse, Decide</span></h2>
+
+      <div class="features-grid">
+
+        <div class="feature-card reveal-up" style="--delay:0s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          </div>
+          <h3>Fleet Overview Dashboard</h3>
+          <p>Real-time monitoring of all turbine assets with health indices, MQTT telemetry streams, and alert triaging across your entire wind farm.</p>
+          <div class="feature-tag">Live Monitoring</div>
+        </div>
+
+        <div class="feature-card reveal-up" style="--delay:0.1s">
+          <div class="feature-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <h3>Downloadable PDF Reports</h3>
+          <p>Generate comprehensive engineering assessment reports per asset, complete with defect maps, severity ratings, evidence images, and dispatch orders.</p>
+          <div class="feature-tag orange">PDF Export</div>
+        </div>
+
+        <div class="feature-card reveal-up" style="--delay:0.2s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h3>Real-Time Data Ingestion</h3>
+          <p>Upload your own drone imagery, thermal scans, and telemetry JSON payloads. The platform parses and maps your data to the live fleet state instantly.</p>
+          <div class="feature-tag">Live Upload</div>
+        </div>
+
+        <div class="feature-card reveal-up" style="--delay:0.3s">
+          <div class="feature-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <h3>AI Natural-Language Queries</h3>
+          <p>Ask the platform in plain English: "Show cracks on Turbine 2 from last 30 days." The AI engine translates and returns structured results from your live data.</p>
+          <div class="feature-tag orange">AI Copilot</div>
+        </div>
+
+        <div class="feature-card reveal-up" style="--delay:0.4s">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <h3>Interactive Blade Schematics</h3>
+          <p>3D-style SVG blade viewer with clickable defect hotspots. Toggle between RGB and thermal mode overlays with smooth crossfade transitions.</p>
+          <div class="feature-tag">Visual Explorer</div>
+        </div>
+
+        <div class="feature-card reveal-up" style="--delay:0.5s">
+          <div class="feature-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <h3>Manual Data Entry Portal</h3>
+          <p>Enter turbine specifications, GPS coordinates, inspection observations, and custom defect classifications directly without needing API integration.</p>
+          <div class="feature-tag orange">Data Entry</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================
+       STATS / SCROLLING TICKER SECTION
+  ============================= -->
+  <section class="ticker-section">
+    <div class="ticker-wrapper">
+      <div class="ticker-track">
+        <span>Fleet Health Monitoring</span> <span class="ticker-dot">◆</span>
+        <span>Blade Defect Detection</span> <span class="ticker-dot">◆</span>
+        <span>Thermal Imaging Analysis</span> <span class="ticker-dot">◆</span>
+        <span>MQTT Telemetry Streams</span> <span class="ticker-dot">◆</span>
+        <span>PDF Report Generation</span> <span class="ticker-dot">◆</span>
+        <span>AI-Assisted NLP Queries</span> <span class="ticker-dot">◆</span>
+        <span>DVC Dataset Versioning</span> <span class="ticker-dot">◆</span>
+        <span>SAM-Assisted Annotation</span> <span class="ticker-dot">◆</span>
+        <span>Edge Intelligence</span> <span class="ticker-dot">◆</span>
+        <!-- Repeat for seamless loop -->
+        <span>Fleet Health Monitoring</span> <span class="ticker-dot">◆</span>
+        <span>Blade Defect Detection</span> <span class="ticker-dot">◆</span>
+        <span>Thermal Imaging Analysis</span> <span class="ticker-dot">◆</span>
+        <span>MQTT Telemetry Streams</span> <span class="ticker-dot">◆</span>
+        <span>PDF Report Generation</span> <span class="ticker-dot">◆</span>
+        <span>AI-Assisted NLP Queries</span> <span class="ticker-dot">◆</span>
+        <span>DVC Dataset Versioning</span> <span class="ticker-dot">◆</span>
+        <span>SAM-Assisted Annotation</span> <span class="ticker-dot">◆</span>
+        <span>Edge Intelligence</span> <span class="ticker-dot">◆</span>
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- ============================
+       CONTACT SECTION
+  ============================= -->
+  <section class="contact-section" id="contact">
+    <div class="section-container">
+      <div class="section-label">Get In Touch</div>
+      <h2 class="section-title">Contact <span class="accent-text">Complique Technologies</span></h2>
+
+      <div class="contact-grid">
+        <div class="contact-info reveal-left">
+          <p class="contact-lead">Ready to transform your wind farm inspection operations? Get in touch with our team for a platform demo or technical inquiry.</p>
+
+          <div class="contact-details">
+            <div class="contact-item">
+              <div class="contact-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              </div>
+              <div>
+                <span class="contact-label">Email</span>
+                <a href="mailto:inspect@reude.tech">inspect@reude.tech</a>
+              </div>
+            </div>
+            <div class="contact-item">
+              <div class="contact-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.62 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.18 6.18l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </div>
+              <div>
+                <span class="contact-label">Phone</span>
+                <a href="tel:+919876543210">+91 98765 43210</a>
+              </div>
+            </div>
+            <div class="contact-item">
+              <div class="contact-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div>
+                <span class="contact-label">Headquarters</span>
+                <span>Complique Technologies Pvt. Ltd., Bangalore, Karnataka, India</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="contact-form-wrap reveal-right">
+          <form id="contact-form" onsubmit="handleContactSubmit(event)">
+            <div class="form-row-2">
+              <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" placeholder="Your name" required>
+              </div>
+              <div class="form-group">
+                <label>Organisation</label>
+                <input type="text" placeholder="Company / Wind Farm">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" placeholder="you@company.com" required>
+            </div>
+            <div class="form-group">
+              <label>Subject</label>
+              <select>
+                <option>Platform Demo Request</option>
+                <option>Technical Integration Query</option>
+                <option>Dataset Partnership</option>
+                <option>General Inquiry</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Message</label>
+              <textarea rows="4" placeholder="Tell us about your wind farm and inspection needs..."></textarea>
+            </div>
+            <button type="submit" class="auth-btn primary">
+              <span>Send Message</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <svg viewBox="0 0 40 40" fill="none" width="36" height="36">
+          <path d="M20 4 L32 16 L26 16 L26 36 L14 36 L14 16 L8 16 Z" fill="none" stroke="#0FA4AF" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="20" cy="20" r="4" fill="#964734"/>
+        </svg>
+        <div>
+          <span class="footer-title">Complique Technologies</span>
+          <span class="footer-tagline">AI-Powered Wind Turbine Inspection</span>
+        </div>
+      </div>
+      <div class="footer-links">
+        <a href="#home">Home</a>
+        <a href="#about">About</a>
+        <a href="#features">Features</a>
+        <a href="#contact">Contact</a>
+        <a href="dashboard.html">Dashboard</a>
+      </div>
+      <div class="footer-copy">
+        <p>© 2026 Complique Technologies Pvt. Ltd. | Summer Internship Project | All Rights Reserved.</p>
+        <p>Mentors: Dr. Rajesh Kumar B • Ms. Keerthana R • Mr. Kandan V</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="landing.js"></script>
+</body>
+</html>
