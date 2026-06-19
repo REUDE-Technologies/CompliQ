@@ -2012,3 +2012,18 @@ body {
   opacity: 0;
   animation: splash-word-in 0.7s ease forwards 0.8s;
 }
+
+/* ── Remove dark grid from REUDE TECHNOLOGIES PNG using screen blend ── */
+img.splash-wordmark {
+  mix-blend-mode: screen !important;
+  filter: brightness(1.15) !important;
+  background: transparent !important;
+  width: 280px;
+}
+
+/* ── Make CompliQ BY label bigger ── */
+.splash-compliq-label {
+  font-size: 1.2rem !important;
+  letter-spacing: 4px;
+  font-weight: 900;
+}
