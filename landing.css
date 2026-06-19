@@ -2028,28 +2028,31 @@ img.splash-wordmark {
   font-weight: 900;
 }
 
-/* ── Splash top row: CompliQ by + transparent logo ── */
-.splash-top-row {
+/* ── Splash REUDE TECHNOLOGIES CSS text (no image) ── */
+.splash-reude-text {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
+  gap: 2px;
   opacity: 0;
-  animation: splash-word-in 0.6s ease forwards 0.2s;
+  animation: splash-word-in 0.7s ease forwards 0.9s;
 }
-.splash-compliq-label {
-  font-family: var(--font-ui) !important;
-  font-size: 1.6rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 3px !important;
-  color: #0FA4AF !important;
-  text-transform: none !important;
-  margin: 0 !important;
-  line-height: 1 !important;
+.splash-reude-big {
+  font-family: var(--font-ui);
+  font-size: 3.6rem;
+  font-weight: 900;
+  font-style: italic;
+  color: #FF7A00;
+  letter-spacing: 6px;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(255,122,0,0.6), 0 0 40px rgba(255,122,0,0.3);
 }
-.splash-inline-logo {
-  height: 56px;
-  width: auto;
-  object-fit: contain;
-  background: transparent;
+.splash-reude-sub {
+  font-family: var(--font-ui);
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-style: italic;
+  color: #FF7A00;
+  letter-spacing: 5px;
+  text-shadow: 0 0 12px rgba(255,122,0,0.4);
 }
