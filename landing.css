@@ -1736,11 +1736,24 @@ body {
 
 /* ── Navbar logo image ── */
 .nav-logo-img {
-  height: 44px;
+  height: 52px;
   width: auto;
   object-fit: contain;
   display: block;
 }
+
+/* ── "COMPLIQ by" text before logo ── */
+.nav-compliq-text {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  color: var(--c-teal);
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+[data-theme="light"] .nav-compliq-text { color: var(--c-teal); }
 
 /* ── Footer logo image ── */
 .footer-logo-img {
