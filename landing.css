@@ -1862,3 +1862,19 @@ body {
 .loader-bar {
   animation: load-progress 6.2s ease-out forwards 0.8s !important;
 }
+
+/* ── Footer "COMPLIQ by" + logo layout ── */
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.footer-compliq-text {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #0FA4AF;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
