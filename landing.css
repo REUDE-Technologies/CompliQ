@@ -1960,3 +1960,10 @@ body {
   text-transform: uppercase;
   margin: 0;
 }
+
+/* ── Splash wordmark: blend dark background away ── */
+.splash-wordmark {
+  mix-blend-mode: lighten;
+  filter: brightness(1.1) contrast(1.05);
+  background: transparent;
+}
