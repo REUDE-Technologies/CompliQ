@@ -1064,3 +1064,21 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   .view { padding: 12px; }
   .filter-btns { flex-wrap: wrap; }
 }
+
+/* ── Dashboard sidebar: COMPLIQ by + logo ── */
+.sidebar-compliq-text {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  color: var(--c-teal);
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+}
+.sidebar-logo-img {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+[data-theme="light"] .sidebar-logo-img { filter: none; }

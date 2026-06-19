@@ -15,11 +15,13 @@
   <!-- SPLASH SCREEN INTRO -->
   <div class="splash-screen" id="splash-screen">
     <div class="splash-content">
-      <p class="splash-compliq-label">COMPLIQ by</p>
+      <div class="splash-brand-row">
+        <p class="splash-compliq-label">COMPLIQ by</p>
+        <img src="images/reude-logo.png" alt="Reude Technologies" class="splash-wordmark">
+      </div>
       <div class="splash-logo-wrap">
         <img src="images/reude R logo.png" alt="Reude R" class="splash-r-spin">
       </div>
-      <img src="images/reude-logo.png" alt="Reude Logo" class="splash-wordmark">
       <p class="splash-subtitle">Blade Inspect AI</p>
       <div class="splash-loader">
         <div class="loader-bar"></div>
@@ -191,6 +193,7 @@
   <section class="hero-section" id="home">
     <div class="hero-bg">
       <video class="hero-bg-video" autoplay muted loop playsinline poster="images/hero_bg.png">
+        <source src="turbine-video.mp4" type="video/mp4">
         <source src="Video Project.mp4" type="video/mp4">
         <img src="images/hero_bg.png" alt="Wind farm aerial view" class="hero-bg-img">
       </video>
@@ -417,7 +420,7 @@
   <section class="contact-section" id="contact">
     <div class="section-container">
       <div class="section-label">Get In Touch</div>
-      <h2 class="section-title">Contact <span class="accent-text">Compliq by Reude Technologies</span></h2>
+      <h2 class="section-title">Contact Us </h2>
 
       <div class="contact-grid">
         <div class="contact-info reveal-left">
@@ -457,6 +460,7 @@
 
         <div class="contact-form-wrap reveal-right">
           <form id="contact-form" onsubmit="handleContactSubmit(event)">
+            <h3 class="contact-form-title">Book Your <span class="accent-text">Demo</span></h3>
             <div class="form-row-2">
               <div class="form-group">
                 <label>Full Name</label>

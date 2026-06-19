@@ -1871,10 +1871,39 @@ body {
 }
 .footer-compliq-text {
   font-family: var(--font-ui);
-  font-size: 0.82rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 3px;
   color: #0FA4AF;
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* ── Splash: COMPLIQ by + logo on one row ── */
+.splash-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.splash-brand-row .splash-compliq-label {
+  margin-bottom: 0;
+  font-size: 1rem;
+  letter-spacing: 3px;
+}
+.splash-brand-row .splash-wordmark {
+  width: 180px;
+  opacity: 0;
+  transform: none;
+  animation: splash-word-in 0.7s ease forwards 0.3s;
+}
+
+/* ── Contact form "Book Your Demo" title ── */
+.contact-form-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 24px;
+  line-height: 1.2;
+}
+[data-theme="light"] .contact-form-title { color: #063235; }
