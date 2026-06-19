@@ -1068,7 +1068,7 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 /* ── Dashboard sidebar: COMPLIQ by + logo ── */
 .sidebar-compliq-text {
   font-family: var(--font-ui);
-  font-size: 0.65rem;
+  font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 2.5px;
   color: var(--c-teal);
@@ -1077,7 +1077,7 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   line-height: 1;
 }
 .sidebar-logo-img {
-  height: 36px;
+  height: 60px;
   width: auto;
   object-fit: contain;
 }
