@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════
 // 1. SESSION & AUTH GATE
 // ══════════════════════════════════════════════════
-const SESSION_KEY = 'reude_session';
+const SESSION_KEY = 'compliq_session';
 
 function checkAuth() {
   const session = localStorage.getItem(SESSION_KEY);
@@ -135,6 +135,7 @@ let STATE = {
   db: null,
   selectedTurbineId: 1,
   selectedBlade: 'A',
+  selectedPart: 'blade-A',
   activeDefect: null,
   zoomLevel: 1,
   filterMode: 'all',
@@ -320,7 +321,7 @@ function renderAssetView() {
   populateTurbineSelector();
   const t = STATE.db.turbines.find(x => x.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
   renderTurbineInfo(t);
-  renderBlade(t, STATE.selectedBlade);
+  renderPartSchematic(t, STATE.selectedPart);
   renderDefectsTable(t);
 }
 
@@ -1701,4 +1702,30 @@ function initApp() {
 }
 
 // ── BOOT ──────────────────────────────────────
-window.addEventListener('DOMContentLoaded', checkAuth);
+window.addEventListener('DOMContentLoaded', () => {
+  checkAuth();
+  initTheme();
+});
+
+// ── THEME TOGGLE ──────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('site_theme') || 'dark';
+  applyDashTheme(saved);
+
+  const btn = document.getElementById('theme-toggle-dash');
+  if (btn) {
+    btn.textContent = saved === 'light' ? '🌙' : '☀️';
+    btn.addEventListener('click', () => {
+      const current = localStorage.getItem('site_theme') || 'dark';
+      const next = current === 'light' ? 'dark' : 'light';
+      localStorage.setItem('site_theme', next);
+      applyDashTheme(next);
+      btn.textContent = next === 'light' ? '🌙' : '☀️';
+    });
+  }
+}
+
+function applyDashTheme(theme) {
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+}

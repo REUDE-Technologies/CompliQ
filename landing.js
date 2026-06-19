@@ -1,7 +1,7 @@
 /* =============================================
-   Complique Landing Page — JavaScript
-   Splash Intro, Particles, Auth, Scroll Effects
-   ============================================= */
+  Compliq by Reude Technologies Landing Page — JavaScript
+  Splash Intro, Particles, Auth, Scroll Effects
+  ============================================= */
 
 // ── SPLASH SCREEN TIMER ───────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -19,8 +19,8 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── AUTH SYSTEM ──────────────────────────────
-const USERS_KEY = 'complique_users';
-const SESSION_KEY = 'complique_session';
+const USERS_KEY = 'compliq_users';
+const SESSION_KEY = 'compliq_session';
 
 function getUsers() {
   return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
@@ -63,7 +63,7 @@ function handleLogin(e) {
   const password = document.getElementById('login-password').value;
 
   // Allow demo account
-  const isDemoAccount = email === 'admin@complique.com' && password === 'password123';
+  const isDemoAccount = email === 'admin@reude.com' && password === 'password123';
   const users = getUsers();
   const found = users.find(u => u.email === email && u.password === password);
 
@@ -75,8 +75,8 @@ function handleLogin(e) {
   const userData = found || {
     firstName: 'Admin',
     lastName: 'Operator',
-    org: 'Complique Technologies',
-    email: 'admin@complique.com',
+    org: 'Reude Technologies',
+    email: 'admin@reude.com',
     role: 'Administrator'
   };
 
@@ -234,14 +234,7 @@ function updateActiveNavLink() {
   });
 }
 
-// ── PARALLAX HERO IMAGE ───────────────────────
-const heroImg = document.getElementById('hero-parallax');
-window.addEventListener('scroll', () => {
-  if (heroImg) {
-    const offset = window.scrollY;
-    heroImg.style.transform = `translateY(${offset * 0.35}px) scale(1.05)`;
-  }
-});
+// ── PARALLAX HERO IMAGE — disabled (video background) ────────────
 
 // ── INTERSECTION OBSERVER FOR REVEAL ─────────
 const revealObserver = new IntersectionObserver((entries) => {
@@ -300,23 +293,45 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
   });
 });
 
-// ── CHECK EXISTING SESSION ────────────────────
+// ── CHECK EXISTING SESSION + THEME INIT ──────
 window.addEventListener('DOMContentLoaded', () => {
   const session = localStorage.getItem(SESSION_KEY);
   if (session) {
     const userData = JSON.parse(session);
-    // Update nav to show user name and dashboard link
+    // Update nav to show user name and dashboard link without removing existing buttons (preserve theme toggle)
     const navActions = document.querySelector('.nav-actions');
     if (navActions) {
-      navActions.innerHTML = `
-        <div style="display:flex;align-items:center;gap:12px;">
+      const userHtml = `
+        <div style="display:flex;align-items:center;gap:12px;margin-left:8px;">
           <div style="width:34px;height:34px;border-radius:50%;background:var(--c-teal);color:var(--c-deep);font-weight:700;font-size:0.8rem;display:flex;align-items:center;justify-content:center;">
-            ${userData.firstName[0]}${userData.lastName ? userData.lastName[0] : ''}
+            ${userData.firstName ? userData.firstName[0] : ''}${userData.lastName ? userData.lastName[0] : ''}
           </div>
-          <span style="font-size:0.85rem;color:var(--c-sky);">${userData.firstName}</span>
+          <span style="font-size:0.85rem;color:var(--c-sky);">${userData.firstName || ''}</span>
           <a href="dashboard.html" style="background:var(--c-teal);color:var(--c-deep);padding:8px 18px;border-radius:8px;font-weight:700;font-size:0.85rem;text-decoration:none;">Dashboard →</a>
         </div>
       `;
+      navActions.insertAdjacentHTML('beforeend', userHtml);
     }
   }
+
+  // Theme initialization: apply saved theme and wire toggle button
+  const savedTheme = localStorage.getItem('site_theme') || 'dark';
+  applyTheme(savedTheme);
+
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) {
+    themeBtn.textContent = savedTheme === 'light' ? '🌙' : '☀️';
+    themeBtn.addEventListener('click', () => {
+      const current = localStorage.getItem('site_theme') || 'dark';
+      const next = current === 'light' ? 'dark' : 'light';
+      localStorage.setItem('site_theme', next);
+      applyTheme(next);
+      themeBtn.textContent = next === 'light' ? '🌙' : '☀️';
+    });
+  }
 });
+
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+}

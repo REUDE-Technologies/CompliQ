@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Complique | Inspection Dashboard</title>
-  <meta name="description" content="Complique Wind Turbine Blade Inspection — Fleet monitoring dashboard with real-time telemetry, defect analysis, and AI-assisted reporting.">
+  <title>Compliq by Reude Technologies | Inspection Dashboard</title>
+  <meta name="description" content="Compliq by Reude Technologies Wind Turbine Blade Inspection — Fleet monitoring dashboard with real-time telemetry, defect analysis, and AI-assisted reporting.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -27,7 +27,7 @@
         <defs><linearGradient id="gg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0FA4AF"/><stop offset="100%" stop-color="#AFDDE5"/></linearGradient></defs>
       </svg>
       <div>
-        <h1>Complique</h1>
+        <h1>COMPLIQ by Reude Technologies</h1>
         <span>Blade Inspect AI</span>
       </div>
     </div>
@@ -47,8 +47,8 @@
         <defs><linearGradient id="sb" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0FA4AF"/><stop offset="100%" stop-color="#AFDDE5"/></linearGradient></defs>
       </svg>
       <div class="brand-text">
-        <span class="brand-name">Complique</span>
-        <span class="brand-version">Platform v2.0</span>
+        <span class="brand-name">Compliq</span>
+        <span class="brand-version">Reude Technologies</span>
       </div>
     </div>
 
@@ -93,6 +93,7 @@
         <p id="page-sub">Real-time monitoring of all turbine assets</p>
       </div>
       <div class="topbar-right">
+        <button id="theme-toggle-dash" class="theme-toggle" aria-label="Toggle theme">☀️</button>
         <!-- NL Search -->
         <div class="nl-search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -218,20 +219,45 @@
             <div id="turbine-info-panel" style="margin-top:20px"></div>
           </div>
         </div>
-        <!-- Right: Blade Schematic -->
+        <!-- Right: Turbine Part Schematic -->
         <div class="panel flex-2">
           <div class="panel-header">
-            <h3>Blade Schematic</h3>
-            <div class="blade-tabs">
-              <button class="btab active" data-blade="A">Blade A</button>
-              <button class="btab" data-blade="B">Blade B</button>
-              <button class="btab" data-blade="C">Blade C</button>
+            <h3 id="schematic-title">Component Schematic</h3>
+            <div class="part-select-wrap">
+              <label style="font-size:0.75rem;color:var(--c-muted);margin-right:8px;">Component:</label>
+              <select id="part-selector" class="styled-select" style="width:auto;padding:6px 12px;font-size:0.82rem;">
+                <option value="full">🔧 Full Turbine Overview</option>
+                <optgroup label="Rotor">
+                  <option value="blade-A">🌀 Blade A</option>
+                  <option value="blade-B">🌀 Blade B</option>
+                  <option value="blade-C">🌀 Blade C</option>
+                  <option value="hub">⚙️ Hub</option>
+                  <option value="pitch-system">🔩 Pitch System</option>
+                </optgroup>
+                <optgroup label="Drive Train">
+                  <option value="main-shaft">🔄 Main Shaft</option>
+                  <option value="gearbox">⚙️ Gearbox</option>
+                  <option value="generator">⚡ Generator</option>
+                  <option value="brake">🛑 Brake System</option>
+                </optgroup>
+                <optgroup label="Nacelle">
+                  <option value="nacelle">🏠 Nacelle Housing</option>
+                  <option value="yaw-system">🧭 Yaw System</option>
+                  <option value="cooling">❄️ Cooling System</option>
+                  <option value="anemometer">📡 Anemometer / Sensors</option>
+                </optgroup>
+                <optgroup label="Tower & Foundation">
+                  <option value="tower">🗼 Tower</option>
+                  <option value="foundation">⬛ Foundation</option>
+                  <option value="cables">🔌 Power Cables</option>
+                </optgroup>
+              </select>
             </div>
           </div>
           <div class="panel-body schematic-body">
             <div id="blade-schematic"></div>
             <div class="blade-legend-row">
-              <span>Click hotspots → Report Viewer</span>
+              <span id="schematic-hint">Click hotspots → Report Viewer</span>
               <div class="bleg-items">
                 <span class="bleg-item"><span class="bleg-dot crack"></span>Crack</span>
                 <span class="bleg-item"><span class="bleg-dot delam"></span>Delamination</span>
@@ -252,7 +278,7 @@
         <div class="panel-body table-panel">
           <table class="data-table">
             <thead><tr>
-              <th>Defect ID</th><th>Blade</th><th>Location</th><th>Defect Type</th><th>Confidence</th>
+              <th>Defect ID</th><th>Component</th><th>Location</th><th>Defect Type</th><th>Confidence</th>
               <th>Severity</th><th>Recommended Action</th><th>Priority</th><th>Status</th><th>Review</th>
             </tr></thead>
             <tbody id="defects-tbody"></tbody>
@@ -551,13 +577,13 @@
     <div class="ai-chat-header">
       <div class="ai-header-info">
         <div class="ai-avatar">AI</div>
-        <div><h4>Complique Copilot</h4><span class="ai-status">● Online • Powered by DSL Engine</span></div>
+        <div><h4>Compliq Copilot</h4><span class="ai-status">● Online • Powered by DSL Engine</span></div>
       </div>
       <button onclick="document.getElementById('ai-chat-box').classList.remove('open')">✕</button>
     </div>
     <div class="ai-messages" id="ai-messages">
       <div class="ai-bubble bot">
-        Hello! I'm the Complique AI Copilot with access to your live fleet database. Try asking:<br><br>
+      Hello! I'm the Compliq AI Copilot with access to your live fleet database. Try asking:<br><br>
         • "Show all severity 4+ defects"<br>
         • "What is the health of Turbine 3?"<br>
         • "Which turbine needs immediate attention?"

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Complique | Wind Turbine Inspection AI Platform</title>
-  <meta name="description" content="Complique Technologies — AI-driven drone inspection platform for wind turbine blade defect detection, fleet management, and predictive maintenance.">
+  <title>Compliq by Reude Technologies | Wind Turbine Inspection AI Platform</title>
+  <meta name="description" content="Compliq by Reude Technologies — AI-driven drone inspection platform for wind turbine blade defect detection, fleet management, and predictive maintenance.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -15,8 +15,8 @@
   <!-- SPLASH SCREEN INTRO -->
   <div class="splash-screen" id="splash-screen">
     <div class="splash-content">
-      <img src="images/complique_logo.png" alt="Complique Logo" class="splash-logo">
-      <h1 class="splash-title">COMPLIQUE</h1>
+      <img src="images/reude R logo.png" alt="Reude R Logo" class="splash-logo">
+      <h1 class="splash-title">COMPLIQ by Reude Technologies</h1>
       <p class="splash-subtitle">Blade Inspect AI</p>
       <div class="splash-loader">
         <div class="loader-bar"></div>
@@ -54,7 +54,7 @@
           </div>
           <div>
             <h2>Welcome Back</h2>
-            <p>Sign in to Complique Inspection Platform</p>
+            <p>Sign in to Compliq Inspection Platform</p>
           </div>
         </div>
         <form id="login-form" onsubmit="handleLogin(event)">
@@ -83,7 +83,6 @@
         </form>
         <!-- Demo credentials hint -->
         <div class="demo-hint">
-          <span>Demo:</span> admin@reude.com / password123
         </div>
       </div>
 
@@ -103,7 +102,7 @@
             </svg>
           </div>
           <div>
-            <h2>Join Complique</h2>
+            <h2>Join Compliq</h2>
             <p>Create your operator account</p>
           </div>
         </div>
@@ -174,7 +173,7 @@
           </defs>
         </svg>
         <div class="nav-brand-text">
-          <span class="brand-title">COMPLIQUE</span>
+          <span class="brand-title">COMPLIQ by Reude Technologies</span>
           <span class="brand-sub">BLADE INSPECT AI</span>
         </div>
       </div>
@@ -185,6 +184,7 @@
         <li><a href="#contact" class="nav-link">Contact</a></li>
       </ul>
       <div class="nav-actions">
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">☀️</button>
         <button class="btn-outline" onclick="openAuth('login')">Sign In</button>
         <button class="btn-primary" onclick="openAuth('register')">Get Started</button>
       </div>
@@ -196,7 +196,10 @@
   ============================= -->
   <section class="hero-section" id="home">
     <div class="hero-bg">
-      <img src="images/hero_bg.png" alt="Wind farm aerial view" class="hero-bg-img" id="hero-parallax">
+      <video class="hero-bg-video" autoplay muted loop playsinline poster="images/hero_bg.png">
+        <source src="Video Project.mp4" type="video/mp4">
+        <img src="images/hero_bg.png" alt="Wind farm aerial view" class="hero-bg-img">
+      </video>
       <div class="hero-overlay"></div>
       <!-- Animated grid overlay -->
       <div class="hero-grid"></div>
@@ -227,7 +230,7 @@
         Dashboards
       </h1>
       <p class="hero-desc animate-fade-up" style="animation-delay:0.3s">
-        Complique's end-to-end wind turbine blade inspection platform transforms drone imagery into actionable maintenance intelligence — with computer vision, real-time telemetry, and AI-assisted analysis.
+        Compliq's end-to-end wind turbine blade inspection platform transforms drone imagery into actionable maintenance intelligence — with computer vision, real-time telemetry, and AI-assisted analysis.
       </p>
       <div class="hero-actions animate-fade-up" style="animation-delay:0.45s">
         <button class="btn-hero-primary" onclick="openAuth('register')">
@@ -263,10 +266,6 @@
       </div>
     </div>
 
-    <div class="hero-scroll-indicator">
-      <div class="scroll-mouse"><div class="scroll-dot"></div></div>
-      <span>Scroll to Explore</span>
-    </div>
   </section>
 
   <!-- ============================
@@ -286,14 +285,12 @@
               <div class="card-label">RGB Inspection Mode</div>
             </div>
             <div class="about-img-badge">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9.09 9 1-1a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/></svg>
-              AI-Powered
             </div>
           </div>
         </div>
 
         <div class="about-content reveal-right">
-          <p class="about-lead">Complique Technologies is an AI-driven hardware-software company with a mission: make the invisible visible, faster and safer than ever before.</p>
+          <p class="about-lead">Compliq by Reude Technologies is an AI-driven hardware-software company with a mission: make the invisible visible, faster and safer than ever before.</p>
           <p class="about-text">Our wind turbine blade inspection platform bridges the gap between drone-captured raw imagery and actionable operator intelligence. We combine computer vision, edge AI, and structured telemetry pipelines to surface defects at scale — before they become failures.</p>
 
           <div class="about-pillars">
@@ -438,7 +435,7 @@
   <section class="contact-section" id="contact">
     <div class="section-container">
       <div class="section-label">Get In Touch</div>
-      <h2 class="section-title">Contact <span class="accent-text">Complique Technologies</span></h2>
+      <h2 class="section-title">Contact <span class="accent-text">Compliq by Reude Technologies</span></h2>
 
       <div class="contact-grid">
         <div class="contact-info reveal-left">
@@ -469,7 +466,7 @@
               </div>
               <div>
                 <span class="contact-label">Headquarters</span>
-                <span>Complique Technologies Pvt. Ltd., Bangalore, Karnataka, India</span>
+                <span>Reude Technologies Pvt. Ltd., Bangalore, Karnataka, India</span>
               </div>
             </div>
           </div>
@@ -523,7 +520,7 @@
           <circle cx="20" cy="20" r="4" fill="#964734"/>
         </svg>
         <div>
-          <span class="footer-title">Complique Technologies</span>
+          <span class="footer-title">Compliq by Reude Technologies</span>
           <span class="footer-tagline">AI-Powered Wind Turbine Inspection</span>
         </div>
       </div>
@@ -535,8 +532,7 @@
         <a href="dashboard.html">Dashboard</a>
       </div>
       <div class="footer-copy">
-        <p>© 2026 Complique Technologies Pvt. Ltd. | Summer Internship Project | All Rights Reserved.</p>
-        <p>Mentors: Dr. Rajesh Kumar B • Ms. Keerthana R • Mr. Kandan V</p>
+        <p>© 2026 Reude Technologies Pvt. Ltd. | Summer Internship Project | All Rights Reserved.</p>
       </div>
     </div>
   </footer>

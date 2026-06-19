@@ -20,6 +20,265 @@
   --shadow:    0 16px 48px rgba(0,49,53,0.6);
 }
 
+/* Light theme overrides */
+[data-theme="light"] {
+  --c-deep:   #F7FBFB;
+  --c-dark:   #E6F3F3;
+  --c-orange: #C75B2E;
+  --c-teal:   #0FA4AF;
+  --c-sky:    #28666E;
+  --c-white:  #063235; /* body text color in light theme */
+  --c-muted:  rgba(6,50,53,0.55);
+  --c-border: rgba(6,50,53,0.08);
+  --c-glass:  rgba(255,255,255,0.85);
+  --glow-teal: 0 0 12px rgba(15,164,175,0.08);
+  --glow-org:  0 0 12px rgba(199,91,46,0.12);
+  --shadow:    0 8px 24px rgba(2,73,80,0.06);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--c-sky);
+  width: 44px; height: 36px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px; cursor: pointer; margin-right: 8px;
+}
+.theme-toggle:hover { transform: translateY(-1px); }
+
+/* Light theme tweak for navbar when active */
+[data-theme="light"] .navbar.scrolled {
+  background: rgba(255,255,255,0.92);
+  color: var(--c-white);
+}
+
+/* ================================================
+   LIGHT THEME — Component Overrides
+   All text, backgrounds, borders that use
+   hardcoded dark values get explicit light fixes.
+================================================ */
+
+/* Body background */
+[data-theme="light"] body {
+  background-color: var(--c-deep);
+  color: var(--c-white);
+}
+
+/* Particle canvas — lighter opacity */
+[data-theme="light"] #particle-canvas { opacity: 0.15; }
+
+/* Navbar */
+[data-theme="light"] .navbar {
+  color: var(--c-white);
+}
+[data-theme="light"] .nav-link { color: var(--c-sky); }
+[data-theme="light"] .nav-link:hover,
+[data-theme="light"] .nav-link.active { color: var(--c-teal); }
+[data-theme="light"] .brand-title { color: var(--c-teal); }
+[data-theme="light"] .brand-sub { color: var(--c-muted); }
+[data-theme="light"] .btn-outline {
+  border-color: var(--c-teal);
+  color: var(--c-teal);
+}
+[data-theme="light"] .btn-outline:hover {
+  background: var(--c-teal);
+  color: #fff;
+}
+[data-theme="light"] .btn-primary {
+  background: var(--c-teal);
+  color: #fff;
+}
+[data-theme="light"] .theme-toggle {
+  border-color: var(--c-border);
+  color: var(--c-sky);
+}
+
+/* Hero section */
+[data-theme="light"] .hero-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(247,251,251,0.8) 0%,
+    rgba(247,251,251,0.5) 40%,
+    rgba(247,251,251,0.9) 100%
+  );
+}
+[data-theme="light"] .hero-grid {
+  background-image:
+    linear-gradient(rgba(15,164,175,0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,164,175,0.1) 1px, transparent 1px);
+}
+[data-theme="light"] .hero-title { color: var(--c-white); }
+[data-theme="light"] .hero-desc { color: var(--c-muted); }
+[data-theme="light"] .hero-badge {
+  background: rgba(15,164,175,0.1);
+  border-color: rgba(15,164,175,0.3);
+  color: var(--c-teal);
+}
+[data-theme="light"] .hero-stats {
+  background: rgba(255,255,255,0.85);
+  border-color: var(--c-border);
+  box-shadow: 0 4px 20px rgba(2,73,80,0.08);
+}
+[data-theme="light"] .stat-item > span:first-child { color: var(--c-teal); }
+[data-theme="light"] .stat-item > span:nth-child(2) { color: var(--c-sky); }
+[data-theme="light"] .stat-label { color: var(--c-muted); }
+[data-theme="light"] .stat-divider { background: var(--c-border); }
+[data-theme="light"] .hero-scroll-indicator span { color: var(--c-muted); }
+[data-theme="light"] .scroll-mouse { border-color: rgba(6,50,53,0.2); }
+
+/* About section */
+[data-theme="light"] .about-section {
+  background: linear-gradient(180deg, var(--c-deep) 0%, var(--c-dark) 100%);
+}
+[data-theme="light"] .about-img-card {
+  background: rgba(255,255,255,0.92);
+  border-color: var(--c-border);
+}
+[data-theme="light"] .card-label { color: var(--c-teal); }
+[data-theme="light"] .about-lead { color: var(--c-sky); }
+[data-theme="light"] .about-text { color: var(--c-muted); }
+[data-theme="light"] .pillar {
+  background: rgba(255,255,255,0.7);
+  border-color: var(--c-border);
+}
+[data-theme="light"] .pillar:hover {
+  background: rgba(15,164,175,0.06);
+  border-color: rgba(15,164,175,0.3);
+}
+[data-theme="light"] .pillar h4 { color: var(--c-white); }
+[data-theme="light"] .pillar p { color: var(--c-muted); }
+
+/* Section shared */
+[data-theme="light"] .section-title { color: var(--c-white); }
+[data-theme="light"] .section-desc { color: var(--c-muted); }
+
+/* Features section */
+[data-theme="light"] .features-section { background: var(--c-deep); }
+[data-theme="light"] .feature-card {
+  background: rgba(255,255,255,0.85);
+  border-color: var(--c-border);
+  box-shadow: 0 2px 12px rgba(2,73,80,0.06);
+}
+[data-theme="light"] .feature-card:hover {
+  background: rgba(255,255,255,0.97);
+  border-color: rgba(15,164,175,0.35);
+  box-shadow: 0 8px 28px rgba(2,73,80,0.1);
+}
+[data-theme="light"] .feature-card h3 { color: var(--c-white); }
+[data-theme="light"] .feature-card p { color: var(--c-muted); }
+
+/* Ticker */
+[data-theme="light"] .ticker-section {
+  background: var(--c-dark);
+  border-color: var(--c-border);
+}
+[data-theme="light"] .ticker-track { color: var(--c-sky); }
+
+/* Contact section */
+[data-theme="light"] .contact-section { background: var(--c-deep); }
+[data-theme="light"] .contact-lead { color: var(--c-sky); }
+[data-theme="light"] .contact-item a,
+[data-theme="light"] .contact-item span { color: var(--c-white); }
+[data-theme="light"] .contact-form-wrap {
+  background: rgba(255,255,255,0.85);
+  border-color: var(--c-border);
+  box-shadow: 0 4px 20px rgba(2,73,80,0.06);
+}
+[data-theme="light"] .form-group label { color: var(--c-sky); }
+[data-theme="light"] .form-group input,
+[data-theme="light"] .form-group select,
+[data-theme="light"] .form-group textarea {
+  background: #fff;
+  border-color: rgba(15,164,175,0.25);
+  color: var(--c-white);
+}
+[data-theme="light"] .form-group input::placeholder,
+[data-theme="light"] .form-group textarea::placeholder {
+  color: rgba(6,50,53,0.35);
+}
+[data-theme="light"] .form-group select option {
+  background: #fff;
+  color: var(--c-white);
+}
+[data-theme="light"] .checkbox-label { color: var(--c-muted); }
+[data-theme="light"] .forgot-link { color: var(--c-teal); }
+
+/* Auth modal */
+[data-theme="light"] .auth-modal {
+  background: #fff;
+  border-color: var(--c-border);
+}
+[data-theme="light"] .auth-tabs {
+  background: rgba(6,50,53,0.05);
+  border-color: var(--c-border);
+}
+[data-theme="light"] .auth-tab { color: var(--c-muted); }
+[data-theme="light"] .auth-tab.active {
+  background: var(--c-teal);
+  color: #fff;
+}
+[data-theme="light"] .auth-brand h2 { color: var(--c-white); }
+[data-theme="light"] .auth-brand p { color: var(--c-muted); }
+[data-theme="light"] .auth-close {
+  background: rgba(6,50,53,0.06);
+  border-color: var(--c-border);
+  color: var(--c-muted);
+}
+[data-theme="light"] .auth-switch { color: var(--c-muted); }
+[data-theme="light"] .demo-hint {
+  background: rgba(15,164,175,0.05);
+  border-color: rgba(15,164,175,0.15);
+  color: var(--c-muted);
+}
+
+/* Footer */
+[data-theme="light"] .site-footer {
+  background: var(--c-dark);
+  border-color: var(--c-border);
+}
+[data-theme="light"] .footer-title { color: var(--c-teal); }
+[data-theme="light"] .footer-tagline { color: var(--c-muted); }
+[data-theme="light"] .footer-links a { color: var(--c-sky); }
+[data-theme="light"] .footer-links a:hover { color: var(--c-teal); }
+[data-theme="light"] .footer-copy p { color: var(--c-muted); }
+
+/* Splash screen */
+[data-theme="light"] .splash-screen { background: #E6F3F3; }
+[data-theme="light"] .splash-title { color: var(--c-white); }
+[data-theme="light"] .splash-subtitle { color: var(--c-sky); }
+
+/* Hero title gradient — keep gradient but ensure contrast */
+[data-theme="light"] .title-gradient {
+  background: linear-gradient(135deg, #0a7a83 0%, #0FA4AF 50%, #7a3520 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hero title main text */
+[data-theme="light"] .hero-title { color: #063235; }
+
+/* Hero description */
+[data-theme="light"] .hero-desc { color: rgba(6,50,53,0.72); }
+
+/* Hero badge */
+[data-theme="light"] .hero-badge { color: var(--c-teal); }
+
+/* Hero stats — numbers and labels */
+[data-theme="light"] .hero-stats {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(15,164,175,0.2);
+}
+[data-theme="light"] .stat-item > span:first-child {
+  color: #063235;
+  -webkit-text-fill-color: #063235;
+}
+[data-theme="light"] .stat-item > span:nth-child(2) {
+  color: #063235;
+}
+[data-theme="light"] .stat-label { color: rgba(6,50,53,0.6); }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { scroll-behavior: smooth; }
@@ -182,6 +441,15 @@ body {
   object-position: center;
   transform-origin: center;
   transition: transform 0.1s linear;
+}
+.hero-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
 }
 .hero-overlay {
   position: absolute;
@@ -1232,9 +1500,14 @@ body {
   border-radius: 24px;
   border: 2px solid var(--c-teal);
   box-shadow: 0 0 30px rgba(15, 164, 175, 0.4);
-  transform: scale(0.8);
+  transform: translateZ(0);
   opacity: 0;
-  animation: splash-logo-in 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 0.2s;
+  animation: splash-logo-entrance 1.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 0.15s;
+}
+
+/* Apply an orange tint to the provided PNG without altering the source image */
+.splash-logo {
+  filter: sepia(1) saturate(6) hue-rotate(10deg) brightness(1.02);
 }
 
 .splash-title {
@@ -1283,9 +1556,17 @@ body {
   animation: load-progress 1.5s ease-out forwards 1.4s;
 }
 
-@keyframes splash-logo-in {
-  to {
-    transform: scale(1);
+@keyframes splash-logo-entrance {
+  0% {
+    transform: scale(0.8) rotate(-90deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05) rotate(30deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
     opacity: 1;
   }
 }
