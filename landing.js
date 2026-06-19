@@ -222,6 +222,26 @@ window.addEventListener('scroll', () => {
   updateActiveNavLink();
 });
 
+// ── HAMBURGER MENU ────────────────────────────
+const hamburger = document.getElementById('nav-hamburger');
+const navLinks  = document.getElementById('nav-links');
+const navActions = document.getElementById('nav-actions');
+if (hamburger) {
+  hamburger.addEventListener('click', () => {
+    const open = hamburger.classList.toggle('open');
+    navLinks.classList.toggle('mobile-open', open);
+    navActions.classList.toggle('mobile-open', open);
+  });
+  // Close on link click
+  document.querySelectorAll('.nav-link').forEach(l => {
+    l.addEventListener('click', () => {
+      hamburger.classList.remove('open');
+      navLinks.classList.remove('mobile-open');
+      navActions.classList.remove('mobile-open');
+    });
+  });
+}
+
 // ── ACTIVE NAV LINK ───────────────────────────
 function updateActiveNavLink() {
   const sections = document.querySelectorAll('section[id]');
