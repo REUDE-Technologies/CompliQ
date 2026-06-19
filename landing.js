@@ -14,7 +14,7 @@ window.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = ''; // Restore scrolling
         splash.style.display = 'none';
       }, 800); // Match CSS transition duration
-    }, 2800);
+    }, 7000);
   }
 });
 

@@ -1736,7 +1736,7 @@ body {
 
 /* ── Navbar logo image ── */
 .nav-logo-img {
-  height: 52px;
+  height: 80px;
   width: auto;
   object-fit: contain;
   display: block;
@@ -1745,20 +1745,20 @@ body {
 /* ── "COMPLIQ by" text before logo ── */
 .nav-compliq-text {
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 2.5px;
   color: var(--c-teal);
   text-transform: uppercase;
   white-space: nowrap;
-  line-height: 1;
+  line-height: 2;
 }
 [data-theme="light"] .nav-compliq-text { color: var(--c-teal); }
 
 /* ── Footer logo image ── */
 .footer-logo-img {
-  height: 38px;
-  width: auto;
+  height: 100px;
+  width: 5;
   object-fit: contain;
 }
 
@@ -1842,4 +1842,23 @@ body {
 [data-theme="light"] .title-coral {
   color: #C75B2E;
   -webkit-text-fill-color: #C75B2E;
+}
+
+/* ── Splash "COMPLIQ by" label ── */
+.splash-compliq-label {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #0FA4AF;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(-10px);
+  animation: splash-word-in 0.6s ease forwards 0.05s;
+  margin-bottom: -8px;
+}
+
+/* ── Extend loader bar to fill over 7 seconds ── */
+.loader-bar {
+  animation: load-progress 6.2s ease-out forwards 0.8s !important;
 }
