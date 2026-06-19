@@ -1733,3 +1733,100 @@ body {
   .about-visual { height: 220px; }
   .section-container { padding: 48px 16px; }
 }
+
+/* ── Navbar logo image ── */
+.nav-logo-img {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+/* ── Footer logo image ── */
+.footer-logo-img {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* ── Hero "Dashboards" coral colour ── */
+.title-coral {
+  color: #E8A87C;
+  -webkit-text-fill-color: #E8A87C;
+}
+
+/* ── Hero primary text white, body text light grey ── */
+.hero-title { color: #FFFFFF; }
+.hero-desc  { color: #CBD5E1; }
+
+/* ── Stat numbers gold ── */
+.stat-item > span:first-child {
+  color: #FFD700 !important;
+  -webkit-text-fill-color: #FFD700 !important;
+}
+
+/* ── Splash: box stays still, only the R image spins ── */
+.splash-logo-wrap {
+  width: 130px;
+  height: 130px;
+  border-radius: 20px;
+  border: 2px solid #0FA4AF;
+  box-shadow: 0 0 28px rgba(15,164,175,0.45);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  animation: splash-box-in 0.5s ease forwards 0.1s;
+}
+@keyframes splash-box-in {
+  to { opacity: 1; }
+}
+
+.splash-r-spin {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  animation: spin-r 1.6s cubic-bezier(0.34,1.56,0.64,1) forwards 0.15s;
+  opacity: 0;
+}
+@keyframes spin-r {
+  0%   { transform: rotate(-360deg) scale(0.5); opacity: 0; }
+  60%  { transform: rotate(20deg)   scale(1.1); opacity: 1; }
+  80%  { transform: rotate(-8deg)   scale(1);   opacity: 1; }
+  100% { transform: rotate(0deg)    scale(1);   opacity: 1; }
+}
+
+/* ── Splash wordmark (Logo-Secondary) ── */
+.splash-wordmark {
+  width: 220px;
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: splash-word-in 0.7s ease forwards 1s;
+}
+@keyframes splash-word-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Video: smoother fade-in transition ── */
+.hero-bg-video {
+  animation: video-fade-in 1.8s ease forwards;
+}
+@keyframes video-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Light mode logo adjustments ── */
+[data-theme="light"] .nav-logo-img  { filter: none; }
+[data-theme="light"] .footer-logo-img { filter: none; }
+[data-theme="light"] .stat-item > span:first-child {
+  color: #0FA4AF !important;
+  -webkit-text-fill-color: #0FA4AF !important;
+}
+[data-theme="light"] .title-coral {
+  color: #C75B2E;
+  -webkit-text-fill-color: #C75B2E;
+}
