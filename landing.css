@@ -1883,19 +1883,11 @@ body {
 .splash-brand-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 20px;
+  margin-bottom: 0;
 }
 .splash-brand-row .splash-compliq-label {
   margin-bottom: 0;
-  font-size: 1rem;
-  letter-spacing: 3px;
-}
-.splash-brand-row .splash-wordmark {
-  width: 180px;
-  opacity: 0;
-  transform: none;
-  animation: splash-word-in 0.7s ease forwards 0.3s;
 }
 
 /* ── Contact form "Book Your Demo" title ── */
@@ -1913,7 +1905,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .splash-compliq-label {
@@ -1949,6 +1941,7 @@ body {
   height: auto;
   object-fit: contain;
   opacity: 0;
+}
 .splash-subtitle {
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -2023,12 +2016,17 @@ img.splash-wordmark {
 
 /* ── Make CompliQ BY label bigger ── */
 .splash-compliq-label {
-  font-size: 1.2rem !important;
-  letter-spacing: 4px;
+  font-size: 1.8rem !important;
+  letter-spacing: 5px;
   font-weight: 900;
+  color: #0FA4AF;
+  text-transform: none;
+  font-family: var(--font-ui);
+  margin: 0;
+  line-height: 1;
 }
 
-/* ── Splash REUDE TECHNOLOGIES CSS text (no image) ── */
+/* ── Splash REUDE TECHNOLOGIES CSS text (vertical, centered) ── */
 .splash-reude-text {
   display: flex;
   flex-direction: column;
@@ -2055,4 +2053,20 @@ img.splash-wordmark {
   color: #FF7A00;
   letter-spacing: 5px;
   text-shadow: 0 0 12px rgba(255,122,0,0.4);
+}
+
+/* ── Splash R-logo large centered ── */
+.splash-logo-wrap {
+  width: 160px;
+  height: 160px;
+  border-radius: 24px;
+  border: 2px solid #0FA4AF;
+  box-shadow: 0 0 28px rgba(15,164,175,0.5);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  animation: splash-word-in 0.6s ease forwards 0.4s;
 }
