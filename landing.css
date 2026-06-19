@@ -1920,9 +1920,9 @@ body {
   font-family: var(--font-ui);
   font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 4px;
+  letter-spacing: 3px;
   color: #0FA4AF;
-  text-transform: uppercase;
+  text-transform: none;
   margin: 0;
 }
 
