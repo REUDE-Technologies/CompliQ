@@ -1949,9 +1949,6 @@ body {
   height: auto;
   object-fit: contain;
   opacity: 0;
-  animation: splash-word-in 0.7s ease forwards 0.8s;
-}
-
 .splash-subtitle {
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -1961,9 +1958,57 @@ body {
   margin: 0;
 }
 
-/* ── Splash wordmark: transparent PNG blends naturally ── */
 .splash-wordmark {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #E8A87C; /* orange tint */
+  opacity: 0;
+  transform: translateY(12px);
+  animation: splash-word-in 0.7s ease forwards 0.8s;
+}
+
+/* Individual parts for styling */
+.splash-reude, .splash-technologies {
+  display: inline-block;
+}
+.splash-reude {
+  text-transform: uppercase;
+}
+.splash-technologies {
+  text-transform: uppercase;
+}
+
+/* ── Hero background REUDE logo blend ── */
+.hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('images/reude-logo.png') center/20% no-repeat;
+  opacity: 0.07;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* ── Brand name styling for Consistent "CompliQ" ── */
+.brand-name {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: var(--c-teal);
+  text-transform: none;
+}
+
+/* ── Splash wordmark image override ── */
+.splash-wordmark {
+  display: block;
+  width: 260px;
+  height: auto;
+  object-fit: contain;
+  background: transparent !important;
   mix-blend-mode: normal;
   filter: none;
-  background: transparent;
+  opacity: 0;
+  animation: splash-word-in 0.7s ease forwards 0.8s;
 }
