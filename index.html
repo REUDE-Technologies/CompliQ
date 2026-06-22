@@ -20,13 +20,16 @@
   <!-- SPLASH SCREEN INTRO -->
   <div class="splash-screen" id="splash-screen">
     <div class="splash-content">
-      <p class="splash-compliq-label">CompliQ by</p>
-      <div class="splash-logo-wrap">
-        <img src="images/reude R logo.png" alt="Reude R" class="splash-r-spin">
-      </div>
-      <div class="splash-reude-text">
-        <span class="splash-reude-big">REUDE</span>
-        <span class="splash-reude-sub">TECHNOLOGIES</span>
+      <!-- Horizontal brand row: CompliQ BY | R-icon | REUDE TECHNOLOGIES -->
+      <div class="splash-brand-row">
+        <p class="splash-compliq-label">CompliQ by</p>
+        <div class="splash-logo-wrap">
+          <img src="images/reude R logo.png" alt="Reude R" class="splash-r-spin">
+        </div>
+        <div class="splash-reude-text">
+          <span class="splash-reude-big">REUDE</span>
+          <span class="splash-reude-sub">TECHNOLOGIES</span>
+        </div>
       </div>
       <p class="splash-subtitle">AI-Powered Industrial Inspection Platform</p>
       <div class="splash-loader">
@@ -278,13 +281,17 @@
   <section class="about-section" id="about">
     <div class="section-container">
       <div class="section-label">Who We Are</div>
-      <h2 class="section-title">Shaping the Future of<br><span class="accent-text">Smarter Wind Energy Inspection</span>
+      <h2 class="section-title">Shaping the Future of<br><span class="accent-text">Smarter Renewable Energy
+          Inspection</span>
       </h2>
 
       <div class="about-grid">
         <div class="about-visual">
           <div class="about-image-stack">
-            <img src="images/turbine_teal.png" alt="Wind Turbine" class="about-img-main reveal-left">
+            <div class="about-main-images">
+              <img src="images/turbine_teal.png" alt="Wind Turbine" class="about-img-main reveal-left">
+              <img src="images/solar_teal.png" alt="Solar Panels" class="about-img-main reveal-right" style="animation-delay: 0.15s;">
+            </div>
             <div class="about-img-card reveal-right">
               <img src="images/turbine_inspect_rgb.png" alt="Blade Inspection">
               <div class="card-label">RGB Inspection Mode</div>
@@ -339,8 +346,7 @@
               </div>
               <div>
                 <h4>Predictive Analytics</h4>
-                <p>Temporal defect progression modelling and maintenance prioritisation across your entire renewable
-                  energy portfolio.</p>
+                <p>Temporal defect progression modeling and maintenance prioritization.</p>
               </div>
             </div>
           </div>
@@ -359,7 +365,7 @@
     <div class="section-container">
       <div class="section-label">Platform Capabilities</div>
       <h2 class="section-title">Everything You Need to<br><span class="accent-text">Inspect, Analyse, Decide— Wind,
-          Solar and Beyond </span></h2>
+          Solar and Beyond</span></h2>
 
       <div class="features-grid">
 
@@ -373,8 +379,8 @@
             </svg>
           </div>
           <h3>Fleet Overview Dashboard</h3>
-          <p>Real-time monitoring of all turbine assets with health indices, MQTT telemetry streams, and alert triaging
-            across your entire wind farm.</p>
+          <p>Real-time monitoring of all renewable energy assets wind turbines and solar farms with health indices, MQTT
+            telemetry streams and alert triaging across your entire portfolio.</p>
           <div class="feature-tag">Live Monitoring</div>
         </div>
 
@@ -386,8 +392,8 @@
             </svg>
           </div>
           <h3>Downloadable PDF Reports</h3>
-          <p>Generate comprehensive engineering assessment reports per asset, complete with defect maps, severity
-            ratings, evidence images, and dispatch orders.</p>
+          <p>Generate comprehensive engineering assessment reports per asset for wind blades, solar panels and other
+            infrastructure complete with defect maps, severity ratings, evidence images and dispatch orders.</p>
           <div class="feature-tag orange">PDF Export</div>
         </div>
 
@@ -400,8 +406,8 @@
             </svg>
           </div>
           <h3>Real-Time Data Ingestion</h3>
-          <p>Upload your own drone imagery, thermal scans, and telemetry JSON payloads. The platform parses and maps
-            your data to the live fleet state instantly.</p>
+          <p>Upload Upload drone imagery, thermal scans and telemetry JSON payloads from wind turbine and solar
+            inspections. The platform parses and maps your data to the live asset state instantly.</p>
           <div class="feature-tag">Live Upload</div>
         </div>
 
@@ -413,8 +419,7 @@
             </svg>
           </div>
           <h3>AI Natural-Language Queries</h3>
-          <p>Ask the platform in plain English: "Show cracks on Turbine 2 from last 30 days." The AI engine translates
-            and returns structured results from your live data.</p>
+          <p> The AI engine returns structured results from your live data.</p>
           <div class="feature-tag orange">AI Copilot</div>
         </div>
 
@@ -426,8 +431,8 @@
             </svg>
           </div>
           <h3>Interactive Blade Schematics</h3>
-          <p>3D-style SVG blade viewer with clickable defect hotspots. Toggle between RGB and thermal mode overlays with
-            smooth crossfade transitions.</p>
+          <p>Interactive SVG asset viewer for wind turbine blades and solar panel arrays with clickable defect hotspots
+            and toggle between RGB and thermal mode overlays.</p>
           <div class="feature-tag">Visual Explorer</div>
         </div>
 
@@ -438,8 +443,8 @@
             </svg>
           </div>
           <h3>Manual Data Entry Portal</h3>
-          <p>Enter turbine specifications, GPS coordinates, inspection observations, and custom defect classifications
-            directly without needing API integration.</p>
+          <p>Enter wind turbine and solar asset specifications, GPS coordinates, inspection observations and custom
+            defect classifications directly — no API integration required.</p>
           <div class="feature-tag orange">Data Entry</div>
         </div>
 
@@ -459,9 +464,11 @@
         <span>MQTT Telemetry Streams</span> <span class="ticker-dot">◆</span>
         <span>PDF Report Generation</span> <span class="ticker-dot">◆</span>
         <span>AI-Assisted NLP Queries</span> <span class="ticker-dot">◆</span>
-        <span>DVC Dataset Versioning</span> <span class="ticker-dot">◆</span>
-        <span>SAM-Assisted Annotation</span> <span class="ticker-dot">◆</span>
+        <span>Wind & Solar Analytics</span> <span class="ticker-dot">◆</span>
+        <span>Predictive Maintenance</span> <span class="ticker-dot">◆</span>
         <span>Edge Intelligence</span> <span class="ticker-dot">◆</span>
+        <span>Solar Panel Inspection</span> <span class="ticker-dot">◆</span>
+
         <!-- Repeat for seamless loop -->
         <span>Fleet Health Monitoring</span> <span class="ticker-dot">◆</span>
         <span>Blade Defect Detection</span> <span class="ticker-dot">◆</span>
@@ -469,9 +476,11 @@
         <span>MQTT Telemetry Streams</span> <span class="ticker-dot">◆</span>
         <span>PDF Report Generation</span> <span class="ticker-dot">◆</span>
         <span>AI-Assisted NLP Queries</span> <span class="ticker-dot">◆</span>
-        <span>DVC Dataset Versioning</span> <span class="ticker-dot">◆</span>
-        <span>SAM-Assisted Annotation</span> <span class="ticker-dot">◆</span>
+        <span>Wind & Solar Analytics </span> <span class="ticker-dot">◆</span>
+        <span>Predictive Maintenance</span> <span class="ticker-dot">◆</span>
         <span>Edge Intelligence</span> <span class="ticker-dot">◆</span>
+        <span>Solar Panel Inspection</span> <span class="ticker-dot">◆</span>
+
       </div>
     </div>
   </section>
@@ -488,8 +497,8 @@
 
       <div class="contact-grid">
         <div class="contact-info reveal-left">
-          <p class="contact-lead">Ready to transform your wind farm inspection operations? Get in touch with our team
-            for a platform demo or technical inquiry.</p>
+          <p class="contact-lead"> Ready to transform your renewable energy inspection operations? Get in touch with our
+            team for a platform demo across wind turbines, solar farms or other energy infrastructure.</p>
 
           <div class="contact-details">
             <div class="contact-item">

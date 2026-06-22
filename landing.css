@@ -781,6 +781,16 @@ body {
   height: 480px;
 }
 .about-image-stack { position: relative; height: 100%; }
+.about-main-images {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  height: 100%;
+}
+.about-main-images .about-img-main {
+  flex: 1;
+  min-width: 0;
+}
 .about-img-main {
   width: 100%;
   height: 100%;
@@ -1879,12 +1889,13 @@ body {
   white-space: nowrap;
 }
 
-/* ── Splash: COMPLIQ by + logo on one row ── */
+/* ── Splash: COMPLIQ by + logo vertical layout ── */
 .splash-brand-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
-  margin-bottom: 0;
+  gap: 24px;
+  margin-bottom: 12px;
 }
 .splash-brand-row .splash-compliq-label {
   margin-bottom: 0;
