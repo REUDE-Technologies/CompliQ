@@ -2109,3 +2109,22 @@ img.splash-wordmark {
   5%   { opacity: 1; }
   100% { transform: rotate(1800deg); opacity: 1; }
 }
+
+/* ── About cards row: shifted left ── */
+.about-cards-row {
+  position: absolute;
+  bottom: -20px;
+  left: -16px;
+  right: auto;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start !important;
+  padding-right: 0;
+}
+.about-cards-row .about-img-card {
+  position: static !important;
+  width: 155px;
+  flex-shrink: 0;
+  bottom: auto;
+  right: auto;
+}
