@@ -1082,3 +1082,12 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   object-fit: contain;
 }
 [data-theme="light"] .sidebar-logo-img { filter: none; }
+
+/* ── Teal buttons text → dark ── */
+.teal-btn, #nl-btn, .gate-btn,
+.nav-item.active,
+.fbtn.active,
+.view-btn:hover,
+.asset-action-btn:hover {
+  color: #003135 !important;
+}
