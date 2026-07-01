@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CompliQ by REUDE Technologies | Sign In / Register</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: #F0F9FF;
+      min-height: 100vh;
+      display: flex;
+      color: #063235;
+    }
+
+    /* ── Left panel ── */
+    .auth-left {
+      width: 420px;
+      flex-shrink: 0;
+      background: linear-gradient(160deg, #003135 0%, #024950 60%, #0FA4AF 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    .auth-left::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(15,164,175,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15,164,175,0.07) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .left-brand {
+      position: relative;
+      z-index: 1;
+    }
+    .left-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+    .left-brand-row img {
+      height: 42px;
+      width: auto;
+      object-fit: contain;
+    }
+    .left-compliq {
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #0FA4AF;
+      text-transform: uppercase;
+    }
+    .left-tagline {
+      position: relative;
+      z-index: 1;
+    }
+    .left-tagline h2 {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.25;
+      margin-bottom: 14px;
+    }
+    .left-tagline h2 span { color: #0FA4AF; }
+    .left-tagline p {
+      font-size: 0.9rem;
+      color: rgba(175,221,229,0.7);
+      line-height: 1.7;
+    }
+    .left-footer {
+      position: relative;
+      z-index: 1;
+      font-size: 0.72rem;
+      color: rgba(175,221,229,0.4);
+    }
+
+    /* ── Right panel ── */
+    .auth-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      overflow-y: auto;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 500px;
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 40px rgba(2,73,80,0.1);
+    }
+
+    /* Tabs */
+    .auth-tabs {
+      display: flex;
+      background: #F0F9FF;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 32px;
+    }
+    .auth-tab {
+      flex: 1;
+      padding: 11px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #28666E;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .auth-tab.active {
+      background: #0FA4AF;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(15,164,175,0.3);
+    }
+
+    /* Form heading */
+    .auth-heading { margin-bottom: 24px; }
+    .auth-heading h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #063235;
+      margin-bottom: 4px;
+    }
+    .auth-heading p { font-size: 0.85rem; color: #28666E; }
+
+    /* Form */
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .form-group label { font-size: 0.82rem; font-weight: 600; color: #063235; }
+    .form-group input,
+    .form-group select {
+      background: #F7FBFB;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: #063235;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: #0FA4AF;
+      box-shadow: 0 0 0 3px rgba(15,164,175,0.12);
+      background: #fff;
+    }
+    .form-group input::placeholder { color: #94a3b8; }
+
+    /* Password wrapper */
+    .pwd-wrap { position: relative; }
+    .pwd-wrap input { padding-right: 42px; }
+    .pwd-eye {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: transparent; border: none;
+      cursor: pointer; font-size: 1rem; opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+    .pwd-eye:hover { opacity: 0.9; }
+
+    /* Password strength indicators */
+    .pwd-rules {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+      font-size: 0.75rem;
+    }
+    .pwd-rule {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #dc2626;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .pwd-rule.met { color: #16a34a; }
+    .pwd-rule::before {
+      content: '✕';
+      font-size: 0.7rem;
+      font-weight: 700;
+      width: 14px;
+      text-align: center;
+    }
+    .pwd-rule.met::before { content: '✓'; }
+
+    /* Checkbox */
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 0.82rem;
+      color: #28666E;
+    }
+    .checkbox-row input[type=checkbox] {
+      width: 16px; height: 16px;
+      accent-color: #0FA4AF;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .checkbox-row a { color: #0FA4AF; font-weight: 600; text-decoration: none; }
+    .checkbox-row a:hover { text-decoration: underline; }
+
+    /* Buttons */
+    .btn-submit {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px;
+      background: #0FA4AF;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.25s;
+      box-shadow: 0 6px 20px rgba(15,164,175,0.3);
+    }
+    .btn-submit:hover {
+      background: #0D8A94;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(15,164,175,0.4);
+    }
+    .switch-text {
+      text-align: center;
+      font-size: 0.83rem;
+      color: #28666E;
+      margin-top: 16px;
+    }
+    .switch-text a { color: #0FA4AF; font-weight: 700; text-decoration: none; cursor: pointer; }
+
+    /* Form sections */
+    .form-section { display: none; }
+    .form-section.active { display: block; }
+
+    /* Forgot / remember row */
+    .form-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+    .form-meta-row label {
+      display: flex; align-items: center; gap: 6px;
+      color: #28666E; cursor: pointer;
+    }
+    .forgot { color: #0FA4AF; text-decoration: none; font-weight: 600; }
+    .forgot:hover { text-decoration: underline; }
+
+    /* Auth messages */
+    .auth-msg {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      margin-bottom: 14px;
+    }
+    .auth-msg.error { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2); color: #dc2626; }
+    .auth-msg.success { background: rgba(15,164,175,0.08); border: 1px solid rgba(15,164,175,0.2); color: #0FA4AF; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .auth-left { display: none; }
+      .auth-card { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left branding panel -->
+  <div class="auth-left">
+    <div class="left-brand">
+      <div class="left-brand-row">
+        <span class="left-compliq">CompliQ by</span>
+        <img src="images/reude-logo.png" alt="Reude Technologies">
+      </div>
+    </div>
+    <div class="left-tagline">
+      <h2>Inspect Smarter.<br><span>Decide Faster.</span></h2>
+      <p>CompliQ's AI-powered drone inspection platform for wind turbines, solar farms and renewable energy infrastructure.</p>
+    </div>
+    <div class="left-footer">© 2026 REUDE Technologies Pvt. Ltd. All Rights Reserved.</div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="auth-right">
+    <div class="auth-card">
+
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="showTab('login')">Sign In</button>
+        <button class="auth-tab" onclick="showTab('register')">Create Account</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div class="form-section active" id="section-login">
+        <div class="auth-heading">
+          <h1>Welcome Back</h1>
+          <p>Sign in to your CompliQ dashboard</p>
+        </div>
+        <div id="login-msg"></div>
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="login-email" placeholder="operator@reude.com" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="pwd-wrap">
+              <input type="password" id="login-pwd" placeholder="Enter password" required>
+              <button type="button" class="pwd-eye" onclick="toggleEye('login-pwd',this)">👁</button>
+            </div>
+          </div>
+          <div class="form-meta-row">
+            <label><input type="checkbox"> Remember me</label>
+            <a href="#" class="forgot">Forgot password?</a>
+          </div>
+          <button type="submit" class="btn-submit">Sign In to Dashboard →</button>
+        </form>
+        <p class="switch-text">Don't have an account? <a onclick="showTab('register')">Register here</a></p>
+      </div>
+
+      <!-- REGISTER -->
+      <div class="form-section" id="section-register">
+        <div class="auth-heading">
+          <h1>Join CompliQ</h1>
+          <p>Create your operator account</p>
+        </div>
+        <div id="register-msg"></div>
+        <form onsubmit="handleRegister(event)">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>First Name</label>
+              <input type="text" id="reg-fname" placeholder="John" required>
+            </div>
+            <div class="form-group">
+              <label>Last Name</label>
+              <input type="text" id="reg-lname" placeholder="Smith" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Organisation / Wind Farm</label>
+            <input type="text" id="reg-org" placeholder="Green Energy Ltd." required>
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="reg-email" placeholder="you@company.com" required>
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <select id="reg-role">
+              <option>Fleet Operator</option>
+              <option>Maintenance Engineer</option>
+              <option>Data Analyst</option>
+              <option>Site Manager</option>
+              <option>Administrator</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="pwd-wrap">
+              <input type="password" id="reg-pwd" placeholder="Create a strong password" required oninput="checkPwd(this.value)">
+              <button type="button" class="pwd-eye" onclick="toggleEye('reg-pwd',this)">👁</button>
+            </div>
+            <div class="pwd-rules" id="pwd-rules">
+              <span class="pwd-rule" id="rule-len">At least 8 characters</span>
+              <span class="pwd-rule" id="rule-upper">At least one uppercase letter (A–Z)</span>
+              <span class="pwd-rule" id="rule-num">At least one number (0–9)</span>
+              <span class="pwd-rule" id="rule-special">At least one special character (!@#$%^&*)</span>
+            </div>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="agree-terms" required>
+            <label for="agree-terms">
+              I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>
+            </label>
+          </div>
+          <button type="submit" class="btn-submit">Create Account →</button>
+        </form>
+        <p class="switch-text">Already have an account? <a onclick="showTab('login')">Sign in</a></p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SESSION_KEY = 'compliq_session';
+    const USERS_KEY   = 'compliq_users';
+
+    function showTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
+      document.getElementById('section-login').classList.toggle('active', tab==='login');
+      document.getElementById('section-register').classList.toggle('active', tab==='register');
+    }
+
+    function toggleEye(id, btn) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.style.opacity = inp.type === 'text' ? '0.9' : '0.5';
+    }
+
+    function checkPwd(val) {
+      toggle('rule-len',   val.length >= 8);
+      toggle('rule-upper', /[A-Z]/.test(val));
+      toggle('rule-num',   /[0-9]/.test(val));
+      toggle('rule-special', /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val));
+    }
+    function toggle(id, met) {
+      document.getElementById(id).classList.toggle('met', met);
+    }
+
+    function pwdValid(val) {
+      return val.length >= 8 && /[A-Z]/.test(val) && /[0-9]/.test(val) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val);
+    }
+
+    function showMsg(id, type, text) {
+      const el = document.getElementById(id);
+      el.innerHTML = `<div class="auth-msg ${type}">${text}</div>`;
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const pwd   = document.getElementById('login-pwd').value;
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      const demo  = email === 'admin@reude.com' && pwd === 'password123';
+      const found = users.find(u => u.email === email && u.password === pwd);
+      if (!demo && !found) { showMsg('login-msg','error','Invalid email or password.'); return; }
+      const user  = found || { firstName:'Admin', lastName:'Operator', org:'REUDE Technologies', email, role:'Administrator' };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      showMsg('login-msg','success',`Welcome back, ${user.firstName}! Redirecting…`);
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+    }
+
+    function handleRegister(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('reg-pwd').value;
+      if (!pwdValid(pwd)) { showMsg('register-msg','error','Password does not meet all requirements.'); return; }
+      const email = document.getElementById('reg-email').value.trim();
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      if (users.find(u => u.email === email)) { showMsg('register-msg','error','An account with this email already exists.'); return; }
+      const user = {
+        firstName: document.getElementById('reg-fname').value.trim(),
+        lastName:  document.getElementById('reg-lname').value.trim(),
+        org:       document.getElementById('reg-org').value.trim(),
+        email, role: document.getElementById('reg-role').value, password: pwd
+      };
+      users.push(user);
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      showMsg('register-msg','success',`Account created! Welcome, ${user.firstName}. Redirecting…`);
+      setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+    }
+
+    // Check URL param to open correct tab
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'register') showTab('register');
+  </script>
+</body>
+</html>
