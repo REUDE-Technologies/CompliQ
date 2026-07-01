@@ -2128,3 +2128,44 @@ img.splash-wordmark {
   bottom: auto;
   right: auto;
 }
+
+/* ── About visual: two columns each with big image + card below ── */
+.about-image-stack {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  height: auto !important;
+  position: relative;
+}
+.about-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.about-col .about-img-main {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow);
+  transition: transform 0.6s ease;
+  position: static;
+}
+.about-col .about-img-card {
+  position: static !important;
+  width: 100% !important;
+  bottom: auto !important;
+  right: auto !important;
+}
+.about-col .about-img-card img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+}
+@media (max-width: 768px) {
+  .about-image-stack { flex-direction: column; }
+  .about-col .about-img-main { height: 180px; }
+}
