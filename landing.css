@@ -2081,3 +2081,31 @@ img.splash-wordmark {
   opacity: 0;
   animation: splash-word-in 0.6s ease forwards 0.4s;
 }
+
+/* ── About: two small cards side by side at the bottom ── */
+.about-cards-row {
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+.about-cards-row .about-img-card {
+  position: static;
+  width: 160px;
+  flex-shrink: 0;
+}
+
+/* ── Splash R: spin 5 full rotations (1800deg), box stays still ── */
+.splash-r-spin {
+  animation: spin-r-5x 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards 0.2s !important;
+  opacity: 0;
+}
+@keyframes spin-r-5x {
+  0%   { transform: rotate(0deg);    opacity: 0; }
+  5%   { opacity: 1; }
+  100% { transform: rotate(1800deg); opacity: 1; }
+}
