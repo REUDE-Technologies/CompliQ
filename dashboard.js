@@ -1709,14 +1709,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ── THEME TOGGLE ──────────────────────────────
 function initTheme() {
-  const saved = localStorage.getItem('site_theme') || 'dark';
+  const saved = localStorage.getItem('site_theme') || 'light';
   applyDashTheme(saved);
 
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) {
     btn.textContent = saved === 'light' ? '🌙' : '☀️';
     btn.addEventListener('click', () => {
-      const current = localStorage.getItem('site_theme') || 'dark';
+      const current = localStorage.getItem('site_theme') || 'light';
       const next = current === 'light' ? 'dark' : 'light';
       localStorage.setItem('site_theme', next);
       applyDashTheme(next);

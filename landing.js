@@ -335,14 +335,14 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   // Theme initialization: apply saved theme and wire toggle button
-  const savedTheme = localStorage.getItem('site_theme') || 'dark';
+  const savedTheme = localStorage.getItem('site_theme') || 'light';
   applyTheme(savedTheme);
 
   const themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) {
     themeBtn.textContent = savedTheme === 'light' ? '🌙' : '☀️';
     themeBtn.addEventListener('click', () => {
-      const current = localStorage.getItem('site_theme') || 'dark';
+      const current = localStorage.getItem('site_theme') || 'light';
       const next = current === 'light' ? 'dark' : 'light';
       localStorage.setItem('site_theme', next);
       applyTheme(next);
