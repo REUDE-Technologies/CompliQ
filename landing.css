@@ -2303,3 +2303,108 @@ img.splash-wordmark {
   width: auto !important;
   display: block !important;
 }
+
+/* ══════════════════════════════════════════════
+   HERO TITLE — Precision / Predictive animation
+══════════════════════════════════════════════ */
+.hero-anim-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Line 1: deep dark forest green, slides up */
+.hero-line-1 {
+  display: block;
+  color: #063a1e;
+  font-weight: 900;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: hero-slide-up 0.6s cubic-bezier(0.22,1,0.36,1) forwards 0.2s;
+}
+
+/* Line 2: staggered 0.3s after line 1 */
+.hero-line-2 {
+  display: block;
+  font-weight: 900;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: hero-slide-up 0.6s cubic-bezier(0.22,1,0.36,1) forwards 0.5s;
+}
+
+/* "Pre" — vibrant digital royal blue gradient */
+.hl2-pre {
+  background: linear-gradient(135deg, #1a56db 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* "dictive Intelligence." — bright safety orange/coral gradient */
+.hl2-rest {
+  background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes hero-slide-up {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Override any conflicting old classes */
+.hero-line-left, .hero-line-right { animation: none !important; opacity: 1 !important; transform: none !important; }
+
+/* ── About: taller big images ── */
+.about-col .about-img-main {
+  min-height: 420px !important;
+  height: 420px !important;
+}
+
+/* ── Small cards: equal fixed size ── */
+.about-card-br {
+  width: 145px !important;
+}
+.about-card-br img {
+  width: 100% !important;
+  height: 90px !important;
+  object-fit: cover !important;
+}
+.about-card-br .card-label {
+  font-size: 0.68rem !important;
+  padding: 6px 8px !important;
+}
+
+/* ── Feature cards: revert to original teal glass ── */
+.feature-card {
+  background: rgba(2,73,80,0.4) !important;
+  border-color: var(--c-border) !important;
+}
+.feature-card:hover {
+  background: rgba(15,164,175,0.06) !important;
+}
+.feature-card h3 { color: var(--c-white) !important; }
+.feature-card p { color: var(--c-muted) !important; }
+
+/* ── Splash REUDE text — ensure visible ── */
+.splash-reude-big {
+  font-size: 3.2rem !important;
+  font-style: italic !important;
+  font-weight: 900 !important;
+  color: #FF7A00 !important;
+  letter-spacing: 6px !important;
+  text-shadow: 0 0 20px rgba(255,122,0,0.5) !important;
+  -webkit-text-fill-color: #FF7A00 !important;
+}
+.splash-reude-sub {
+  font-size: 1rem !important;
+  font-style: italic !important;
+  font-weight: 700 !important;
+  color: #FF7A00 !important;
+  letter-spacing: 5px !important;
+  -webkit-text-fill-color: #FF7A00 !important;
+}
+.splash-reude-text {
+  opacity: 0;
+  animation: splash-word-in 0.7s ease forwards 0.9s !important;
+}
