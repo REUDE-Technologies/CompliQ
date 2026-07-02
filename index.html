@@ -20,17 +20,11 @@
   <!-- SPLASH SCREEN INTRO -->
   <div class="splash-screen" id="splash-screen">
     <div class="splash-content">
-      <!-- Horizontal brand row: CompliQ BY | R-icon | REUDE TECHNOLOGIES -->
-      <div class="splash-brand-row">
-        <p class="splash-compliq-label">CompliQ by</p>
-        <div class="splash-logo-wrap">
-          <img src="images/reude R logo.png" alt="Reude R" class="splash-r-spin">
-        </div>
-        <div class="splash-reude-text">
-          <span class="splash-reude-big">REUDE</span>
-          <span class="splash-reude-sub">TECHNOLOGIES</span>
-        </div>
+      <p class="splash-compliq-label">CompliQ by</p>
+      <div class="splash-logo-wrap">
+        <img src="images/reude R logo.png" alt="Reude R" class="splash-r-spin">
       </div>
+      <img src="images/reude-words.png" alt="Reude Technologies" class="splash-wordmark">
       <p class="splash-subtitle">AI-Powered Industrial Inspection Platform</p>
       <div class="splash-loader">
         <div class="loader-bar"></div>
@@ -288,22 +282,25 @@
       <div class="about-grid">
         <div class="about-visual">
           <div class="about-image-stack">
-            <div class="about-main-images">
-              <img src="images/turbine_teal.png" alt="Wind Turbine" class="about-img-main reveal-left">
-              <img src="images/solar_teal.png" alt="Solar Panels" class="about-img-main reveal-right" style="animation-delay: 0.15s;">
-            </div>
-            <!-- Bottom cards row: RGB inspection + solar & drone side by side -->
-            <div class="about-cards-row">
-              <div class="about-img-card reveal-right">
-                <img src="images/turbine_inspect_rgb.png" alt="Blade Inspection">
-                <div class="card-label">RGB Inspection Mode</div>
-              </div>
-              <div class="about-img-card reveal-right" style="animation-delay:0.15s">
-                <img src="images/solar_teal.png" alt="Solar & Drone Inspection">
-                <div class="card-label">Solar & Drone Inspection</div>
+            <!-- Left col: turbine big + RGB card bottom-right -->
+            <div class="about-col">
+              <div class="about-col-inner">
+                <img src="images/turbine_teal.png" alt="Wind Turbine" class="about-img-main reveal-left">
+                <div class="about-img-card about-card-br reveal-left" style="animation-delay:0.25s">
+                  <img src="images/turbine_inspect_rgb.png" alt="Blade Inspection">
+                  <div class="card-label">RGB Inspection Mode</div>
+                </div>
               </div>
             </div>
-            <div class="about-img-badge" style="display:none;">
+            <!-- Right col: solar big + drone card bottom-right -->
+            <div class="about-col">
+              <div class="about-col-inner">
+                <img src="images/solar_teal.png" alt="Solar Panels" class="about-img-main reveal-right" style="animation-delay:0.15s">
+                <div class="about-img-card about-card-br reveal-right" style="animation-delay:0.35s">
+                  <img src="images/drone_inspection.png" alt="Solar & Drone Inspection">
+                  <div class="card-label">Solar & Drone Inspection</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -604,7 +601,7 @@
         <a href="#about">About</a>
         <a href="#features">Features</a>
         <a href="#contact">Contact</a>
-        <a href="dashboard.html">Dashboard</a>
+        <a href="javascript:goToDashboard()">Dashboard</a>
       </div>
       <div class="footer-copy">
         <p>© 2026 Reude Technologies Pvt. Ltd. | All Rights Reserved.</p>

@@ -327,7 +327,7 @@ window.addEventListener('DOMContentLoaded', () => {
             ${userData.firstName ? userData.firstName[0] : ''}${userData.lastName ? userData.lastName[0] : ''}
           </div>
           <span style="font-size:0.85rem;color:var(--c-sky);">${userData.firstName || ''}</span>
-          <a href="dashboard.html" style="background:var(--c-teal);color:var(--c-deep);padding:8px 18px;border-radius:8px;font-weight:700;font-size:0.85rem;text-decoration:none;">Dashboard →</a>
+          <a href="javascript:goToDashboard()" style="background:var(--c-teal);color:var(--c-deep);padding:8px 18px;border-radius:8px;font-weight:700;font-size:0.85rem;text-decoration:none;">Dashboard →</a>
         </div>
       `;
       navActions.insertAdjacentHTML('beforeend', userHtml);
@@ -354,4 +354,15 @@ window.addEventListener('DOMContentLoaded', () => {
 function applyTheme(theme) {
   if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
+}
+
+function goToDashboard() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (raw) {
+    try {
+      const user = JSON.parse(raw);
+      if (user.sector === 'solar') { window.location.href = 'solar-dashboard.html'; return; }
+    } catch(e) {}
+  }
+  window.location.href = 'dashboard.html';
 }

@@ -2213,3 +2213,93 @@ img.splash-wordmark {
 [data-theme="light"] .about-text { color: #003135 !important; }
 [data-theme="light"] .pillar h4 { color: #003135 !important; }
 [data-theme="light"] .pillar p { color: #1e4a4e !important; }
+
+/* ── Splash: CompliQ by stacked above R, then wordmark image ── */
+.splash-content {
+  gap: 12px !important;
+}
+.splash-compliq-label {
+  font-size: 1.1rem !important;
+  letter-spacing: 4px !important;
+  margin-bottom: 4px !important;
+}
+/* splash wordmark image: screen blend removes dark bg, larger size */
+img.splash-wordmark {
+  width: 300px !important;
+  height: auto !important;
+  mix-blend-mode: screen !important;
+  filter: brightness(1.2) !important;
+  opacity: 0;
+  animation: splash-word-in 0.7s ease forwards 1.0s !important;
+}
+
+/* ── About section: two columns, small card at bottom-right of each big image ── */
+.about-image-stack {
+  display: flex !important;
+  gap: 14px !important;
+  height: auto !important;
+  align-items: stretch !important;
+}
+.about-col {
+  flex: 1;
+  min-width: 0;
+}
+.about-col-inner {
+  position: relative;
+  height: 100%;
+}
+.about-col .about-img-main {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow);
+  display: block;
+}
+/* Small card pinned to bottom-right corner of big image */
+.about-card-br {
+  position: absolute !important;
+  bottom: -16px !important;
+  right: -12px !important;
+  left: auto !important;
+  width: 140px !important;
+  z-index: 2;
+}
+.about-card-br img {
+  height: 80px !important;
+  object-fit: cover !important;
+}
+
+/* About visual height = right content height */
+.about-visual { align-self: stretch; }
+.about-image-stack { height: 100%; }
+
+/* ── Feature cards: deep dark blue ── */
+.feature-card {
+  background: #0a1628 !important;
+  border-color: rgba(15,164,175,0.2) !important;
+}
+.feature-card:hover {
+  background: #0d1e35 !important;
+}
+.feature-card h3 { color: #fff !important; }
+.feature-card p { color: rgba(175,221,229,0.75) !important; }
+
+/* ── Dashboard sidebar logo: centered and bigger ── */
+.sidebar-brand {
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  gap: 6px !important;
+}
+.sidebar-compliq-text {
+  font-size: 0.7rem !important;
+  letter-spacing: 1.5px !important;
+}
+.sidebar-logo-img {
+  height: 52px !important;
+  width: auto !important;
+  display: block !important;
+}

@@ -29,7 +29,8 @@
     .sidebar-switch-link:hover { color: var(--c-teal); border-color: rgba(15,164,175,0.35); background: rgba(15,164,175,0.06); }
     /* Sidebar logo text */
     .sidebar-compliq-text { font-size: 0.72rem; font-weight: 700; color: var(--c-teal); letter-spacing: 1px; display: block; }
-    .sidebar-logo-img { height: 22px; opacity: 0.9; display: block; margin-top: 4px; }
+    .sidebar-logo-img { height: 48px; opacity: 1; display: block; margin-top: 4px; }
+    .sidebar-brand { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 6px !important; }
   </style>
 </head>
 <body>
@@ -147,7 +148,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span>PDF Report</span>
         </button>
-        <a href="index.html" class="icon-btn home-btn" title="Back to Home">
+        <a href="javascript:goHome()" class="icon-btn home-btn" title="Back to Home">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </a>
       </div>
@@ -431,6 +432,18 @@ function checkAuth() {
 
 function handleLogout() {
   localStorage.removeItem(SESSION_KEY);
+  window.location.href = 'index.html';
+}
+
+function goHome() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      const user = JSON.parse(raw);
+      user.sector = 'solar';
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    }
+  } catch(e) {}
   window.location.href = 'index.html';
 }
 

@@ -1729,3 +1729,16 @@ function applyDashTheme(theme) {
   if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
 }
+
+function goHome() {
+  // Save that this user was on wind dashboard
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      const user = JSON.parse(raw);
+      user.sector = user.sector || 'wind';
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    }
+  } catch(e) {}
+  window.location.href = 'index.html';
+}
