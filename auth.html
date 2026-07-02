@@ -518,10 +518,8 @@
       };
       users.push(user);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      showMsg('register-msg','success',`Account created! Welcome, ${user.firstName}. Redirecting…`);
-      const redirect = selectedSector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
-      setTimeout(() => { window.location.href = redirect; }, 1200);
+      showMsg('register-msg','success',`Account created! Welcome, ${user.firstName}. Please sign in to continue.`);
+      setTimeout(() => { showTab('login'); }, 1800);
     }
 
     // Check URL param to open correct tab
