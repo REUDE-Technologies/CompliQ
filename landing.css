@@ -2276,17 +2276,6 @@ img.splash-wordmark {
 .about-visual { align-self: stretch; }
 .about-image-stack { height: 100%; }
 
-/* ── Feature cards: deep dark blue ── */
-.feature-card {
-  background: #0a1628 !important;
-  border-color: rgba(15,164,175,0.2) !important;
-}
-.feature-card:hover {
-  background: #0d1e35 !important;
-}
-.feature-card h3 { color: #fff !important; }
-.feature-card p { color: rgba(175,221,229,0.75) !important; }
-
 /* ── Dashboard sidebar logo: centered and bigger ── */
 .sidebar-brand {
   flex-direction: column !important;
@@ -2357,8 +2346,8 @@ img.splash-wordmark {
 
 /* ── About: taller big images ── */
 .about-col .about-img-main {
-  min-height: 420px !important;
-  height: 420px !important;
+  min-height: 600px !important;
+  height: 600px !important;
 }
 
 /* ── Small cards: equal fixed size ── */
@@ -2374,17 +2363,6 @@ img.splash-wordmark {
   font-size: 0.68rem !important;
   padding: 6px 8px !important;
 }
-
-/* ── Feature cards: revert to original teal glass ── */
-.feature-card {
-  background: rgba(2,73,80,0.4) !important;
-  border-color: var(--c-border) !important;
-}
-.feature-card:hover {
-  background: rgba(15,164,175,0.06) !important;
-}
-.feature-card h3 { color: var(--c-white) !important; }
-.feature-card p { color: var(--c-muted) !important; }
 
 /* ── Splash REUDE text — ensure visible ── */
 .splash-reude-big {
