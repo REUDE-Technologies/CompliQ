@@ -2137,3 +2137,79 @@ img.splash-wordmark {
 .auth-tab.active {
   color: #003135 !important;
 }
+
+/* ── Hero title slide-in animations ── */
+.hero-line-left {
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(-60px);
+  animation: slide-from-left 0.8s cubic-bezier(0.16,1,0.3,1) forwards 0.3s;
+  color: #063235;
+}
+.hero-line-right {
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(60px);
+  animation: slide-from-right 0.8s cubic-bezier(0.16,1,0.3,1) forwards 0.55s;
+}
+@keyframes slide-from-left {
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-from-right {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Light theme: reduce hero overlay so video is visible ── */
+[data-theme="light"] .hero-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.45) 0%,
+    rgba(255,255,255,0.25) 40%,
+    rgba(255,255,255,0.55) 100%
+  ) !important;
+}
+
+/* ── Hero desc dark color in light theme ── */
+[data-theme="light"] .hero-desc { color: #003135 !important; -webkit-text-fill-color: #003135 !important; }
+
+/* ── Explore Features button visible ── */
+.btn-hero-outline {
+  border: 2px solid rgba(255,255,255,0.7) !important;
+  color: #fff !important;
+  background: rgba(255,255,255,0.1) !important;
+}
+[data-theme="light"] .btn-hero-outline {
+  border: 2px solid #003135 !important;
+  color: #003135 !important;
+  background: rgba(255,255,255,0.85) !important;
+  font-weight: 700 !important;
+}
+
+/* ── About images same height as content ── */
+.about-visual { height: auto !important; }
+.about-col .about-img-main { height: 220px !important; }
+
+/* ── Remove red dot (about-img-badge hidden) ── */
+.about-img-badge { display: none !important; }
+
+/* ── Feature cards scroll-in animation ── */
+.feature-card {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.feature-card.visible {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* ── Scroll reveal for all elements ── */
+.reveal-left, .reveal-right, .reveal-up {
+  transition: opacity 0.7s ease, transform 0.7s ease !important;
+}
+
+/* ── About section: CompliQ by REUDE text dark ── */
+[data-theme="light"] .about-lead,
+[data-theme="light"] .about-text { color: #003135 !important; }
+[data-theme="light"] .pillar h4 { color: #003135 !important; }
+[data-theme="light"] .pillar p { color: #1e4a4e !important; }
