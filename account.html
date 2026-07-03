@@ -336,11 +336,11 @@
 
         <div class="security-item">
           <div class="security-info"><h4>Two-Factor Authentication</h4><p>Add an extra layer of security to your account.</p></div>
-          <span class="status-badge disabled">Disabled</span>
+          <label class="toggle-switch"><input type="checkbox" id="toggle-2fa" onchange="saveSecToggle('2fa',this.checked)"><span class="toggle-slider"></span></label>
         </div>
         <div class="security-item">
           <div class="security-info"><h4>Login Alerts</h4><p>Get notified of new sign-ins to your account.</p></div>
-          <span class="status-badge enabled">Enabled</span>
+          <label class="toggle-switch"><input type="checkbox" id="toggle-alerts" checked onchange="saveSecToggle('alerts',this.checked)"><span class="toggle-slider"></span></label>
         </div>
         <div class="security-item">
           <div class="security-info"><h4>Account Created</h4><p id="acc-created">—</p></div>
@@ -421,6 +421,13 @@
     const USERS_KEY   = 'compliq_users';
 
     // ── Load session ──────────────────────────────
+    function saveSecToggle(key, val) {
+      const prefs = JSON.parse(localStorage.getItem('compliq_prefs') || '{}');
+      prefs[key] = val;
+      localStorage.setItem('compliq_prefs', JSON.stringify(prefs));
+      showToast(`${key === '2fa' ? 'Two-Factor Authentication' : 'Login Alerts'} ${val ? 'enabled' : 'disabled'}`, 'success');
+    }
+
     function loadProfile() {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) { window.location.href = 'auth.html'; return; }
@@ -443,7 +450,14 @@
 
       document.getElementById('acc-created').textContent = user.createdAt
         ? new Date(user.createdAt).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})
-        : 'Account registered via CompliQ platform';
+        : new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+
+      // Load security toggles
+      const prefs = JSON.parse(localStorage.getItem('compliq_prefs') || '{}');
+      const t2fa = document.getElementById('toggle-2fa');
+      const talerts = document.getElementById('toggle-alerts');
+      if (t2fa) t2fa.checked = prefs['2fa'] || false;
+      if (talerts) talerts.checked = prefs['alerts'] !== false; // default true
 
       // Preferences
       const sect = document.getElementById('pref-sector');

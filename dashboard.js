@@ -1731,14 +1731,26 @@ function applyDashTheme(theme) {
 }
 
 function goHome() {
-  // Save that this user was on wind dashboard
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    if (raw) {
-      const user = JSON.parse(raw);
-      user.sector = user.sector || 'wind';
-      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    }
+    if (raw) { const user = JSON.parse(raw); user.sector = user.sector || 'wind'; localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
   } catch(e) {}
   window.location.href = 'index.html';
+}
+
+function switchDashboard(targetSector) {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) { window.location.href = `auth.html?sector=${targetSector}`; return; }
+  const session = JSON.parse(raw);
+  const users = JSON.parse(localStorage.getItem('compliq_users') || '[]');
+  const hasAccount = users.some(u => u.email === session.email) || session.email === 'admin@reude.com';
+  if (hasAccount) {
+    session.sector = targetSector;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    window.location.href = targetSector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
+  } else {
+    if (confirm(`Sign in to the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first?`)) {
+      window.location.href = `auth.html?sector=${targetSector}`;
+    }
+  }
 }
