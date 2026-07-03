@@ -1124,3 +1124,45 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   border-color: rgba(15,164,175,0.35);
   background: rgba(15,164,175,0.06);
 }
+
+/* ── AI Copilot panel: light theme fixes ── */
+[data-theme="light"] .ai-chat-box {
+  background: #fff;
+  border: 1px solid rgba(15,164,175,0.2);
+  box-shadow: 0 8px 40px rgba(2,73,80,0.12);
+}
+[data-theme="light"] .ai-chat-header {
+  background: #fff;
+  border-bottom-color: rgba(15,164,175,0.15);
+}
+[data-theme="light"] .ai-chat-header h4 { color: #003135; }
+[data-theme="light"] .ai-chat-header > button { color: #28666E; }
+[data-theme="light"] .ai-messages { background: #F7FBFB; }
+[data-theme="light"] .ai-bubble.bot {
+  background: rgba(15,164,175,0.06);
+  border-color: rgba(15,164,175,0.15);
+  color: #063235;
+}
+[data-theme="light"] .ai-bubble.user {
+  background: rgba(15,164,175,0.12);
+  border-color: rgba(15,164,175,0.25);
+  color: #003135;
+}
+[data-theme="light"] .ai-suggestions { background: #fff; border-top: 1px solid rgba(15,164,175,0.1); }
+[data-theme="light"] .sugg-btn {
+  background: #F0F9FF;
+  border-color: rgba(15,164,175,0.2);
+  color: #28666E;
+}
+[data-theme="light"] .sugg-btn:hover { border-color: #0FA4AF; color: #0FA4AF; background: rgba(15,164,175,0.06); }
+[data-theme="light"] .ai-input-row {
+  background: #fff;
+  border-top-color: rgba(15,164,175,0.12);
+}
+[data-theme="light"] .ai-input-row input {
+  background: #F0F9FF;
+  border-color: rgba(15,164,175,0.2);
+  color: #063235;
+}
+[data-theme="light"] .ai-input-row input::placeholder { color: #94a3b8; }
+[data-theme="light"] .ai-input-row input:focus { border-color: #0FA4AF; background: #fff; }
