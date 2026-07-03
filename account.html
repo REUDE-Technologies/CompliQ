@@ -54,7 +54,7 @@
     .acc-nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
     .acc-nav-item:hover { background: rgba(15,164,175,0.06); color: #0FA4AF; }
     .acc-nav-item.active { background: rgba(15,164,175,0.1); color: #0FA4AF; font-weight: 700; }
-    .acc-nav-divider { border: none; border-top: 1px solid #E2F0F0; margin: 8px 0; }
+    .acc-nav-divider { border: none; border-top: 1px solid #327878; margin: 8px 0; }
 
     /* ── Content panels ── */
     .acc-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
@@ -78,6 +78,25 @@
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; box-shadow: 0 4px 16px rgba(15,164,175,0.3);
     }
+    .avatar-upload-wrap {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .avatar-edit-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .avatar-upload-wrap:hover .avatar-edit-overlay { opacity: 1; }
     .avatar-info h3 { font-size: 1.1rem; font-weight: 800; color: #003135; }
     .avatar-info p { font-size: 0.82rem; color: #28666E; margin-top: 2px; }
     .avatar-info .role-badge {
@@ -276,7 +295,14 @@
         <div class="acc-panel-title">Profile Information</div>
         <div class="acc-panel-sub">Update your personal details and organisation information.</div>
         <div class="avatar-row">
-          <div class="avatar-circle" id="acc-avatar">OP</div>
+          <div class="avatar-upload-wrap" onclick="document.getElementById('avatar-file-input').click()" title="Click to change photo">
+            <div class="avatar-circle" id="acc-avatar" style="position:relative;cursor:pointer;">OP</div>
+            <img id="acc-avatar-img" src="" alt="Profile" style="display:none;width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #0FA4AF;cursor:pointer;">
+            <div class="avatar-edit-overlay">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" width="18" height="18"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+            <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+          </div>
           <div class="avatar-info">
             <h3 id="acc-fullname">Operator</h3>
             <p id="acc-email-display">—</p>
@@ -435,6 +461,16 @@
 
       const initials = `${user.firstName?.[0]||'O'}${user.lastName?.[0]||'P'}`;
       document.getElementById('acc-avatar').textContent = initials;
+      if (user.avatarUrl) {
+        document.getElementById('acc-avatar').style.display = 'none';
+        const img = document.getElementById('acc-avatar-img');
+        img.src = user.avatarUrl;
+        img.style.display = 'block';
+      } else {
+        document.getElementById('acc-avatar').style.display = '';
+        const img = document.getElementById('acc-avatar-img');
+        if (img) { img.src = ''; img.style.display = 'none'; }
+      }
       document.getElementById('acc-fullname').textContent = `${user.firstName||''} ${user.lastName||''}`.trim();
       document.getElementById('acc-email-display').textContent = user.email || '—';
       document.getElementById('acc-role-badge').textContent = user.role || 'Fleet Operator';
@@ -609,6 +645,33 @@
       const t = document.getElementById('acc-toast');
       t.textContent = msg; t.className = `toast-acc show ${type}`;
       setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ── Avatar upload ─────────────────────────────
+    function handleAvatarUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        // Save to session and users
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return;
+        const user = JSON.parse(raw);
+        user.avatarUrl = dataUrl;
+        localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+        const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+        const idx = users.findIndex(u => u.email === user.email);
+        if (idx > -1) { users[idx].avatarUrl = dataUrl; localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+        // Update UI
+        document.getElementById('acc-avatar').style.display = 'none';
+        const img = document.getElementById('acc-avatar-img');
+        img.src = dataUrl;
+        img.style.display = 'block';
+        showToast('Profile photo updated', 'success');
+      };
+      reader.readAsDataURL(file);
     }
 
     // Init

@@ -88,6 +88,11 @@
         <span>Inspection Report</span>
       </button>
       <div class="nav-group-label" style="margin-top:16px">Data Management</div>
+      <div class="nav-group-label" style="margin-top:16px">Data Management</div>
+      <button class="nav-item" data-tab="manual">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Manual Entry</span>
+      </button>
       <button class="nav-item" data-tab="analytics">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         <span>Analytics</span>
@@ -392,6 +397,86 @@
       </div>
     </section>
 
+    <!-- MANUAL DATA ENTRY -->
+    <section class="view" id="view-manual">
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Manual Solar Array &amp; Defect Entry</h3>
+          <p style="font-size:0.8rem;color:var(--c-muted)">Add real-world solar array data and inspection observations</p>
+        </div>
+        <div class="panel-body">
+          <div style="display:flex;gap:8px;margin-bottom:20px;">
+            <button class="fbtn active" id="mtab-array" onclick="switchSolarManualTab('array')">Add New Array</button>
+            <button class="fbtn" id="mtab-defect" onclick="switchSolarManualTab('defect')">Add Defect / Observation</button>
+          </div>
+          <!-- ADD ARRAY -->
+          <div id="mform-array">
+            <form onsubmit="handleAddArray(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Array ID *</label><input type="text" id="ma-id" class="styled-input" required></div>
+                <div class="fg"><label>Site / Solar Park *</label><input type="text" id="ma-site" class="styled-input" required></div>
+                <div class="fg"><label>GPS (Lat, Long) *</label><input type="text" id="ma-gps" placeholder="27.53, 71.90" class="styled-input" required></div>
+                <div class="fg"><label>Capacity (MW)</label><input type="number" id="ma-capacity" step="0.1" value="100" class="styled-input"></div>
+                <div class="fg"><label>Total Panels</label><input type="number" id="ma-panels" value="4000" class="styled-input"></div>
+                <div class="fg"><label>Manufacturer</label><input type="text" id="ma-mfr" class="styled-input"></div>
+                <div class="fg"><label>Module Model</label><input type="text" id="ma-model" class="styled-input"></div>
+                <div class="fg"><label>Commission Year</label><input type="number" id="ma-year" value="2023" class="styled-input"></div>
+                <div class="fg"><label>Initial Health (%)</label><input type="number" id="ma-health" value="97" min="0" max="100" class="styled-input"></div>
+                <div class="fg"><label>DC Power (MW)</label><input type="number" id="ma-dcpower" step="0.1" value="90" class="styled-input"></div>
+                <div class="fg"><label>PR Ratio</label><input type="number" id="ma-pr" step="0.01" value="0.80" class="styled-input"></div>
+                <div class="fg"><label>Irradiance (W/m²)</label><input type="number" id="ma-irr" value="900" class="styled-input"></div>
+              </div>
+              <div class="form-actions" style="margin-top:16px;">
+                <button type="submit" class="teal-btn">Add Array to Fleet</button>
+                <button type="button" class="ghost-btn" onclick="this.closest('form').reset()">Reset</button>
+              </div>
+            </form>
+          </div>
+          <!-- ADD DEFECT -->
+          <div id="mform-defect" style="display:none;">
+            <form onsubmit="handleAddSolarDefect(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Target Array *</label><select id="md-array" class="styled-select"></select></div>
+                <div class="fg"><label>String Group *</label><input type="text" id="md-string" placeholder="SG-1" class="styled-input" required></div>
+                <div class="fg"><label>Panel Number *</label><input type="text" id="md-panel" placeholder="P-001" class="styled-input" required></div>
+                <div class="fg"><label>Defect Type *</label>
+                  <select id="md-type" class="styled-select">
+                    <option>Hotspot</option><option>Delamination</option><option>Soiling</option>
+                    <option>Micro-crack</option><option>Bypass Diode Failure</option><option>Frame Corrosion</option>
+                  </select>
+                </div>
+                <div class="fg"><label>Severity (1–5) *</label><input type="number" id="md-sev" min="1" max="5" value="3" class="styled-input" required></div>
+                <div class="fg"><label>Confidence (%)</label><input type="number" id="md-conf" value="85" class="styled-input"></div>
+                <div class="fg"><label>Detection Method</label>
+                  <select id="md-method" class="styled-select">
+                    <option>Drone RGB</option><option>Thermal Imaging</option><option>EL Imaging</option><option>Visual (Manual)</option>
+                  </select>
+                </div>
+                <div class="fg"><label>Inspection Date</label><input type="date" id="md-date" class="styled-input"></div>
+                <div class="fg"><label>Campaign ID</label><input type="text" id="md-campaign" placeholder="INSP-2026-Q2" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Recommended Action *</label><input type="text" id="md-action" class="styled-input" value="Schedule validation inspection" required></div>
+              <div class="fg" style="margin-top:8px"><label>Observations</label><textarea id="md-notes" rows="3" class="styled-input" placeholder="Describe the defect..."></textarea></div>
+              <div class="form-actions" style="margin-top:16px;">
+                <button type="submit" class="teal-btn">Record Defect</button>
+                <button type="button" class="ghost-btn" onclick="this.closest('form').reset()">Reset</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <!-- Records log -->
+      <div class="panel full-panel" style="margin-top:20px;">
+        <div class="panel-header">
+          <h3>Manual Records Log</h3>
+          <button class="ghost-btn" onclick="clearSolarManualRecords()">Clear All</button>
+        </div>
+        <div class="panel-body">
+          <div id="solar-manual-list"><p style="color:var(--c-muted);font-size:0.85rem;padding:16px 0">No manual records yet.</p></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -462,6 +547,14 @@ function checkAuth() {
     document.getElementById('user-display-name').textContent = `${session.firstName || 'Solar'} ${session.lastName || 'Engineer'}`.trim();
     document.getElementById('user-display-role').textContent = session.role || 'Solar Fleet Engineer';
     initApp();
+    // Save solar session for sector switching
+    const solarRaw = localStorage.getItem('compliq_session');
+    if (solarRaw) {
+      const solarUser = JSON.parse(solarRaw);
+      if (solarUser.sector === 'solar') {
+        localStorage.setItem('compliq_solar_session', solarRaw);
+      }
+    }
   } catch (e) {
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
@@ -482,19 +575,22 @@ function handleLogout() {
 }
 
 function switchDashboard(targetSector) {
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) { window.location.href = `auth.html?sector=${targetSector}`; return; }
+  const raw = localStorage.getItem('compliq_session');
+  if (!raw) { window.location.href = 'auth.html'; return; }
   const session = JSON.parse(raw);
-  const users = JSON.parse(localStorage.getItem('compliq_users') || '[]');
-  const hasAccount = users.some(u => u.email === session.email) || session.email === 'admin@reude.com';
-  if (hasAccount) {
-    session.sector = targetSector;
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  const targetKey = targetSector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
+  const targetSession = localStorage.getItem(targetKey);
+  if (targetSession) {
+    // Already registered and logged in for this sector — switch directly
+    const targetUser = JSON.parse(targetSession);
+    localStorage.setItem('compliq_session', JSON.stringify({...targetUser, sector: targetSector}));
     window.location.href = targetSector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
   } else {
-    if (confirm(`Sign in to the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first?`)) {
-      window.location.href = `auth.html?sector=${targetSector}`;
-    }
+    // Not registered for this sector yet
+    showToast(`Register for the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first`, 'error');
+    setTimeout(() => {
+      window.location.href = `auth.html?tab=register&sector=${targetSector}`;
+    }, 1800);
   }
 }
 
@@ -583,6 +679,7 @@ const PAGE_TITLES = {
   fleet:    ['Solar Fleet Overview',      'Real-time monitoring of all solar panel array assets'],
   asset:    ['Panel Array Detail',        'Interactive array thermal map & defect explorer'],
   report:   ['Inspection Report',         'Thermal & EL inspection evidence & engineering assessment'],
+  manual:   ['Manual Entry',              'Add solar array data and defect observations'],
   analytics:['Analytics',                 'Fleet performance trends & defect analysis charts']
 };
 
@@ -1323,6 +1420,90 @@ function initApp() {
   setInterval(addLogEntry, 2200);
   // Add initial log entries
   for (let i = 0; i < 6; i++) setTimeout(addLogEntry, i * 100);
+}
+
+// ── MANUAL ENTRY (SOLAR) ──────────────────────────
+function switchSolarManualTab(tab) {
+  document.getElementById('mform-array').style.display = tab === 'array' ? 'block' : 'none';
+  document.getElementById('mform-defect').style.display = tab === 'defect' ? 'block' : 'none';
+  document.getElementById('mtab-array').classList.toggle('active', tab === 'array');
+  document.getElementById('mtab-defect').classList.toggle('active', tab === 'defect');
+  if (tab === 'defect') populateArrayDropdown();
+}
+function populateArrayDropdown() {
+  const sel = document.getElementById('md-array');
+  if (!sel) return;
+  sel.innerHTML = STATE.arrays.map(a => `<option value="${a.id}">${a.assetId} — ${a.name}</option>`).join('');
+}
+function handleAddArray(e) {
+  e.preventDefault();
+  const gpsStr = document.getElementById('ma-gps').value.split(',');
+  const id = STATE.arrays.length + 1 + (Date.now() % 1000);
+  const assetId = document.getElementById('ma-id').value.trim();
+  const newArr = {
+    id, assetId, name: assetId,
+    site: document.getElementById('ma-site').value.trim(),
+    state: 'Manual Entry',
+    gps: { lat: parseFloat(gpsStr[0])||0, lng: parseFloat(gpsStr[1])||0 },
+    location: document.getElementById('ma-site').value.trim(),
+    status: 'normal', health: parseInt(document.getElementById('ma-health').value)||97,
+    dcPower: parseFloat(document.getElementById('ma-dcpower').value)||90,
+    capacity: parseFloat(document.getElementById('ma-capacity').value)||100,
+    panels: parseInt(document.getElementById('ma-panels').value)||4000,
+    manufacturer: document.getElementById('ma-mfr').value||'Unknown',
+    model: document.getElementById('ma-model').value||'—',
+    commYear: parseInt(document.getElementById('ma-year').value)||2023,
+    prRatio: parseFloat(document.getElementById('ma-pr').value)||0.8,
+    irradiance: parseInt(document.getElementById('ma-irr').value)||900,
+    stringVoltage: 800, temperature: 50,
+    lastInspection: new Date().toISOString().slice(0,10),
+    campaign: 'MANUAL-ENTRY', inspCoverage: 100, anomalies: 0, defects: []
+  };
+  STATE.arrays.push(newArr);
+  renderMetrics(); renderFleetGrid(); renderAssetList();
+  logManualRecord(`Array Added: ${assetId} — ${newArr.site}`);
+  showToast(`Array ${assetId} added to fleet`, 'success');
+  e.target.reset();
+}
+function handleAddSolarDefect(e) {
+  e.preventDefault();
+  const arrId = parseInt(document.getElementById('md-array').value);
+  const sev = parseInt(document.getElementById('md-sev').value);
+  const newDef = {
+    id: 'SDF-M' + Date.now().toString().slice(-4),
+    assetId: arrId,
+    string: document.getElementById('md-string').value.trim(),
+    panel: document.getElementById('md-panel').value.trim(),
+    type: document.getElementById('md-type').value,
+    severity: sev,
+    confidence: parseInt(document.getElementById('md-conf').value)/100,
+    priority: sev >= 4 ? 'HIGH' : sev === 3 ? 'MEDIUM' : 'LOW',
+    action: document.getElementById('md-action').value.trim(),
+    status: 'Pending',
+    method: document.getElementById('md-method').value,
+    campaign: document.getElementById('md-campaign').value||'MANUAL',
+    inspDate: document.getElementById('md-date').value||new Date().toISOString().slice(0,10),
+    notes: document.getElementById('md-notes').value||'Manually entered observation.'
+  };
+  STATE.defects.push(newDef);
+  const arr = STATE.arrays.find(a => a.id === arrId);
+  if (arr) { arr.anomalies++; if (!arr.defects) arr.defects = []; arr.defects.push(newDef.id); }
+  logManualRecord(`Defect Recorded: ${newDef.id} — ${newDef.type} on ${arr?.assetId} ${newDef.string} (SEV-${sev})`);
+  showToast(`Defect ${newDef.id} recorded`, 'success');
+  e.target.reset();
+}
+let solarManualRecords = [];
+function logManualRecord(text) {
+  solarManualRecords.unshift({ text, time: new Date().toLocaleTimeString() });
+  const el = document.getElementById('solar-manual-list');
+  if (!el) return;
+  el.innerHTML = solarManualRecords.map(r =>
+    `<div style="padding:10px 0;border-bottom:1px solid var(--c-border);font-size:0.82rem;color:var(--c-sky);">${r.text} <span style="font-size:0.7rem;color:var(--c-muted)">· ${r.time}</span></div>`
+  ).join('');
+}
+function clearSolarManualRecords() {
+  solarManualRecords = [];
+  document.getElementById('solar-manual-list').innerHTML = '<p style="color:var(--c-muted);font-size:0.85rem;padding:16px 0">No manual records yet.</p>';
 }
 
 // Kick off
