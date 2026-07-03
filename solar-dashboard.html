@@ -1199,15 +1199,17 @@ function showToast(msg, type = 'success') {
 // 14. THEME TOGGLE
 // ══════════════════════════════════════════════════
 function setupTheme() {
-  const saved = localStorage.getItem('compliq_theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+  const saved = localStorage.getItem('site_theme') || 'light';
+  if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
   btn?.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('compliq_theme', next);
+    const current = localStorage.getItem('site_theme') || 'light';
+    const next = current === 'light' ? 'dark' : 'light';
+    if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('site_theme', next);
     btn.textContent = next === 'light' ? '🌙' : '☀️';
   });
 }

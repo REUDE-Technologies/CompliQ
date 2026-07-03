@@ -1091,3 +1091,36 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 .asset-action-btn:hover {
   color: #003135 !important;
 }
+
+/* ── Sidebar switch dashboard button ── */
+.sidebar-switch-link {
+  display: block;
+  text-align: center;
+  padding: 9px 12px;
+  margin-top: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--c-muted);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-ui);
+  transition: all 0.2s;
+  width: 100%;
+}
+.sidebar-switch-link:hover {
+  color: var(--c-teal);
+  border-color: rgba(15,164,175,0.4);
+  background: rgba(15,164,175,0.06);
+}
+[data-theme="light"] .sidebar-switch-link {
+  color: #28666E;
+  border-color: rgba(6,50,53,0.15);
+}
+[data-theme="light"] .sidebar-switch-link:hover {
+  color: #0FA4AF;
+  border-color: rgba(15,164,175,0.35);
+  background: rgba(15,164,175,0.06);
+}
