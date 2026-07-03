@@ -395,6 +395,41 @@
   </main>
 </div>
 
+<!-- FLOATING AI COPILOT -->
+<div class="ai-float-wrap" id="ai-float">
+  <button class="ai-trigger-btn" id="ai-trigger">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span>AI Copilot</span>
+    <span class="ai-pulse"></span>
+  </button>
+  <div class="ai-chat-box" id="ai-chat-box">
+    <div class="ai-chat-header">
+      <div class="ai-header-info">
+        <div class="ai-avatar">AI</div>
+        <div><h4>CompliQ Solar Copilot</h4><span class="ai-status">● Online • Powered by DSL Engine</span></div>
+      </div>
+      <button onclick="document.getElementById('ai-chat-box').classList.remove('open')">✕</button>
+    </div>
+    <div class="ai-messages" id="ai-messages">
+      <div class="ai-bubble bot">
+        Hello! I'm the CompliQ Solar AI Copilot with access to your live array database. Try asking:<br><br>
+        • "Show all critical hotspot defects"<br>
+        • "Which array has lowest health?"<br>
+        • "What is the PR ratio of ARR-003?"
+      </div>
+    </div>
+    <div class="ai-suggestions" id="ai-suggestions">
+      <button class="sugg-btn" data-q="Show all critical defects">Critical defects</button>
+      <button class="sugg-btn" data-q="Which array has lowest health?">Lowest health</button>
+      <button class="sugg-btn" data-q="Show all hotspot defects">Hotspots</button>
+    </div>
+    <div class="ai-input-row">
+      <input type="text" id="ai-input" placeholder="Ask about your solar fleet...">
+      <button id="ai-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1295,6 +1330,85 @@ window.addEventListener('DOMContentLoaded', () => {
   setupTheme();
   checkAuth();
 });
+
+// ── AI COPILOT ────────────────────────────────────
+document.getElementById('ai-trigger')?.addEventListener('click', () => {
+  document.getElementById('ai-chat-box').classList.toggle('open');
+});
+document.getElementById('ai-send')?.addEventListener('click', sendAIMessage);
+document.getElementById('ai-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') sendAIMessage(); });
+document.querySelectorAll('.sugg-btn').forEach(btn => {
+  btn.addEventListener('click', () => { document.getElementById('ai-input').value = btn.dataset.q; sendAIMessage(); });
+});
+
+function sendAIMessage() {
+  const input = document.getElementById('ai-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  addAIMessage(q, 'user');
+  setTimeout(() => addAIMessage(processSolarQuery(q), 'bot'), 600 + Math.random() * 400);
+}
+
+function addAIMessage(text, role) {
+  const msgs = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = `ai-bubble ${role}`;
+  div.innerHTML = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function processSolarQuery(q) {
+  const query = q.toLowerCase();
+  if (query.includes('health') && query.includes('fleet')) {
+    const avg = STATE.arrays.reduce((s,a) => s+a.health, 0) / STATE.arrays.length;
+    return `Fleet health index: <strong>${avg.toFixed(1)}%</strong><br>${STATE.arrays.filter(a=>a.status==='critical').length} critical, ${STATE.arrays.filter(a=>a.status==='warning').length} advisory.`;
+  }
+  if (query.includes('critical') || query.includes('high') || query.includes('sev-4') || query.includes('sev-5')) {
+    const crits = STATE.defects.filter(d => d.severity >= 4);
+    if (!crits.length) return 'No critical defects found. ✓';
+    return `<strong>${crits.length} critical/high defects:</strong><br>` + crits.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• ${d.id} — ${d.type} on ${a?.assetId} ${d.string} (SEV-${d.severity})`; }).join('<br>');
+  }
+  if (query.includes('hotspot')) {
+    const hs = STATE.defects.filter(d => d.type === 'Hotspot');
+    return `Found <strong>${hs.length} hotspot defect(s)</strong>:<br>` + hs.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• ${d.id} on ${a?.assetId} ${d.string} ${d.panel} — SEV-${d.severity}`; }).join('<br>');
+  }
+  if (query.includes('lowest') || query.includes('worst')) {
+    const worst = [...STATE.arrays].sort((a,b) => a.health - b.health)[0];
+    return `Lowest health: <strong>${worst.assetId} — ${worst.name}</strong><br>Health: ${worst.health}% | PR Ratio: ${worst.prRatio}<br>DC Power: ${worst.dcPower} MW<br>Location: ${worst.location}`;
+  }
+  if (query.includes('pr ratio') || query.includes('performance')) {
+    return `<strong>PR Ratios:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.prRatio} (${a.health}% health)`).join('<br>');
+  }
+  if (query.includes('power') || query.includes('output')) {
+    return `<strong>DC Power Output:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.dcPower} MW / ${a.capacity} MW capacity`).join('<br>');
+  }
+  if (query.includes('irradiance')) {
+    return `<strong>Irradiance Readings:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.irradiance} W/m²`).join('<br>');
+  }
+  if (query.includes('action') || query.includes('recommend')) {
+    const pending = STATE.defects.filter(d => d.status === 'Pending').slice(0,4);
+    return `<strong>Top Pending Actions:</strong><br>` + pending.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• [${d.priority}] ${a?.assetId} ${d.id}: ${d.action}`; }).join('<br>');
+  }
+  if (query.includes('count') || query.includes('how many')) {
+    return `Arrays: <strong>${STATE.arrays.length}</strong><br>Total defects: <strong>${STATE.defects.length}</strong><br>Critical: <strong>${STATE.defects.filter(d=>d.severity>=4).length}</strong><br>Pending: <strong>${STATE.defects.filter(d=>d.status==='Pending').length}</strong>`;
+  }
+  const match = STATE.arrays.find(a => query.includes(a.assetId.toLowerCase()) || query.includes(a.name.toLowerCase()) || query.includes(a.state.toLowerCase()));
+  if (match) return `<strong>${match.assetId} — ${match.name}</strong><br>Health: ${match.health}% | Status: ${match.status.toUpperCase()}<br>PR Ratio: ${match.prRatio} | DC: ${match.dcPower} MW<br>Location: ${match.location}<br>Defects: ${match.anomalies}`;
+  return `Try asking: "Show critical defects", "Fleet health", "PR ratios", "Power output", "Hotspot defects", or "Recommended actions".`;
+}
+
+// Wire NL topbar to copilot
+document.getElementById('nl-btn')?.addEventListener('click', () => {
+  const q = document.getElementById('nl-input').value.trim();
+  if (!q) return;
+  document.getElementById('ai-chat-box').classList.add('open');
+  document.getElementById('ai-input').value = q;
+  document.getElementById('nl-input').value = '';
+  setTimeout(sendAIMessage, 100);
+});
+document.getElementById('nl-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('nl-btn').click(); });
 </script>
 </body>
 </html>
