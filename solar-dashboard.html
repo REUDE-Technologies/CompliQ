@@ -457,6 +457,15 @@
               </div>
               <div class="fg" style="margin-top:12px"><label>Recommended Action *</label><input type="text" id="md-action" class="styled-input" value="Schedule validation inspection" required></div>
               <div class="fg" style="margin-top:8px"><label>Observations</label><textarea id="md-notes" rows="3" class="styled-input" placeholder="Describe the defect..."></textarea></div>
+              <div class="fg" style="margin-top:12px">
+                <label>Evidence Media (Images / Thermal / JSON)</label>
+                <div class="dropzone" id="solar-dropzone" onclick="document.getElementById('solar-file-inp').click()" style="padding:20px;text-align:center;border:2px dashed var(--c-border);border-radius:10px;cursor:pointer;transition:border-color 0.2s;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28" style="color:var(--c-teal);margin-bottom:6px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <p style="font-size:0.82rem;color:var(--c-muted);">Drop image/thermal/JSON here or <span style="color:var(--c-teal);font-weight:600;">browse</span></p>
+                  <input type="file" id="solar-file-inp" accept="image/*,.json" multiple style="display:none" onchange="handleSolarFileUpload(this)">
+                </div>
+                <div id="solar-file-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
+              </div>
               <div class="form-actions" style="margin-top:16px;">
                 <button type="submit" class="teal-btn">Record Defect</button>
                 <button type="button" class="ghost-btn" onclick="this.closest('form').reset()">Reset</button>
@@ -1504,6 +1513,31 @@ function logManualRecord(text) {
 function clearSolarManualRecords() {
   solarManualRecords = [];
   document.getElementById('solar-manual-list').innerHTML = '<p style="color:var(--c-muted);font-size:0.85rem;padding:16px 0">No manual records yet.</p>';
+}
+
+function handleSolarFileUpload(input) {
+  const preview = document.getElementById('solar-file-preview');
+  if (!preview) return;
+  Array.from(input.files).forEach(file => {
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--c-border);cursor:zoom-in;';
+        img.title = file.name;
+        img.onclick = () => { window.open(e.target.result, '_blank'); };
+        preview.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const tag = document.createElement('div');
+      tag.style.cssText = 'padding:8px 12px;background:rgba(15,164,175,0.08);border:1px solid var(--c-border);border-radius:8px;font-size:0.75rem;color:var(--c-teal);';
+      tag.textContent = '📄 ' + file.name;
+      preview.appendChild(tag);
+    }
+  });
+  showToast(`${input.files.length} file(s) attached`, 'success');
 }
 
 // Kick off
