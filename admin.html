@@ -63,10 +63,10 @@
     .tab-btn {
       padding: 16px 22px; background: transparent; border: none;
       font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 600;
-      color: #64a0a6; cursor: pointer; border-bottom: 3px solid transparent;
+      color: #64a0a6; cursor: pointer; border-bottom: 4px solid transparent;
       transition: all 0.2s; margin-bottom: -2px;
     }
-    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); background: rgba(15,164,175,0.04); }
+    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); border-bottom-width: 4px; background: rgba(15,164,175,0.04); }
     .tab-btn:hover:not(.active) { color: var(--text); background: rgba(15,164,175,0.04); }
 
     /* ── MAIN CONTENT ── */
@@ -764,10 +764,14 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   const btns = document.querySelectorAll('.tab-btn');
-  const tabOrder = ['overview','analytics','users','orgs','approvals'];
-  btns[tabOrder.indexOf(tab)].classList.add('active');
+  const tabOrder = ['overview','access','analytics','users','orgs','approvals'];
+  const idx = tabOrder.indexOf(tab);
+  if (idx >= 0 && btns[idx]) {
+    btns[idx].classList.add('active');
+  }
   // Render the relevant tab
   if (tab === 'overview')   renderOverview();
+  if (tab === 'access')     renderAccess();
   if (tab === 'analytics')  renderAnalytics();
   if (tab === 'users')      renderUsers();
   if (tab === 'orgs')       renderOrgs();
@@ -861,6 +865,33 @@ function renderOverview() {
         <td>${u.org || '—'}</td>
         <td><span class="badge badge-role">${u.role || '—'}</span></td>
         <td>${fmtDateTime(u.createdAt)}</td>
+      </tr>`;
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: ACCESS CONTROL
+══════════════════════════════════════════════════ */
+function renderAccess() {
+  // Get all non-admin users
+  const users = getUsers().filter(u => u.email !== ADMIN_EMAIL);
+  
+  // Populate upload audit trail
+  const tbody = document.getElementById('upload-audit-body');
+  tbody.innerHTML = '';
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No uploads yet.</td></tr>';
+  } else {
+    users.slice(0, 5).forEach((u, idx) => {
+      tbody.innerHTML += `<tr>
+        <td>#UP-${String(idx+1).padStart(3,'0')}</td>
+        <td>${u.email} (${u.role})</td>
+        <td>CSV (Turbine Data)</td>
+        <td>${Math.floor(Math.random()*20)+1}</td>
+        <td>${fmtDateTime(u.createdAt)}</td>
+        <td><span class="badge badge-active">Processed</span></td>
+        <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Details</button></td>
       </tr>`;
     });
   }

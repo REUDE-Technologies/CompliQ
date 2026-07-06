@@ -28,7 +28,10 @@ function checkAuth() {
     // Show admin button if user is administrator
     const adminBtn = document.getElementById('admin-nav-btn');
     if (user.role === 'Administrator' || user.email === 'admin@reude.tech') {
-      if (adminBtn) adminBtn.style.display = 'flex';
+      if (adminBtn) {
+        adminBtn.style.display = 'flex';
+        adminBtn.onclick = () => window.location.href = 'admin.html';
+      }
     }
     
     initApp();

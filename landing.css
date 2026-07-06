@@ -36,6 +36,14 @@
   --shadow:    0 8px 24px rgba(2,73,80,0.06);
 }
 
+/* Logo image — ensure always visible orange, never fade */
+.nav-logo-img, .footer-logo-img {
+  opacity: 1 !important;
+  filter: none !important;
+  animation: none !important;
+  display: inline-block;
+}
+
 /* Theme toggle button */
 .theme-toggle {
   background: transparent;
@@ -238,6 +246,19 @@
   border-color: var(--c-border);
 }
 [data-theme="light"] .footer-title { color: var(--c-teal); }
+[data-theme="light"] .footer-compliq-text {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--c-teal);
+  display: inline;
+}
+[data-theme="light"] .nav-compliq-lower {
+  font-size: 0.75em;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+}
 [data-theme="light"] .footer-tagline { color: var(--c-muted); }
 [data-theme="light"] .footer-links a { color: var(--c-sky); }
 [data-theme="light"] .footer-links a:hover { color: var(--c-teal); }
@@ -337,7 +358,26 @@ body {
   gap: 12px;
   text-decoration: none;
 }
+.nav-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
 .nav-logo-svg { width: 38px; height: 38px; }
+.nav-compliq-text {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--c-teal);
+  display: inline;
+}
+.nav-compliq-lower {
+  font-size: 0.75em;
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+}
 .brand-title {
   font-size: 1.3rem;
   font-weight: 800;
@@ -1775,6 +1815,13 @@ body {
   opacity: 1!important;
   animation: none !important;
   filter: none !important;
+}
+
+/* CompliQ text styling - mix capitals and lowercase */
+.nav-compliq-lower {
+  font-size: 0.7em;
+  opacity: 0.6;
+  vertical-align: super;
 }
 
 /* ── "COMPLIQ by" text before logo ── */
