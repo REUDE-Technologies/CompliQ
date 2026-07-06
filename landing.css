@@ -2601,3 +2601,24 @@ body { padding-bottom: 44px; }
   display: flex; align-items: center; gap: 8px;
   text-decoration: none;
 }
+
+/* ── Restore full footer (not fixed/sticky) ── */
+.site-footer {
+  position: static !important;
+  background: var(--c-dark) !important;
+  border-top: 1px solid var(--c-border) !important;
+  padding: 48px 0 32px !important;
+  z-index: auto !important;
+}
+body { padding-bottom: 0 !important; }
+
+/* ── Splash REUDE text: same proportions as footer logo ── */
+.splash-reude-big {
+  font-size: 2.2rem !important;
+  letter-spacing: 4px !important;
+  line-height: 1.1 !important;
+}
+.splash-reude-sub {
+  font-size: 0.85rem !important;
+  letter-spacing: 4px !important;
+}
