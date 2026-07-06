@@ -1524,7 +1524,10 @@ body {
   height: 180px !important;
   border-radius: 28px !important;
   border: 2.5px solid #0FA4AF !important;
-  box-shadow: 0 0 32px rgba(15,164,175,0.55) !important;
+  box-shadow: 
+    0 0 32px rgba(15,164,175,0.55),
+    0 0 60px rgba(15,164,175,0.35),
+    0 8px 32px rgba(0,0,0,0.25) !important;
   background: #1a1a2e !important;
   overflow: hidden;
   display: flex;
@@ -1590,16 +1593,6 @@ body {
   margin: 8px 0 4px !important;
   opacity: 0;
   animation: splash-fade-up 0.6s ease forwards 1.3s !important;
-}
-
-/* Teal divider line */
-.splash-divider {
-  width: 80px;
-  height: 2px;
-  background: #0FA4AF;
-  border-radius: 1px;
-  opacity: 0;
-  animation: splash-fade-up 0.5s ease forwards 1.5s !important;
 }
 
 /* Progress loader bar */
@@ -1779,6 +1772,9 @@ body {
   width: auto;
   object-fit: contain;
   display: block;
+  opacity: 1!important;
+  animation: none !important;
+  filter: none !important;
 }
 
 /* ── "COMPLIQ by" text before logo ── */
@@ -1797,8 +1793,10 @@ body {
 /* ── Footer logo image ── */
 .footer-logo-img {
   height: 100px;
-  width: 5;
+  width: auto;
   object-fit: contain;
+  opacity: 1 !important;
+  animation: none !important;
 }
 
 /* ── Hero "Dashboards" coral colour ── */
@@ -1834,7 +1832,8 @@ body {
 }
 
 /* ── Light mode logo adjustments ── */
-[data-theme="light"] .nav-logo-img  { filter: none; }
+[data-theme="light"] .nav-logo-img  { filter: none !important; opacity: 1 !important; }
+
 [data-theme="light"] .footer-logo-img { filter: none; }
 [data-theme="light"] .stat-item > span:first-child {
   color: #0FA4AF !important;
@@ -2249,10 +2248,13 @@ body {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--c-border);
 }
-.footer-bottom p { font-size: 0.78rem; color: var(--c-muted); }
-.footer-bottom-right { font-size: 0.75rem; }
+.footer-bottom p { font-size: 0.78rem; color: var(--c-muted); margin: 0; }
+.footer-bottom-center { flex: 1; text-align: center; }
+.footer-bottom-right { text-align: right; }
 
 /* Light theme footer */
 [data-theme="light"] .footer-col-links a { color: rgba(6,50,53,0.6); }
@@ -2355,8 +2357,8 @@ body { padding-bottom: 44px; }
 [data-theme="dark"] .nav-logo-img,
 :not([data-theme]) .sidebar-logo-img,
 :not([data-theme]) .nav-logo-img {
-  mix-blend-mode: screen;
-  filter: brightness(1.1);
+  mix-blend-mode: normal;
+  filter: none !important;
 }
 
 /* ── Footer: theme-aware slim bar ── */

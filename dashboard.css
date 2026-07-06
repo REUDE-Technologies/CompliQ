@@ -1072,7 +1072,6 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   font-weight: 800;
   letter-spacing: 2.5px;
   color: var(--c-teal);
-  text-transform: uppercase;
   white-space: nowrap;
   line-height: 1;
 }
@@ -1166,3 +1165,149 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 }
 [data-theme="light"] .ai-input-row input::placeholder { color: #94a3b8; }
 [data-theme="light"] .ai-input-row input:focus { border-color: #0FA4AF; background: #fff; }
+
+
+/* ================================================
+   DASHBOARD FOOTER
+================================================ */
+.dashboard-footer {
+  flex-shrink: 0;
+  background: var(--c-dark);
+  border-top: 1px solid var(--c-border);
+  padding: 16px 28px;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-tagline {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.footer-contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-link {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: var(--c-teal);
+}
+
+/* Light theme footer overrides */
+[data-theme="light"] .dashboard-footer {
+  background: var(--c-dark);
+  border-top-color: var(--c-border);
+}
+
+[data-theme="light"] .footer-tagline {
+  color: var(--c-muted);
+}
+
+[data-theme="light"] .footer-link {
+  color: var(--c-muted);
+}
+
+[data-theme="light"] .footer-link:hover {
+  color: var(--c-teal);
+}
+
+
+/* ================================================
+   LIGHT THEME — Main Area Background
+================================================ */
+[data-theme="light"] .main-area {
+  background: linear-gradient(180deg, var(--c-deep) 0%, var(--c-dark) 100%);
+}
+
+[data-theme="light"] .view {
+  background: transparent;
+}
+
+/* Ensure light theme dropdown menu styling */
+[data-theme="light"] .styled-select option,
+[data-theme="light"] select option {
+  background: #fff;
+  color: var(--c-white);
+}
+
+/* Light theme AI panel */
+[data-theme="light"] .ai-panel {
+  background: rgba(255,255,255,0.92);
+  border-color: var(--c-border);
+}
+
+[data-theme="light"] .ai-input-row input {
+  background: #fff;
+  border-color: rgba(15,164,175,0.25);
+  color: var(--c-white);
+}
+
+[data-theme="light"] .ai-input-row input::placeholder {
+  color: rgba(6,50,53,0.35);
+}
+
+[data-theme="light"] .sugg-btn {
+  background: rgba(15,164,175,0.08);
+  color: var(--c-teal);
+  border-color: rgba(15,164,175,0.2);
+}
+
+[data-theme="light"] .sugg-btn:hover {
+  background: rgba(15,164,175,0.12);
+  border-color: rgba(15,164,175,0.3);
+}
+
+[data-theme="light"] .ai-title { color: var(--c-white); }
+[data-theme="light"] .ai-subtitle { color: var(--c-muted); }
+
+
+/* ================================================
+   ADMIN BUTTON STYLING
+================================================ */
+#admin-nav-btn {
+  margin-top: 12px;
+  background: rgba(150,71,52,0.15);
+  border-left: 3px solid #964734;
+  color: #964734 !important;
+}
+
+#admin-nav-btn:hover {
+  background: rgba(150,71,52,0.25);
+  border-left-color: #C2724A;
+  color: #C2724A !important;
+}
+
+#admin-nav-btn svg {
+  color: #964734;
+}
+
+#admin-nav-btn:hover svg {
+  color: #C2724A;
+}

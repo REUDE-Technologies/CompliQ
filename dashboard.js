@@ -24,6 +24,13 @@ function checkAuth() {
     document.getElementById('user-av').textContent = initials;
     document.getElementById('user-display-name').textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
     document.getElementById('user-display-role').textContent = user.role || 'Fleet Operator';
+    
+    // Show admin button if user is administrator
+    const adminBtn = document.getElementById('admin-nav-btn');
+    if (user.role === 'Administrator' || user.email === 'admin@reude.tech') {
+      if (adminBtn) adminBtn.style.display = 'flex';
+    }
+    
     initApp();
     // Save wind session for sector switching
     const windRaw = localStorage.getItem('compliq_session');
@@ -973,6 +980,90 @@ function resetIngestForm() {
     fileInp.parsedJsonData = null;
   }
   document.getElementById('file-preview').style.display = 'none';
+}
+
+// File upload handlers for drag & drop
+function handleDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.style.borderColor = 'var(--c-teal)';
+  e.currentTarget.style.backgroundColor = 'rgba(15,164,175,0.05)';
+}
+
+function handleDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.style.borderColor = '';
+  e.currentTarget.style.backgroundColor = '';
+}
+
+function handleFileDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.style.borderColor = '';
+  e.currentTarget.style.backgroundColor = '';
+  
+  const files = e.dataTransfer.files;
+  if (files.length) {
+    handleFileSelect({ target: { files: files } });
+  }
+}
+
+function handleFileSelect(e) {
+  const files = e.target.files;
+  const preview = document.getElementById('file-preview');
+  preview.style.display = 'block';
+  preview.innerHTML = '';
+  
+  const validFiles = [];
+  const fileList = [];
+  
+  for (let file of files) {
+    // Validate file type and size
+    const validTypes = ['image/jpeg', 'image/png', 'video/mp4', 'application/json'];
+    if (!validTypes.includes(file.type) && !file.name.endsWith('.json')) {
+      continue;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      // File too large, skip
+      continue;
+    }
+    validFiles.push(file);
+    fileList.push(`✓ ${file.name} (${(file.size/1024).toFixed(0)} KB)`);
+    
+    // Auto-store file to localStorage (up to storage limit)
+    storeFileToAsset(file);
+  }
+  
+  if (fileList.length > 0) {
+    preview.innerHTML = `<div style="font-size:0.78rem;color:var(--c-teal);margin-top:8px;padding:8px;background:rgba(15,164,175,0.05);border-radius:6px;"><strong>${fileList.length} file(s) ready for ingestion:</strong><br>${fileList.join('<br>')}</div>`;
+  }
+}
+
+function storeFileToAsset(file) {
+  // Store file metadata and blob reference for ingestion
+  const FILES_KEY = 'compliq_ingest_files';
+  let storedFiles = JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+  
+  // Limit stored files to avoid exceeding localStorage quota
+  if (storedFiles.length > 20) {
+    storedFiles = storedFiles.slice(-20);
+  }
+  
+  const fileEntry = {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    timestamp: new Date().toISOString(),
+    turbineId: document.getElementById('ig-turbine')?.value || '',
+    blade: document.getElementById('ig-blade')?.value || 'A'
+  };
+  
+  storedFiles.push(fileEntry);
+  localStorage.setItem(FILES_KEY, JSON.stringify(storedFiles));
+  
+  // Show toast confirmation
+  showToast(`File stored: ${file.name}`, 'success');
 }
 
 // Dropzone

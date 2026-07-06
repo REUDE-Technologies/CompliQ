@@ -264,6 +264,7 @@
 ══════════════════════════════════════ -->
 <nav class="tab-nav" id="tab-nav">
   <button class="tab-btn active" onclick="switchTab('overview')">📊 Overview</button>
+  <button class="tab-btn" onclick="switchTab('access')">🔐 Access Control</button>
   <button class="tab-btn" onclick="switchTab('analytics')">📈 Analytics</button>
   <button class="tab-btn" onclick="switchTab('users')">👥 Users</button>
   <button class="tab-btn" onclick="switchTab('orgs')">🏢 Organizations</button>
@@ -375,6 +376,152 @@
           <tr><th>Name</th><th>Email</th><th>Organization</th><th>Role</th><th>Registered</th></tr>
         </thead>
         <tbody id="recent-signups-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB: ACCESS CONTROL
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-access">
+    <div class="section-heading">🔐 Access Control & Permissions</div>
+    
+    <div class="table-card">
+      <h3>Role-Based Access Control (RBAC)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Description</th>
+            <th>Fleet View</th>
+            <th>Upload Data</th>
+            <th>Generate Reports</th>
+            <th>Manage Users</th>
+            <th>Admin Panel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-role">Administrator</span></td>
+            <td>Full platform access & user management</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Editor</span></td>
+            <td>Can upload, edit, and report</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Viewer</span></td>
+            <td>Read-only access to reports</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Fleet Operator</span></td>
+            <td>Full operational access</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Maintenance Engineer</span></td>
+            <td>Inspection & maintenance data access</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Active User Sessions & Access Logs</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Last Activity</th>
+            <th>Device</th>
+            <th>IP Address</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="access-logs-body">
+          <tr>
+            <td><div class="avatar">OP</div> Operator Fleet</td>
+            <td>operator@reude.tech</td>
+            <td><span class="badge badge-role">Fleet Operator</span></td>
+            <td>2 mins ago</td>
+            <td>Mac OS</td>
+            <td>192.168.x.x</td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Block</button></td>
+          </tr>
+          <tr>
+            <td><div class="avatar">ME</div> Maintenance Eng</td>
+            <td>engineer@reude.tech</td>
+            <td><span class="badge badge-role">Maintenance Engineer</span></td>
+            <td>15 mins ago</td>
+            <td>Windows</td>
+            <td>192.168.x.y</td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Block</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Data Upload Audit Trail</h3>
+      <p style="font-size:0.85rem;color:#64a0a6;margin-bottom:14px;">Track who uploaded data and when</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Upload ID</th>
+            <th>Uploaded By</th>
+            <th>File Type</th>
+            <th>Records</th>
+            <th>Timestamp</th>
+            <th>Status</th>
+            <th>View</th>
+          </tr>
+        </thead>
+        <tbody id="upload-audit-body">
+          <tr>
+            <td>#UP-001</td>
+            <td>operator@reude.tech (Fleet Operator)</td>
+            <td>CSV (Turbine Data)</td>
+            <td>42</td>
+            <td>Today 10:30 AM</td>
+            <td><span class="badge badge-active">Processed</span></td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Details</button></td>
+          </tr>
+          <tr>
+            <td>#UP-002</td>
+            <td>engineer@reude.tech (Maintenance Engineer)</td>
+            <td>JSON (Inspection)</td>
+            <td>5</td>
+            <td>Today 9:15 AM</td>
+            <td><span class="badge badge-active">Processed</span></td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Details</button></td>
+          </tr>
+        </tbody>
       </table>
     </div>
   </section>
@@ -580,7 +727,7 @@ function distinctOrgs(users) {
 ══════════════════════════════════════════════════ */
 (function authGate() {
   const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  if (!sess || sess.email !== ADMIN_EMAIL) {
+  if (!sess || (sess.email !== ADMIN_EMAIL && sess.role !== 'Administrator')) {
     window.location.replace('auth.html');
     return;
   }
@@ -596,7 +743,8 @@ function distinctOrgs(users) {
     });
     saveUsers(users);
   }
-  document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
+  const currentEmail = sess.email || ADMIN_EMAIL;
+  document.getElementById('admin-email-display').textContent = currentEmail;
 })();
 
 function signOut() {
