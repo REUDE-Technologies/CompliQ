@@ -282,6 +282,33 @@
     .auth-msg.error { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2); color: #dc2626; }
     .auth-msg.success { background: rgba(15,164,175,0.08); border: 1px solid rgba(15,164,175,0.2); color: #0FA4AF; }
 
+    /* ── Image slider ── */
+    .auth-slider {
+      position: relative; z-index: 2;
+      width: 100%; border-radius: 14px;
+      overflow: hidden; background: rgba(0,0,0,0.2);
+    }
+    .auth-slide { display: none; position: relative; }
+    .auth-slide.active { display: block; animation: slide-in 0.5s ease; }
+    @keyframes slide-in { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+    .auth-slide img { width: 100%; height: 200px; object-fit: cover; border-radius: 14px; }
+    .slide-caption {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,49,53,0.85));
+      color: #fff; padding: 28px 16px 12px;
+      font-size: 0.88rem; font-weight: 700; border-radius: 0 0 14px 14px;
+    }
+    .slider-dots {
+      display: flex; justify-content: center; gap: 6px;
+      padding: 10px 0 6px; background: transparent;
+    }
+    .slider-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(175,221,229,0.35); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .slider-dot.active { background: #0FA4AF; transform: scale(1.3); }
+
     /* Responsive */
     @media (max-width: 768px) {
       .auth-left { display: none; }
@@ -299,8 +326,38 @@
         <img src="images/reude-logo.png" alt="Reude Technologies">
       </div>
     </div>
-    <div class="left-tagline">
-      <img src="images/reude R logo.png" style="width:80px;height:80px;border-radius:16px;margin:0 auto 20px;display:block;">
+
+    <!-- R logo centered -->
+    <div style="text-align:center;position:relative;z-index:2;margin-bottom:24px;">
+      <img src="images/reude R logo.png" style="width:90px;height:90px;border-radius:18px;border:2px solid rgba(15,164,175,0.5);box-shadow:0 0 28px rgba(15,164,175,0.4);display:inline-block;">
+    </div>
+
+    <!-- Image slider -->
+    <div class="auth-slider" id="auth-slider">
+      <div class="auth-slide active">
+        <img src="images/turbine_teal.png" alt="Wind Turbine">
+        <div class="slide-caption">🌀 Wind Turbine Inspection</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/solar_teal.png" alt="Solar Farm">
+        <div class="slide-caption">☀️ Solar Farm Analytics</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/turbine_inspect_rgb.png" alt="RGB Inspection">
+        <div class="slide-caption">🔍 RGB Defect Detection</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/turbine_inspect_thermal.png" alt="Thermal Inspection">
+        <div class="slide-caption">🌡️ Thermal Imaging Analysis</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/drone_inspection.png" alt="Drone Inspection">
+        <div class="slide-caption">🚁 Autonomous UAV Systems</div>
+      </div>
+      <div class="slider-dots" id="slider-dots"></div>
+    </div>
+
+    <div class="left-tagline" style="margin-top:20px;">
       <h2>Inspect Smarter.<br><span>Decide Faster.</span></h2>
       <p>CompliQ's AI-powered drone inspection platform for wind turbines, solar farms and renewable energy infrastructure.</p>
     </div>
@@ -487,17 +544,46 @@
 
     function handleLogin(e) {
       e.preventDefault();
-      const email = document.getElementById('login-email').value.trim();
-      const pwd   = document.getElementById('login-pwd').value;
+      const email  = document.getElementById('login-email').value.trim();
+      const pwd    = document.getElementById('login-pwd').value;
       const sector = document.getElementById('login-sector').value;
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      const demo  = email === 'admin@reude.com' && pwd === 'password123';
-      const found = users.find(u => u.email === email && u.password === pwd);
-      if (!demo && !found) { showMsg('login-msg','error','Invalid email or password.'); return; }
-      const user  = found || { firstName:'Admin', lastName:'Operator', org:'REUDE Technologies', email, role:'Administrator', sector: 'wind' };
-      user.sector = found ? (found.sector || sector) : sector;
-      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      showMsg('login-msg','success',`Welcome back, ${user.firstName}! Redirecting…`);
+      const users  = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+
+      // ── Admin super-login ──────────────────────────────────────
+      if (email === 'admin@reude.tech' && pwd === 'Admin@Reude2026') {
+        // Ensure admin exists in users array
+        if (!users.find(u => u.email === 'admin@reude.tech')) {
+          users.unshift({ firstName:'Admin', lastName:'REUDE', email:'admin@reude.tech', org:'REUDE Technologies', role:'Administrator', password:'Admin@Reude2026', sector:'wind', status:'active', createdAt: new Date().toISOString() });
+          localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        }
+        const adminUser = { firstName:'Admin', lastName:'REUDE', org:'REUDE Technologies', email:'admin@reude.tech', role:'Administrator', sector };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
+        showMsg('login-msg','success','Welcome back, Admin! Redirecting to Admin Dashboard…');
+        setTimeout(() => { window.location.href = 'admin.html'; }, 1200);
+        return;
+      }
+
+      // ── Regular users ──────────────────────────────────────────
+      let found = users.find(u => u.email === email && u.password === pwd && u.sector === sector);
+      if (!found) found = users.find(u => u.email === email && u.password === pwd);
+      if (!found) { showMsg('login-msg','error','Invalid email or password.'); return; }
+
+      // Block pending users
+      if (!found.status || found.status === 'pending') {
+        showMsg('login-msg','error','⏳ Your account is pending admin approval. Please wait.');
+        return;
+      }
+      // Block rejected users
+      if (found.status === 'rejected') {
+        showMsg('login-msg','error','❌ Your account has been rejected. Please contact support: cmo_ira@reude.tech');
+        return;
+      }
+
+      found = { ...found, sector };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(found));
+      const sectorKey = sector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
+      localStorage.setItem(sectorKey, JSON.stringify({...found, sector}));
+      showMsg('login-msg','success',`Welcome back, ${found.firstName}! Redirecting…`);
       const redirect = sector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
       setTimeout(() => { window.location.href = redirect; }, 1200);
     }
@@ -508,23 +594,55 @@
       if (!pwdValid(pwd)) { showMsg('register-msg','error','Password does not meet all requirements.'); return; }
       const email = document.getElementById('reg-email').value.trim();
       const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      if (users.find(u => u.email === email)) { showMsg('register-msg','error','An account with this email already exists.'); return; }
+      if (users.find(u => u.email === email && u.sector === selectedSector)) {
+        showMsg('register-msg','error','You already have a ' + (selectedSector === 'solar' ? 'Solar Farm' : 'Wind Turbine') + ' account with this email.');
+        return;
+      }
       const user = {
         firstName: document.getElementById('reg-fname').value.trim(),
         lastName:  document.getElementById('reg-lname').value.trim(),
         org:       document.getElementById('reg-org').value.trim(),
         email, role: document.getElementById('reg-role').value, password: pwd,
-        sector: selectedSector
+        sector: selectedSector,
+        status: 'pending',   // Awaiting admin approval
+        createdAt: new Date().toISOString()
       };
       users.push(user);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      showMsg('register-msg','success',`Account created! Welcome, ${user.firstName}. Please sign in to continue.`);
-      setTimeout(() => { showTab('login'); }, 1800);
+      // Do NOT set session — user must wait for admin approval
+      showMsg('register-msg','success',`✅ Account created! Your account is pending admin approval. Please wait — you will be able to sign in once approved.`);
+      setTimeout(() => { showTab('login'); }, 3000);
     }
 
     // Check URL param to open correct tab
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'register') showTab('register');
+    const sectorParam = params.get('sector');
+    if (sectorParam && (sectorParam === 'solar' || sectorParam === 'wind')) {
+      selectSector(sectorParam);
+    }
+
+    // ── Image Slider ──────────────────────────────
+    (function initSlider() {
+      const slides = document.querySelectorAll('.auth-slide');
+      const dotsWrap = document.getElementById('slider-dots');
+      let current = 0;
+      // Build dots
+      slides.forEach((_, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'slider-dot' + (i === 0 ? ' active' : '');
+        dot.onclick = () => goTo(i);
+        dotsWrap.appendChild(dot);
+      });
+      function goTo(n) {
+        slides[current].classList.remove('active');
+        document.querySelectorAll('.slider-dot')[current].classList.remove('active');
+        current = (n + slides.length) % slides.length;
+        slides[current].classList.add('active');
+        document.querySelectorAll('.slider-dot')[current].classList.add('active');
+      }
+      setInterval(() => goTo(current + 1), 3000);
+    })();
   </script>
 </body>
 </html>
