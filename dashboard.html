@@ -41,8 +41,10 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <span class="sidebar-CompliQ-text">CompliQ by</span>
-      <img src="images/reude-logo.png" alt="Reude Technologies" class="sidebar-logo-img">
+      <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;">
+        <span class="sidebar-CompliQ-text">CompliQ by</span>
+        <img src="images/reude-logo.png" alt="Reude Technologies" class="sidebar-logo-img">
+      </a>
     </div>
 
     <nav class="sidebar-nav">
@@ -369,6 +371,17 @@
                   <input type="file" id="file-inp" accept="image/*,video/*,.json" style="display:none">
                 </div>
                 <div id="file-preview" style="display:none"></div>
+              </div>
+              <!-- CSV / Excel bulk upload -->
+              <div class="fg" style="margin-top:12px">
+                <label>📊 Bulk Upload via CSV / Excel</label>
+                <div class="dropzone" onclick="document.getElementById('csv-inp').click()" style="border-color:rgba(15,164,175,0.3);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                  <p>Upload CSV / Excel to auto-fill form fields, or <span>click to browse</span></p>
+                  <small>CSV, XLSX, XLS — columns: turbine_id, blade, defect_type, severity, confidence, dist, action</small>
+                  <input type="file" id="csv-inp" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleCSVUpload(this,'ingest')">
+                </div>
+                <div id="csv-preview" style="margin-top:8px;font-size:0.78rem;color:var(--c-teal);"></div>
               </div>
 
               <div class="form-actions">

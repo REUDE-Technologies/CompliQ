@@ -25,6 +25,14 @@ function checkAuth() {
     document.getElementById('user-display-name').textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
     document.getElementById('user-display-role').textContent = user.role || 'Fleet Operator';
     initApp();
+    // Save wind session for sector switching
+    const windRaw = localStorage.getItem('compliq_session');
+    if (windRaw) {
+      const windUser = JSON.parse(windRaw);
+      if (windUser.sector === 'wind' || !windUser.sector) {
+        localStorage.setItem('compliq_wind_session', windRaw);
+      }
+    }
   }
 }
 
@@ -1707,6 +1715,68 @@ window.addEventListener('DOMContentLoaded', () => {
   initTheme();
 });
 
+// ── CSV / EXCEL BULK UPLOAD ────────────────────
+function handleCSVUpload(input, context) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const rows = text.split('\n').filter(r => r.trim());
+    if (rows.length < 2) { showToast('CSV must have a header row + at least one data row', 'error'); return; }
+    const headers = rows[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g,'_'));
+    const data = rows.slice(1).map(row => {
+      const vals = row.split(',');
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = (vals[i]||'').trim().replace(/^"|"$/g,''); });
+      return obj;
+    }).filter(r => Object.values(r).some(v => v));
+
+    if (context === 'ingest' && data.length > 0) {
+      const first = data[0];
+      if (first.turbine_id || first.turbine) {
+        const sel = document.getElementById('ig-turbine');
+        const match = STATE.db?.turbines?.find(t => t.assetId.toLowerCase() === (first.turbine_id||first.turbine||'').toLowerCase());
+        if (match && sel) sel.value = match.id;
+      }
+      if (first.defect_type || first.type) document.getElementById('ig-defect') && (document.getElementById('ig-defect').value = first.defect_type||first.type||'');
+      if (first.severity) document.getElementById('ig-sev') && (document.getElementById('ig-sev').value = first.severity||3);
+      if (first.confidence) document.getElementById('ig-conf') && (document.getElementById('ig-conf').value = parseInt(first.confidence)||85);
+      if (first.dist || first.distance) document.getElementById('ig-dist') && (document.getElementById('ig-dist').value = first.dist||first.distance||34);
+      if (first.action) document.getElementById('ig-action') && (document.getElementById('ig-action').value = first.action||'');
+      if (first.blade) document.getElementById('ig-blade') && (document.getElementById('ig-blade').value = first.blade||'A');
+      const preview = document.getElementById('csv-preview');
+      if (preview) preview.textContent = `✅ ${data.length} row(s) loaded from CSV. First row auto-filled above.`;
+      showToast(`CSV loaded — ${data.length} records. First row auto-filled.`, 'success');
+    }
+    if (context === 'manual-turbine' && data.length > 0) {
+      data.forEach(row => {
+        const gps = (row.gps||row.location||'0,0').split(',');
+        document.getElementById('mt-id') && (document.getElementById('mt-id').value = row.turbine_id||row.id||'');
+        document.getElementById('mt-site') && (document.getElementById('mt-site').value = row.site||row.wind_farm||'');
+        document.getElementById('mt-gps') && (document.getElementById('mt-gps').value = row.gps||`${gps[0]},${gps[1]}`||'');
+        document.getElementById('mt-rotor') && (document.getElementById('mt-rotor').value = row.rotor_dia||row.rotor||126);
+        document.getElementById('mt-hub') && (document.getElementById('mt-hub').value = row.hub_height||row.hub||90);
+        document.getElementById('mt-power') && (document.getElementById('mt-power').value = row.rated_power||row.power||2.5);
+        document.getElementById('mt-mfr') && (document.getElementById('mt-mfr').value = row.manufacturer||row.mfr||'Vestas');
+        document.getElementById('mt-model') && (document.getElementById('mt-model').value = row.model||'');
+        document.getElementById('mt-year') && (document.getElementById('mt-year').value = row.year||row.commission_year||2022);
+        document.getElementById('mt-wind') && (document.getElementById('mt-wind').value = row.wind_speed||12);
+        document.getElementById('mt-rpm') && (document.getElementById('mt-rpm').value = row.rpm||14.5);
+        document.getElementById('mt-health') && (document.getElementById('mt-health').value = row.health||97);
+      });
+      showToast(`CSV loaded — ${data.length} turbine record(s). First row auto-filled.`, 'success');
+    }
+  };
+  // Handle both CSV (text) and basic XLSX detection
+  if (file.name.endsWith('.csv')) {
+    reader.readAsText(file);
+  } else {
+    showToast('For Excel files, please save as CSV first (File → Save As → CSV), then upload.', 'error');
+    input.value = '';
+  }
+}
+
 // ── THEME TOGGLE ──────────────────────────────
 function initTheme() {
   const saved = localStorage.getItem('site_theme') || 'light';
@@ -1739,18 +1809,21 @@ function goHome() {
 }
 
 function switchDashboard(targetSector) {
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) { window.location.href = `auth.html?sector=${targetSector}`; return; }
+  const raw = localStorage.getItem('compliq_session');
+  if (!raw) { window.location.href = 'auth.html'; return; }
   const session = JSON.parse(raw);
-  const users = JSON.parse(localStorage.getItem('compliq_users') || '[]');
-  const hasAccount = users.some(u => u.email === session.email) || session.email === 'admin@reude.com';
-  if (hasAccount) {
-    session.sector = targetSector;
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  const targetKey = targetSector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
+  const targetSession = localStorage.getItem(targetKey);
+  if (targetSession) {
+    // Already registered and logged in for this sector — switch directly
+    const targetUser = JSON.parse(targetSession);
+    localStorage.setItem('compliq_session', JSON.stringify({...targetUser, sector: targetSector}));
     window.location.href = targetSector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
   } else {
-    if (confirm(`Sign in to the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first?`)) {
-      window.location.href = `auth.html?sector=${targetSector}`;
-    }
+    // Not registered for this sector yet
+    showToast(`Register for the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first`, 'error');
+    setTimeout(() => {
+      window.location.href = `auth.html?tab=register&sector=${targetSector}`;
+    }, 1800);
   }
 }
