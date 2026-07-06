@@ -2622,3 +2622,39 @@ body { padding-bottom: 0 !important; }
   font-size: 0.85rem !important;
   letter-spacing: 4px !important;
 }
+
+/* ── Splash REUDE text: small, like the footer logo size ── */
+.splash-reude-big {
+  font-size: 1.4rem !important;
+  letter-spacing: 3px !important;
+  line-height: 1.1 !important;
+  text-shadow: 0 0 12px rgba(255,122,0,0.5) !important;
+}
+.splash-reude-sub {
+  font-size: 0.62rem !important;
+  letter-spacing: 3px !important;
+}
+
+/* ── Footer bottom bar: sticky at bottom ── */
+.footer-bottom {
+  position: fixed !important;
+  bottom: 0; left: 0; right: 0;
+  background: var(--c-deep) !important;
+  border-top: 1px solid var(--c-border) !important;
+  padding: 10px 48px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  z-index: 900;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-bottom p { font-size: 0.78rem; color: var(--c-muted); margin-bottom: 0 !important; }
+/* Give body padding so content isn't hidden behind sticky bar */
+body { padding-bottom: 46px !important; }
+/* Light theme footer bottom */
+[data-theme="light"] .footer-bottom {
+  background: #fff !important;
+  border-top-color: rgba(15,164,175,0.15) !important;
+}
+[data-theme="light"] .footer-bottom p { color: #28666E; }

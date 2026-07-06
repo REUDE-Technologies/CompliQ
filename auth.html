@@ -407,6 +407,33 @@
           <button type="submit" class="btn-submit">Sign In to Dashboard →</button>
         </form>
         <p class="switch-text">Don't have an account? <a onclick="showTab('register')">Register here</a></p>
+        <details style="margin-top:16px;border:1px solid #E2F0F0;border-radius:8px;padding:12px 14px;background:#F7FBFB;">
+          <summary style="font-size:0.78rem;font-weight:700;color:#28666E;cursor:pointer;">🔑 Default Company Credentials</summary>
+          <div style="margin-top:10px;font-size:0.76rem;color:#063235;font-family:'JetBrains Mono',monospace;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:6px 0;border-bottom:1px solid #E2F0F0;font-weight:700;color:#0FA4AF;">
+              <span>Role</span><span>Email</span><span>Password</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;border-bottom:1px solid #F0F9FF;">
+              <span>Admin</span><span>admin@reude.tech</span><span>Admin@Reude2026</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;border-bottom:1px solid #F0F9FF;">
+              <span>Fleet Operator</span><span>operator@reude.tech</span><span>Operator@2026</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;border-bottom:1px solid #F0F9FF;">
+              <span>Maint. Engineer</span><span>engineer@reude.tech</span><span>Engineer@2026</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;border-bottom:1px solid #F0F9FF;">
+              <span>Data Analyst</span><span>analyst@reude.tech</span><span>Analyst@2026</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;border-bottom:1px solid #F0F9FF;">
+              <span>Site Manager</span><span>sitemanager@reude.tech</span><span>SiteMan@2026</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;padding:5px 0;">
+              <span>Solar Operator</span><span>solar@reude.tech</span><span>Solar@Reude2026</span>
+            </div>
+            <p style="margin-top:8px;color:#28666E;font-family:'Outfit',sans-serif;font-size:0.72rem;">These accounts are pre-built for REUDE Technologies staff. Others must register.</p>
+          </div>
+        </details>
       </div>
 
       <!-- REGISTER -->
@@ -542,12 +569,41 @@
       el.innerHTML = `<div class="auth-msg ${type}">${text}</div>`;
     }
 
+    // ── Default role accounts (seeded automatically) ──────────────
+    const DEFAULT_ACCOUNTS = [
+      { firstName:'Admin',     lastName:'REUDE',    email:'admin@reude.tech',           password:'Admin@Reude2026',   org:'REUDE Technologies', role:'Administrator',        sector:'wind', status:'active' },
+      { firstName:'Fleet',     lastName:'Operator', email:'operator@reude.tech',        password:'Operator@2026',     org:'REUDE Technologies', role:'Fleet Operator',       sector:'wind', status:'active' },
+      { firstName:'Maintenance',lastName:'Engineer',email:'engineer@reude.tech',        password:'Engineer@2026',     org:'REUDE Technologies', role:'Maintenance Engineer', sector:'wind', status:'active' },
+      { firstName:'Data',      lastName:'Analyst',  email:'analyst@reude.tech',         password:'Analyst@2026',      org:'REUDE Technologies', role:'Data Analyst',         sector:'wind', status:'active' },
+      { firstName:'Site',      lastName:'Manager',  email:'sitemanager@reude.tech',     password:'SiteMan@2026',      org:'REUDE Technologies', role:'Site Manager',         sector:'wind', status:'active' },
+      { firstName:'Solar',     lastName:'Operator', email:'solar@reude.tech',           password:'Solar@Reude2026',   org:'REUDE Technologies', role:'Fleet Operator',       sector:'solar', status:'active' },
+    ];
+
+    function seedDefaultAccounts() {
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      let updated = false;
+      DEFAULT_ACCOUNTS.forEach(acc => {
+        if (!users.find(u => u.email === acc.email)) {
+          users.push({ ...acc, createdAt: new Date(2026,0,1).toISOString() });
+          updated = true;
+        }
+      });
+      if (updated) localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    }
+
+    // Seed on page load
+    window.addEventListener('DOMContentLoaded', () => { seedDefaultAccounts(); });
+
     function handleLogin(e) {
       e.preventDefault();
       const email  = document.getElementById('login-email').value.trim();
       const pwd    = document.getElementById('login-pwd').value;
       const sector = document.getElementById('login-sector').value;
-      const users  = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+
+      // ── Seed default role accounts on first use ────────────────
+      seedDefaultAccounts();
+
+      let users  = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
 
       // ── Admin super-login ──────────────────────────────────────
       if (email === 'admin@reude.tech' && pwd === 'Admin@Reude2026') {
