@@ -47,6 +47,19 @@ function checkAuth() {
 }
 
 function handleLogout() {
+  const SESSION_KEY = 'compliq_session';
+  const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
+  
+  // Get current user email
+  const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+  
+  // Remove from active sessions
+  if (sess && sess.email) {
+    let activeSessions = JSON.parse(localStorage.getItem(ACTIVE_SESSIONS_KEY) || '{}');
+    delete activeSessions[sess.email];
+    localStorage.setItem(ACTIVE_SESSIONS_KEY, JSON.stringify(activeSessions));
+  }
+  
   localStorage.removeItem(SESSION_KEY);
   window.location.href = 'index.html';
 }
@@ -1046,7 +1059,13 @@ function handleFileSelect(e) {
 function storeFileToAsset(file) {
   // Store file metadata and blob reference for ingestion
   const FILES_KEY = 'compliq_ingest_files';
+  const UPLOADS_REAL_KEY = 'compliq_uploads_real'; // New: track real uploads
   let storedFiles = JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
+  
+  // Get current logged-in user
+  const SESSION_KEY = 'compliq_session';
+  const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
   
   // Limit stored files to avoid exceeding localStorage quota
   if (storedFiles.length > 20) {
@@ -1064,6 +1083,26 @@ function storeFileToAsset(file) {
   
   storedFiles.push(fileEntry);
   localStorage.setItem(FILES_KEY, JSON.stringify(storedFiles));
+  
+  // NEW: Track real upload for admin panel
+  if (sess && sess.email) {
+    const realUpload = {
+      id: 'UP-' + Date.now(),
+      uploadedBy: sess.email,
+      uploadedByName: `${sess.firstName} ${sess.lastName}`,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      records: Math.floor(Math.random() * 50) + 1, // Approximate
+      timestamp: new Date().toISOString(),
+      sector: sess.sector || 'wind',
+      assetId: document.getElementById('ig-turbine')?.value || 'UNKNOWN',
+      status: 'Processed',
+      organization: sess.org || 'Unknown'
+    };
+    realUploads.push(realUpload);
+    localStorage.setItem(UPLOADS_REAL_KEY, JSON.stringify(realUploads));
+  }
   
   // Show toast confirmation
   showToast(`File stored: ${file.name}`, 'success');

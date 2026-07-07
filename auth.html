@@ -395,7 +395,7 @@
           </div>
           <div class="form-meta-row">
             <label><input type="checkbox"> Remember me</label>
-            <a href="#" class="forgot">Forgot password?</a>
+            <a href="#" class="forgot" onclick="showForgotPassword(event)">Forgot password?</a>
           </div>
           <div class="form-group">
             <label>Dashboard Type</label>
@@ -615,6 +615,22 @@
       localStorage.setItem(SESSION_KEY, JSON.stringify(found));
       const sectorKey = sector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
       localStorage.setItem(sectorKey, JSON.stringify({...found, sector}));
+      
+      // TRACK ACTIVE SESSION - User is now logged in RIGHT NOW
+      const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
+      let activeSessions = JSON.parse(localStorage.getItem(ACTIVE_SESSIONS_KEY) || '{}');
+      activeSessions[found.email] = {
+        email: found.email,
+        firstName: found.firstName,
+        lastName: found.lastName,
+        role: found.role,
+        sector: sector,
+        loginTime: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        status: 'online'
+      };
+      localStorage.setItem(ACTIVE_SESSIONS_KEY, JSON.stringify(activeSessions));
+      
       showMsg('login-msg','success',`Welcome back, ${found.firstName}! Redirecting…`);
       const redirect = sector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
       setTimeout(() => { window.location.href = redirect; }, 1200);
@@ -675,6 +691,57 @@
       }
       setInterval(() => goTo(current + 1), 3000);
     })();
+
+    // ── FORGOT PASSWORD & PASSWORD RESET ──
+    function showForgotPassword(e) {
+      e.preventDefault();
+      document.getElementById('forgot-modal').style.display = 'flex';
+      document.getElementById('forgot-msg').innerHTML = '';
+    }
+    function closeForgotPassword() {
+      document.getElementById('forgot-modal').style.display = 'none';
+    }
+    function sendPasswordReset() {
+      const email = document.getElementById('forgot-email').value.trim();
+      if (!email) {
+        showForgotMsg('Please enter your email address', 'error');
+        return;
+      }
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      const user = users.find(u => u.email === email);
+      if (!user) {
+        showForgotMsg('Email not found in system', 'error');
+        return;
+      }
+      // Generate reset token (valid for 1 hour)
+      const resetToken = Math.random().toString(36).substring(2, 12);
+      const resetData = JSON.parse(localStorage.getItem('compliq_resets') || '{}');
+      resetData[email] = { token: resetToken, expires: Date.now() + 3600000 };
+      localStorage.setItem('compliq_resets', JSON.stringify(resetData));
+      showForgotMsg(`✅ Reset link sent to ${email}. Check your email (demo: token saved in localStorage)`, 'success');
+      setTimeout(() => closeForgotPassword(), 3000);
+    }
+    function showForgotMsg(msg, type) {
+      const el = document.getElementById('forgot-msg');
+      el.className = type === 'success' ? 'auth-msg success' : 'auth-msg error';
+      el.textContent = msg;
+    }
   </script>
+
+  <!-- FORGOT PASSWORD MODAL -->
+  <div class="modal-overlay" id="forgot-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+    <div style="background:#fff;border-radius:16px;padding:40px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+      <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:8px;color:#063235;">Reset Password</h3>
+      <p style="font-size:0.88rem;color:#64a0a6;margin-bottom:24px;">Enter your email and we'll send a password reset link</p>
+      <input type="email" id="forgot-email" placeholder="your@email.com" style="width:100%;padding:11px 14px;border:1.5px solid #E2F0F0;border-radius:8px;font-family:Outfit,sans-serif;margin-bottom:16px;outline:none;" />
+      <div id="forgot-msg" style="margin-bottom:16px;font-size:0.85rem;"></div>
+      <div style="display:flex;gap:12px;">
+        <button onclick="sendPasswordReset()" style="flex:1;background:#0FA4AF;color:#fff;border:none;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Send Reset Link</button>
+        <button onclick="closeForgotPassword()" style="flex:1;background:#F0F9FF;color:#063235;border:1.5px solid #E2F0F0;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
 </body>
 </html>

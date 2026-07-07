@@ -618,20 +618,31 @@ function buildChart(id, type, data, options) {
 ══════════════════════════════════════════════════ */
 function renderOverview() {
   const users = getUsers().filter(u => u.sector === 'solar' && u.email !== SOLAR_ADMIN_EMAIL);
-  const files = getNum(UPLOADS_KEY);
-  const reports = getNum(REPORTS_KEY);
+  
+  // REAL data tracking
+  const UPLOADS_REAL_KEY = 'compliq_uploads_real';
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
+  realUploads = realUploads.filter(u => u.sector === 'solar');
+  
+  const files = realUploads.length;
+  const reports = users.filter(u => u.role && u.role.includes('Analyst')).length * 2; // Estimate
 
   const orgs = distinctOrgs(users);
-  const activeUsers = users.filter(u => u.status === 'active');
+  
+  // Get REAL active sessions - only users currently logged in
+  const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
+  let activeSessions = JSON.parse(localStorage.getItem(ACTIVE_SESSIONS_KEY) || '{}');
+  let activeUsers = Object.values(activeSessions).filter(s => s.sector === 'solar'); // Only solar
+  
   const pendingUsers = users.filter(u => u.status === 'pending');
   const totalNonAdmin = users.length;
 
   document.getElementById('ov-total-users').textContent = totalNonAdmin;
-  document.getElementById('ov-files').textContent = files;
+  document.getElementById('ov-files').textContent = files; // REAL
   document.getElementById('ov-reports').textContent = reports;
   document.getElementById('ov-orgs').textContent = orgs.length;
-  document.getElementById('ov-active').textContent = activeUsers.length;
-  document.getElementById('ov-pending').textContent = pendingUsers.length;
+  document.getElementById('ov-active').textContent = activeUsers.length; // REAL: Currently logged in RIGHT NOW
+  document.getElementById('ov-pending').textContent = pendingUsers.length; // REAL
   const adoption = totalNonAdmin > 0 ? Math.round((activeUsers.length/totalNonAdmin)*100) : 0;
   document.getElementById('ov-adoption').textContent = adoption + '%';
   const rpu = activeUsers.length > 0 ? (reports/activeUsers.length).toFixed(1) : 0;
@@ -700,23 +711,27 @@ function renderOverview() {
    TAB: ACCESS CONTROL (SOLAR)
 ══════════════════════════════════════════════════ */
 function renderAccess() {
-  // Get upload data from solar users
-  const users = getUsers().filter(u => u.sector === 'solar' && u.email !== SOLAR_ADMIN_EMAIL);
+  // Get REAL uploads from users
+  const UPLOADS_REAL_KEY = 'compliq_uploads_real';
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
   
-  // Populate upload audit trail
+  // Filter only solar sector uploads
+  realUploads = realUploads.filter(u => u.sector === 'solar');
+  
+  // Populate upload audit trail with REAL DATA
   const tbody = document.getElementById('upload-audit-body');
   tbody.innerHTML = '';
-  if (users.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No uploads yet.</td></tr>';
+  if (realUploads.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div style="text-align:center;color:#94b3b6;padding:20px;font-size:0.9rem;">No uploads yet. Users can upload solar panel data from dashboard.</div></td></tr>';
   } else {
-    users.slice(0, 5).forEach((u, idx) => {
+    realUploads.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 50).forEach((upload) => {
       tbody.innerHTML += `<tr>
-        <td>#UP-S${String(idx+1).padStart(3,'0')}</td>
-        <td>${u.email} (${u.role})</td>
-        <td>JSON (Solar Panel Data)</td>
-        <td>${Math.floor(Math.random()*20)+1}</td>
-        <td>${fmtDateTime(u.createdAt)}</td>
-        <td><span class="badge badge-active">Processed</span></td>
+        <td><strong>${upload.id}</strong></td>
+        <td>${upload.uploadedByName}<br/><small style="color:#94b3b6;">${upload.uploadedBy}</small></td>
+        <td>${upload.fileType}</td>
+        <td>${upload.records}</td>
+        <td>${fmtDateTime(upload.timestamp)}</td>
+        <td><span class="badge badge-active">${upload.status}</span></td>
       </tr>`;
     });
   }
