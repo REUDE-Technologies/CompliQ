@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CompliQ by Reude Technologies | Inspection Dashboard</title>
+  <meta name="description" content="CompliQ by Reude Technologies Wind Turbine Blade Inspection — Fleet monitoring dashboard with real-time telemetry, defect analysis, and AI-assisted reporting.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- jsPDF for PDF report generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Chart.js for interactive charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<!-- AUTH GATE — shown if not logged in -->
+<div class="auth-gate" id="auth-gate">
+  <div class="gate-inner">
+    <div class="gate-logo">
+      <svg viewBox="0 0 60 60" fill="none" width="56" height="56">
+        <path d="M30 6L48 24L39 24L39 54L21 54L21 24L12 24Z" fill="none" stroke="url(#gg)" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="30" cy="30" r="6" fill="#964734"/>
+        <defs><linearGradient id="gg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0FA4AF"/><stop offset="100%" stop-color="#AFDDE5"/></linearGradient></defs>
+      </svg>
+      <div>
+        <h1>CompliQ by Reude Technologies</h1>
+        <span>Blade Inspect AI</span>
+      </div>
+    </div>
+    <p>Please sign in to access the inspection dashboard.</p>
+    <a href="index.html" class="gate-btn">Go to Login Page →</a>
+  </div>
+</div>
+
+<div class="app-wrap" id="app-wrap" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;">
+        <span class="sidebar-compliq-text">CompliQ by</span>
+        <img src="images/reude-logo.png" alt="Reude Technologies" class="sidebar-logo-img">
+      </a>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Operations</div>
+      <button class="nav-item active" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet Overview</span></button>
+      <button class="nav-item" data-tab="asset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Asset Detail</span></button>
+      <button class="nav-item" data-tab="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Report Viewer</span></button>
+
+      <div class="nav-group-label" style="margin-top:16px">Data Management</div>
+      <button class="nav-item" data-tab="ingest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest Data</span></button>
+      <button class="nav-item" data-tab="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual Entry</span></button>
+      <button class="nav-item" data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
+      <!-- Admin Panel Button (hidden by default) -->
+      <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none;background:rgba(150,71,52,0.15);border-left:3px solid #964734;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin Panel</span></button>
+    </nav>
+
+    <div class="mqtt-status">
+      <div class="status-dot pulsing"></div>
+      <div class="status-text">
+        <span>Edge Gateway</span>
+        <small>MQTT: Live Stream</small>
+      </div>
+    </div>
+
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="user-av" id="user-av">OP</div>
+      <div class="user-info">
+        <span id="user-display-name">Operator</span>
+        <small id="user-display-role">Fleet Operator</small>
+      </div>
+      <a href="account.html" class="logout-btn" title="Account Settings" style="color:var(--c-teal);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </a>
+      <button class="logout-btn" title="Sign out" onclick="handleLogout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+    <button onclick="switchDashboard('solar')" class="sidebar-switch-link" id="switch-solar-btn">☀️ Switch to Solar Dashboard</button>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-area">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="page-title">Fleet Overview</h2>
+        <p id="page-sub">Real-time monitoring of all turbine assets</p>
+      </div>
+      <div class="topbar-right">
+        <button id="theme-toggle-dash" class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <!-- NL Search -->
+        <div class="nl-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="nl-input" placeholder="Ask AI: 'Show all critical cracks...'">
+          <button id="nl-btn">Ask</button>
+        </div>
+        <!-- Notif Bell -->
+        <div class="notif-bell-wrap" id="notif-wrap">
+          <button class="icon-btn" id="notif-bell">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge" id="notif-badge">3</span>
+          </button>
+          <div class="notif-panel" id="notif-panel">
+            <div class="notif-panel-header">
+              <h4>Alerts</h4>
+              <button onclick="clearNotifs()">Clear all</button>
+            </div>
+            <div id="notif-list-items"></div>
+          </div>
+        </div>
+        <!-- Download Report Button -->
+        <button class="icon-btn download-btn" id="download-report-btn" title="Download PDF Report" onclick="generatePDFReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>PDF Report</span>
+        </button>
+        <!-- Back to Landing -->
+        <a href="javascript:goHome()" class="icon-btn home-btn" title="Back to Home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <!-- ==========================================
+         VIEW: FLEET OVERVIEW
+    =========================================== -->
+    <section class="view active" id="view-fleet">
+      <!-- Metric Cards -->
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Fleet Health Index</span>
+            <span class="metric-val" id="m-health">—</span>
+            <span class="metric-sub" id="m-health-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Active Anomalies</span>
+            <span class="metric-val" id="m-anomalies">—</span>
+            <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Inspection Coverage</span>
+            <span class="metric-val" id="m-coverage">—</span>
+            <span class="metric-sub" id="m-cov-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Avg. Confidence</span>
+            <span class="metric-val" id="m-conf">—</span>
+            <span class="metric-sub">P95 &lt; 200ms latency</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fleet Grid + Live Log -->
+      <div class="two-col-row">
+        <div class="panel flex-3">
+          <div class="panel-header">
+            <h3>Interactive Fleet Grid</h3>
+            <div class="legend-row">
+              <span class="leg-dot good"></span>Normal
+              <span class="leg-dot warn"></span>Warning
+              <span class="leg-dot crit"></span>Critical
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="fleet-grid" id="fleet-grid"></div>
+          </div>
+        </div>
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3>MQTT Telemetry</h3>
+            <span class="live-badge">● LIVE</span>
+          </div>
+          <div class="panel-body log-body" id="mqtt-log"></div>
+        </div>
+      </div>
+
+      <!-- Asset Registry List -->
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Asset Registry &amp; Status</h3>
+          <div class="filter-btns">
+            <button class="fbtn active" data-f="all">All</button>
+            <button class="fbtn" data-f="warn">Warning / Critical</button>
+            <button class="fbtn" data-f="ok">Normal</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="asset-list" id="asset-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: ASSET DETAIL
+    =========================================== -->
+    <section class="view" id="view-asset">
+      <div class="two-col-row">
+        <!-- Left: Asset info -->
+        <div class="panel flex-1">
+          <div class="panel-header"><h3>Select Turbine</h3></div>
+          <div class="panel-body">
+            <select id="turbine-selector" class="styled-select"></select>
+            <div id="turbine-info-panel" style="margin-top:20px"></div>
+          </div>
+        </div>
+        <!-- Right: Turbine Part Schematic -->
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3 id="schematic-title">Component Schematic</h3>
+            <div class="part-select-wrap">
+              <label style="font-size:0.75rem;color:var(--c-muted);margin-right:8px;">Component:</label>
+              <select id="part-selector" class="styled-select" style="width:auto;padding:6px 12px;font-size:0.82rem;">
+                <option value="full">🔧 Full Turbine Overview</option>
+                <optgroup label="Rotor">
+                  <option value="blade-A">🌀 Blade A</option>
+                  <option value="blade-B">🌀 Blade B</option>
+                  <option value="blade-C">🌀 Blade C</option>
+                  <option value="hub">⚙️ Hub</option>
+                  <option value="pitch-system">🔩 Pitch System</option>
+                </optgroup>
+                <optgroup label="Drive Train">
+                  <option value="main-shaft">🔄 Main Shaft</option>
+                  <option value="gearbox">⚙️ Gearbox</option>
+                  <option value="generator">⚡ Generator</option>
+                  <option value="brake">🛑 Brake System</option>
+                </optgroup>
+                <optgroup label="Nacelle">
+                  <option value="nacelle">🏠 Nacelle Housing</option>
+                  <option value="yaw-system">🧭 Yaw System</option>
+                  <option value="cooling">❄️ Cooling System</option>
+                  <option value="anemometer">📡 Anemometer / Sensors</option>
+                </optgroup>
+                <optgroup label="Tower & Foundation">
+                  <option value="tower">🗼 Tower</option>
+                  <option value="foundation">⬛ Foundation</option>
+                  <option value="cables">🔌 Power Cables</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div class="panel-body schematic-body">
+            <div id="blade-schematic"></div>
+            <div class="blade-legend-row">
+              <span id="schematic-hint">Click hotspots → Report Viewer</span>
+              <div class="bleg-items">
+                <span class="bleg-item"><span class="bleg-dot crack"></span>Crack</span>
+                <span class="bleg-item"><span class="bleg-dot delam"></span>Delamination</span>
+                <span class="bleg-item"><span class="bleg-dot erosion"></span>Erosion</span>
+                <span class="bleg-item"><span class="bleg-dot lightning"></span>Lightning</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Defects Table -->
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Detected Defects &amp; Decisions</h3>
+          <button class="teal-btn" onclick="generatePDFReport()">⬇ Export Asset Report (PDF)</button>
+        </div>
+        <div class="panel-body table-panel">
+          <table class="data-table">
+            <thead><tr>
+              <th>Defect ID</th><th>Component</th><th>Location</th><th>Defect Type</th><th>Confidence</th>
+              <th>Severity</th><th>Recommended Action</th><th>Priority</th><th>Status</th><th>Review</th>
+            </tr></thead>
+            <tbody id="defects-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: REPORT VIEWER
+    =========================================== -->
+    <section class="view" id="view-report">
+      <div class="report-layout">
+        <!-- Image Viewer Panel -->
+        <div class="panel flex-3">
+          <div class="panel-header">
+            <h3 id="report-viewer-title">CV Inspection Viewer</h3>
+            <div class="viewer-controls">
+              <label class="toggle-wrap"><input type="checkbox" id="mask-toggle" checked><span class="tog-slider"></span>Mask Overlay</label>
+              <div class="slider-wrap">
+                <span>RGB</span>
+                <input type="range" id="therm-slider" min="0" max="100" value="0">
+                <span>Thermal</span>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body viewer-body">
+            <div class="img-frame" id="img-frame">
+              <img id="img-rgb" src="images/turbine_inspect_rgb.png" alt="RGB View">
+              <img id="img-therm" src="images/turbine_inspect_thermal.png" alt="Thermal View" style="opacity:0">
+              <svg id="overlay-svg" class="overlay-svg" viewBox="0 0 800 500"></svg>
+              <div class="zoom-badge" id="zoom-badge">Zoom: 100%</div>
+              <div class="provenance-tag" id="provenance-tag">Campaign: 2026_Q2_North | DJI M300 RTK | Zenmuse H20T</div>
+            </div>
+            <div class="viewer-actions">
+              <button class="icon-btn" onclick="zoomIn()">+ Zoom In</button>
+              <button class="icon-btn" onclick="zoomOut()">− Zoom Out</button>
+              <button class="icon-btn" onclick="resetZoom()">↺ Reset</button>
+              <button class="teal-btn" onclick="generatePDFReport()">⬇ Download Full Report PDF</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Decision Card -->
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3>Engineering Assessment</h3>
+            <span class="priority-badge" id="report-priority-badge">—</span>
+          </div>
+          <div class="panel-body" id="report-decision-body">
+            <!-- Populated by JS -->
+          </div>
+          <div class="panel-footer">
+            <button class="orange-btn" id="dispatch-btn" onclick="approveDispatch()">Approve Dispatch Order</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: INGEST DATA
+    =========================================== -->
+    <section class="view" id="view-ingest">
+      <div class="two-col-row">
+        <div class="panel flex-3">
+          <div class="panel-header"><h3>Ingest Real-Time CV Payload</h3><p style="font-size:0.8rem;color:var(--c-muted)">Simulate MQTT or API ingestion from edge device</p></div>
+          <div class="panel-body">
+            <form id="ingest-form" onsubmit="handleIngest(event)">
+              <div class="form-grid-2">
+                <div class="fg"><label>Target Turbine</label><select id="ig-turbine" class="styled-select"></select></div>
+                <div class="fg"><label>Blade Segment</label>
+                  <select id="ig-blade" class="styled-select"><option>A</option><option>B</option><option>C</option></select></div>
+                <div class="fg"><label>Defect Class</label>
+                  <select id="ig-defect" class="styled-select">
+                    <option>Crack</option><option>Delamination</option><option>Erosion</option><option>Lightning</option>
+                  </select></div>
+                <div class="fg"><label>Severity (1–5)</label><input type="number" id="ig-sev" min="1" max="5" value="3" class="styled-input"></div>
+                <div class="fg"><label>Confidence (%)</label><input type="number" id="ig-conf" min="10" max="100" value="88" class="styled-input"></div>
+                <div class="fg"><label>Distance from Root (m)</label><input type="number" id="ig-dist" min="1" max="80" value="34" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Recommended Action</label>
+                <input type="text" id="ig-action" value="Schedule validation inspection within 14 days" class="styled-input"></div>
+
+              <!-- File Upload -->
+              <div class="fg" style="margin-top:16px">
+                <label>Evidence Media (Images / Videos / JSON)</label>
+                <div class="dropzone" id="dropzone" onclick="document.getElementById('file-inp').click()" ondrop="handleFileDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <p>Drop multiple files here, or <span>click to browse</span></p>
+                  <small>JPG, PNG, MP4, JSON — up to 50MB total</small>
+                  <input type="file" id="file-inp" accept="image/*,video/*,.json" style="display:none" multiple onchange="handleFileSelect(event)">
+                </div>
+                <div id="file-preview" style="display:none;margin-top:10px;"></div>
+              </div>
+              <!-- CSV / Excel bulk upload -->
+              <div class="fg" style="margin-top:12px">
+                <label>📊 Bulk Upload via CSV / Excel</label>
+                <div class="dropzone" onclick="document.getElementById('csv-inp').click()" style="border-color:rgba(15,164,175,0.3);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                  <p>Upload CSV / Excel to auto-fill form fields, or <span>click to browse</span></p>
+                  <small>CSV, XLSX, XLS — columns: turbine_id, blade, defect_type, severity, confidence, dist, action</small>
+                  <input type="file" id="csv-inp" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleCSVUpload(this,'ingest')">
+                </div>
+                <div id="csv-preview" style="margin-top:8px;font-size:0.78rem;color:var(--c-teal);"></div>
+              </div>
+
+              <div class="form-actions">
+                <button type="button" class="ghost-btn" onclick="resetIngestForm()">Reset</button>
+                <button type="submit" class="teal-btn" id="ingest-submit-btn">
+                  <span>Ingest Payload</span>
+                  <span class="spinner" id="ingest-spinner" style="display:none"></span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Contract Reference -->
+        <div class="panel flex-2">
+          <div class="panel-header"><h3>API Data Contracts</h3></div>
+          <div class="panel-body contracts-body">
+            <div class="contract-block">
+              <div class="contract-header">MQTT Anomaly Event</div>
+              <pre><code id="contract-mqtt">{
+  "device_id": "WTG-003",
+  "timestamp_ms": 1718450000,
+  "anomaly_type": "Crack",
+  "confidence": 0.92,
+  "severity": 4,
+  "feature_window_id": "FW-9812",
+  "signature": "sha256-abc..."
+}</code></pre>
+            </div>
+            <div class="contract-block" style="margin-top:16px">
+              <div class="contract-header">CV Detection Record</div>
+              <pre><code>{
+  "detection_id": "DET-201",
+  "inspection_id": "INSP-888",
+  "asset_id": 3,
+  "defect_class": "Delamination",
+  "confidence": 0.94,
+  "bounding_box": [120,200,380,360],
+  "area_px": 2840,
+  "detected_at": "2026-06-15T09:12:00Z",
+  "model_version": "YOLOv8-WT-3.2"
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: MANUAL DATA ENTRY
+    =========================================== -->
+    <section class="view" id="view-manual">
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Manual Turbine &amp; Defect Entry</h3>
+          <p style="font-size:0.8rem;color:var(--c-muted)">Add your own real-world turbine data and inspection observations</p>
+        </div>
+        <div class="panel-body">
+          <div class="manual-tabs">
+            <button class="manual-tab active" data-mtab="turbine">Add New Turbine</button>
+            <button class="manual-tab" data-mtab="defect">Add Defect / Observation</button>
+            <button class="manual-tab" data-mtab="inspection">Log Inspection Event</button>
+          </div>
+
+          <!-- ADD TURBINE -->
+          <div class="manual-form active" id="mform-turbine">
+            <form onsubmit="handleAddTurbine(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Turbine ID / Name *</label><input type="text" id="mt-id" placeholder="e.g. WTG-007" class="styled-input" required></div>
+                <div class="fg"><label>Site / Wind Farm Name *</label><input type="text" id="mt-site" placeholder="e.g. North Sea Farm Alpha" class="styled-input" required></div>
+                <div class="fg"><label>Location (GPS Lat, Long) *</label><input type="text" id="mt-gps" placeholder="e.g. 13.0827, 80.2707" class="styled-input" required></div>
+                <div class="fg"><label>Rotor Diameter (m)</label><input type="number" id="mt-rotor" placeholder="126" class="styled-input" value="126"></div>
+                <div class="fg"><label>Hub Height (m)</label><input type="number" id="mt-hub" placeholder="90" class="styled-input" value="90"></div>
+                <div class="fg"><label>Rated Power (MW)</label><input type="number" id="mt-power" step="0.1" placeholder="2.5" class="styled-input" value="2.5"></div>
+                <div class="fg"><label>Manufacturer</label><input type="text" id="mt-mfr" placeholder="Vestas / Siemens / GE" class="styled-input" value="Vestas"></div>
+                <div class="fg"><label>Model</label><input type="text" id="mt-model" placeholder="V150-4.5 MW" class="styled-input"></div>
+                <div class="fg"><label>Commission Year</label><input type="number" id="mt-year" min="2000" max="2030" value="2022" class="styled-input"></div>
+                <div class="fg"><label>Current Wind Speed (m/s)</label><input type="number" id="mt-wind" step="0.1" value="12.0" class="styled-input"></div>
+                <div class="fg"><label>Current RPM</label><input type="number" id="mt-rpm" step="0.1" value="14.5" class="styled-input"></div>
+                <div class="fg"><label>Initial Health Index (%)</label><input type="number" id="mt-health" min="0" max="100" value="97" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Notes / Additional Details</label>
+                <textarea id="mt-notes" rows="3" class="styled-input" placeholder="Any additional observations about this turbine..."></textarea></div>
+              <div class="form-actions" style="margin-top:20px">
+                <button type="submit" class="teal-btn">Add Turbine to Fleet</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- ADD DEFECT -->
+          <div class="manual-form" id="mform-defect">
+            <form onsubmit="handleAddDefect(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Target Turbine *</label><select id="md-turbine" class="styled-select"></select></div>
+                <div class="fg"><label>Blade *</label><select id="md-blade" class="styled-select"><option>A</option><option>B</option><option>C</option></select></div>
+                <div class="fg"><label>Defect Type *</label>
+                  <select id="md-type" class="styled-select"><option>Crack</option><option>Delamination</option><option>Erosion</option><option>Lightning</option><option>Vortex Generator Damage</option><option>Paint Peeling</option></select></div>
+                <div class="fg"><label>Defect ID</label><input type="text" id="md-id" placeholder="Auto-generated" class="styled-input"></div>
+                <div class="fg"><label>Distance from Root (m) *</label><input type="number" id="md-dist" min="0" max="100" value="35" class="styled-input" required></div>
+                <div class="fg"><label>Severity (1–5) *</label><input type="number" id="md-sev" min="1" max="5" value="3" class="styled-input" required></div>
+                <div class="fg"><label>Detection Confidence (%)</label><input type="number" id="md-conf" min="0" max="100" value="85" class="styled-input"></div>
+                <div class="fg"><label>Detection Method</label>
+                  <select id="md-method" class="styled-select"><option>Drone RGB</option><option>Thermal Imaging</option><option>Acoustic NDT</option><option>Visual (Manual)</option><option>Ultrasonic</option></select></div>
+                <div class="fg"><label>Inspector / Drone ID</label><input type="text" id="md-inspector" placeholder="DJI-M300-RTK-01" class="styled-input"></div>
+                <div class="fg"><label>GPS Location</label><input type="text" id="md-gps" placeholder="13.0827, 80.2707" class="styled-input"></div>
+                <div class="fg"><label>Campaign / Inspection ID</label><input type="text" id="md-campaign" placeholder="INSP-2026-Q2" class="styled-input"></div>
+                <div class="fg"><label>Inspection Date</label><input type="date" id="md-date" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Engineering Recommended Action *</label>
+                <input type="text" id="md-action" class="styled-input" value="Schedule validation and remediation" required></div>
+              <div class="fg" style="margin-top:12px"><label>Detailed Observations</label>
+                <textarea id="md-notes" rows="3" class="styled-input" placeholder="Describe the defect in detail: depth, extent, propagation risk, material analysis..."></textarea></div>
+              <div class="form-actions" style="margin-top:20px">
+                <button type="submit" class="teal-btn">Record Defect to Database</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- LOG INSPECTION EVENT -->
+          <div class="manual-form" id="mform-inspection">
+            <form onsubmit="handleLogInspection(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Turbine *</label><select id="mi-turbine" class="styled-select"></select></div>
+                <div class="fg"><label>Inspection Type</label>
+                  <select id="mi-type" class="styled-select"><option>Routine Annual</option><option>Post-Storm Emergency</option><option>Condition-Based</option><option>Pre-Commissioning</option><option>Decommissioning</option></select></div>
+                <div class="fg"><label>Inspection Date *</label><input type="date" id="mi-date" class="styled-input" required></div>
+                <div class="fg"><label>Lead Inspector</label><input type="text" id="mi-inspector" placeholder="Name / Team ID" class="styled-input"></div>
+                <div class="fg"><label>Campaign ID</label><input type="text" id="mi-campaign" placeholder="INSP-2026-Q2" class="styled-input"></div>
+                <div class="fg"><label>Overall Result</label>
+                  <select id="mi-result" class="styled-select"><option>PASS — No Issues</option><option>ADVISORY — Monitor</option><option>ACTION REQUIRED</option><option>CRITICAL — Halt</option></select></div>
+                <div class="fg"><label>Drone Model</label><input type="text" id="mi-drone" placeholder="DJI Matrice 300 RTK" class="styled-input"></div>
+                <div class="fg"><label>Camera / Sensor</label><input type="text" id="mi-cam" placeholder="Zenmuse H20T" class="styled-input"></div>
+                <div class="fg"><label>Images Captured</label><input type="number" id="mi-imgs" value="0" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Inspection Summary</label>
+                <textarea id="mi-summary" rows="3" class="styled-input" placeholder="Overall findings, weather conditions, access challenges, etc."></textarea></div>
+              <div class="form-actions" style="margin-top:20px">
+                <button type="submit" class="teal-btn">Log Inspection Event</button>
+              </div>
+            </form>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Manually Added Data Preview -->
+      <div class="panel full-panel" style="margin-top:24px">
+        <div class="panel-header">
+          <h3>Manual Records Log</h3>
+          <button class="ghost-btn" onclick="clearManualRecords()">Clear All</button>
+        </div>
+        <div class="panel-body table-panel">
+          <div id="manual-records-list">
+            <p style="color:var(--c-muted);font-size:0.85rem;padding:20px 0">No manual records added yet. Use the forms above to record data.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: ANALYTICS
+    =========================================== -->
+    <section class="view" id="view-analytics">
+      <div class="analytics-grid">
+        <div class="panel">
+          <div class="panel-header"><h3>Fleet Health Trend</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-health" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-defects" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Severity Distribution</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-severity" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Inspections Timeline</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-timeline" width="400" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- FLOATING AI ASSISTANT -->
+<div class="ai-float-wrap" id="ai-float">
+  <button class="ai-trigger-btn" id="ai-trigger">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span>AI Copilot</span>
+    <span class="ai-pulse"></span>
+  </button>
+  <div class="ai-chat-box" id="ai-chat-box">
+    <div class="ai-chat-header">
+      <div class="ai-header-info">
+        <div class="ai-avatar">AI</div>
+        <div><h4>CompliQ Copilot</h4><span class="ai-status">● Online • Powered by DSL Engine</span></div>
+      </div>
+      <button onclick="document.getElementById('ai-chat-box').classList.remove('open')">✕</button>
+    </div>
+    <div class="ai-messages" id="ai-messages">
+      <div class="ai-bubble bot">
+      Hello! I'm the CompliQ AI Copilot with access to your live fleet database. Try asking:<br><br>
+        • "Show all severity 4+ defects"<br>
+        • "What is the health of Turbine 3?"<br>
+        • "Which turbine needs immediate attention?"
+      </div>
+    </div>
+    <div class="ai-suggestions" id="ai-suggestions">
+      <button class="sugg-btn" data-q="Show all critical severity defects">Critical defects</button>
+      <button class="sugg-btn" data-q="Which turbine has lowest health?">Lowest health</button>
+      <button class="sugg-btn" data-q="List all recommended actions">All actions</button>
+    </div>
+    <div class="ai-input-row">
+      <input type="text" id="ai-input" placeholder="Ask about your fleet...">
+      <button id="ai-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+  </div>
+</div>
+
+    <!-- DASHBOARD FOOTER -->
+    <footer class="dashboard-footer">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="footer-tagline">Powered by REUDE</span>
+        </div>
+        <div class="footer-contact">
+          <a href="mailto:cmo_ira@reude.tech" class="footer-link">Contact support: cmo_ira@reude.tech</a>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div class="toast" id="toast"></div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

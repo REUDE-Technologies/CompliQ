@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CompliQ Solar - Fleet Dashboard</title>
+  <meta name="description" content="CompliQ Solar by Reude Technologies - Solar Farm Panel Array Inspection Dashboard with real-time telemetry, defect analysis, and AI-assisted reporting.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    /* Solar-specific node grid */
+    .fleet-grid { grid-template-columns: repeat(2, 1fr); }
+    /* Solar panel SVG icon */
+    .solar-graphic {
+      width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
+    }
+    /* Sidebar switch link */
+    .sidebar-switch-link {
+      display: block; text-align: center; padding: 8px 12px;
+      font-size: 0.78rem; color: var(--c-muted);
+      border: 1px solid var(--c-border); border-radius: 8px;
+      text-decoration: none; margin-top: 10px;
+      transition: all 0.2s;
+    }
+    .sidebar-switch-link:hover { color: var(--c-teal); border-color: rgba(15,164,175,0.35); background: rgba(15,164,175,0.06); }
+    /* Sidebar logo text */
+    .sidebar-compliq-text { font-size: 0.72rem; font-weight: 700; color: var(--c-teal); letter-spacing: 1px; display: block; }
+    .sidebar-logo-img { height: 48px; opacity: 1; display: block; margin-top: 4px; }
+    .sidebar-brand { flex-direction: column !important; align-items: center !important; text-align: center !important; gap: 6px !important; }
+  </style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<!-- AUTH GATE -->
+<div class="auth-gate" id="auth-gate">
+  <div class="gate-inner">
+    <div class="gate-logo">
+      <svg viewBox="0 0 60 60" fill="none" width="56" height="56">
+        <rect x="6" y="18" width="48" height="30" rx="3" fill="none" stroke="url(#sg)" stroke-width="2.5"/>
+        <line x1="6" y1="29" x2="54" y2="29" stroke="url(#sg)" stroke-width="1.5"/>
+        <line x1="6" y1="37" x2="54" y2="37" stroke="url(#sg)" stroke-width="1.5"/>
+        <line x1="22" y1="18" x2="22" y2="48" stroke="url(#sg)" stroke-width="1.5"/>
+        <line x1="38" y1="18" x2="38" y2="48" stroke="url(#sg)" stroke-width="1.5"/>
+        <circle cx="30" cy="10" r="5" fill="#964734"/>
+        <line x1="30" y1="4" x2="30" y2="0" stroke="#F2C94C" stroke-width="1.5"/>
+        <line x1="36" y1="7" x2="39" y2="4" stroke="#F2C94C" stroke-width="1.5"/>
+        <line x1="24" y1="7" x2="21" y2="4" stroke="#F2C94C" stroke-width="1.5"/>
+        <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0FA4AF"/><stop offset="100%" stop-color="#AFDDE5"/></linearGradient></defs>
+      </svg>
+      <div>
+        <h1>CompliQ Solar</h1>
+        <span>Solar Farm Inspection AI</span>
+      </div>
+    </div>
+    <p>Please sign in with a Solar sector account to access this dashboard.</p>
+    <a href="auth.html" class="gate-btn">Go to Login Page →</a>
+  </div>
+</div>
+
+<div class="app-wrap" id="app-wrap" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;">
+        <span class="sidebar-compliq-text">CompliQ Solar by</span>
+        <img src="images/reude-logo.png" alt="Reude Technologies" class="sidebar-logo-img">
+      </a>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Operations</div>
+      <button class="nav-item active" data-tab="fleet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span>Fleet Overview</span>
+      </button>
+      <button class="nav-item" data-tab="asset">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <span>Panel Array Detail</span>
+      </button>
+      <button class="nav-item" data-tab="report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>Inspection Report</span>
+      </button>
+      <div class="nav-group-label" style="margin-top:16px">Data Management</div>
+      <button class="nav-item" data-tab="ingest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Ingest Data</span>
+      </button>
+      <button class="nav-item" data-tab="manual">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Manual Entry</span>
+      </button>
+      <button class="nav-item" data-tab="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Analytics</span>
+      </button>
+      <!-- Admin Panel Button (hidden by default) -->
+      <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none;background:rgba(150,71,52,0.15);border-left:3px solid #964734;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin Panel</span></button>
+    </nav>
+
+    <div class="mqtt-status">
+      <div class="status-dot pulsing"></div>
+      <div class="status-text">
+        <span>SCADA Gateway</span>
+        <small>Modbus / MQTT: Live</small>
+      </div>
+    </div>
+
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="user-av" id="user-av">OP</div>
+      <div class="user-info">
+        <span id="user-display-name">Operator</span>
+        <small id="user-display-role">Solar Fleet Engineer</small>
+      </div>
+      <a href="account.html" class="logout-btn" title="Account Settings" style="color:var(--c-teal);">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </a>
+      <button class="logout-btn" title="Sign out" onclick="handleLogout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+
+    <a href="javascript:switchDashboard('wind')" class="sidebar-switch-link">🌀 Switch to Wind Dashboard</a>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-area">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="page-title">Solar Fleet Overview</h2>
+        <p id="page-sub">Real-time monitoring of all solar panel array assets</p>
+      </div>
+      <div class="topbar-right">
+        <button id="theme-toggle-dash" class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <div class="nl-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="nl-input" placeholder="Ask AI: 'Show all hotspot defects...'">
+          <button id="nl-btn">Ask</button>
+        </div>
+        <div class="notif-bell-wrap" id="notif-wrap">
+          <button class="icon-btn" id="notif-bell">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge" id="notif-badge">3</span>
+          </button>
+          <div class="notif-panel" id="notif-panel">
+            <div class="notif-panel-header">
+              <h4>Alerts</h4>
+              <button onclick="clearNotifs()">Clear all</button>
+            </div>
+            <div id="notif-list-items"></div>
+          </div>
+        </div>
+        <button class="icon-btn download-btn" id="download-report-btn" title="Download PDF Report" onclick="generatePDFReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>PDF Report</span>
+        </button>
+        <a href="javascript:goHome()" class="icon-btn home-btn" title="Back to Home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </a>
+      </div>
+    </header>
+
+    <!-- ==========================================
+         VIEW: SOLAR FLEET OVERVIEW
+    =========================================== -->
+    <section class="view active" id="view-fleet">
+      <!-- Metric Cards -->
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-icon teal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div class="metric-body">
+            <span class="metric-label">Panel Health Index</span>
+            <span class="metric-val" id="m-health">—</span>
+            <span class="metric-sub" id="m-health-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          </div>
+          <div class="metric-body">
+            <span class="metric-label">Active Defects</span>
+            <span class="metric-val" id="m-anomalies">—</span>
+            <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon teal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg>
+          </div>
+          <div class="metric-body">
+            <span class="metric-label">Array Coverage</span>
+            <span class="metric-val" id="m-coverage">—</span>
+            <span class="metric-sub" id="m-cov-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </div>
+          <div class="metric-body">
+            <span class="metric-label">Avg. Irradiance</span>
+            <span class="metric-val" id="m-conf">—</span>
+            <span class="metric-sub">W/m² across fleet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fleet Grid + Live Log -->
+      <div class="two-col-row">
+        <div class="panel flex-3">
+          <div class="panel-header">
+            <h3>Interactive Fleet Grid</h3>
+            <div class="legend-row">
+              <span class="leg-dot good"></span>Normal
+              <span class="leg-dot warn"></span>Warning
+              <span class="leg-dot crit"></span>Critical
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="fleet-grid" id="fleet-grid"></div>
+          </div>
+        </div>
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3>SCADA Telemetry</h3>
+            <span class="live-badge">● LIVE</span>
+          </div>
+          <div class="panel-body log-body" id="mqtt-log"></div>
+        </div>
+      </div>
+
+      <!-- Asset Registry -->
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Array Registry &amp; Status</h3>
+          <div class="filter-btns">
+            <button class="fbtn active" data-f="all">All</button>
+            <button class="fbtn" data-f="warn">Warning / Critical</button>
+            <button class="fbtn" data-f="ok">Normal</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="asset-list" id="asset-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: PANEL ARRAY DETAIL
+    =========================================== -->
+    <section class="view" id="view-asset">
+      <div class="two-col-row">
+        <div class="panel flex-1">
+          <div class="panel-header"><h3>Select Array</h3></div>
+          <div class="panel-body">
+            <select id="turbine-selector" class="styled-select"></select>
+            <div id="turbine-info-panel" style="margin-top:20px"></div>
+          </div>
+        </div>
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3 id="schematic-title">Array Thermal Map</h3>
+            <div class="part-select-wrap">
+              <label style="font-size:0.75rem;color:var(--c-muted);margin-right:8px;">Zone:</label>
+              <select id="part-selector" class="styled-select" style="width:auto;padding:6px 12px;font-size:0.82rem;">
+                <option value="full">🔆 Full Array Overview</option>
+                <optgroup label="String Groups">
+                  <option value="string-1">⚡ String Group 1 (North)</option>
+                  <option value="string-2">⚡ String Group 2 (South)</option>
+                  <option value="string-3">⚡ String Group 3 (East)</option>
+                  <option value="string-4">⚡ String Group 4 (West)</option>
+                </optgroup>
+                <optgroup label="Electrical">
+                  <option value="inverter">🔌 Inverter / Combiner Box</option>
+                  <option value="wiring">🔌 DC Wiring Harness</option>
+                </optgroup>
+                <optgroup label="Structural">
+                  <option value="frame">🔧 Mounting Frame</option>
+                  <option value="tracker">🧭 Single-Axis Tracker</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div class="panel-body schematic-body">
+            <div id="blade-schematic"></div>
+            <div class="blade-legend-row">
+              <span id="schematic-hint">Click hotspots → Inspection Report</span>
+              <div class="bleg-items">
+                <span class="bleg-item"><span class="bleg-dot crack"></span>Hotspot</span>
+                <span class="bleg-item"><span class="bleg-dot delam"></span>Delamination</span>
+                <span class="bleg-item"><span class="bleg-dot erosion"></span>Soiling</span>
+                <span class="bleg-item"><span class="bleg-dot lightning"></span>Micro-crack</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Defects Table -->
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Detected Defects &amp; Decisions</h3>
+          <button class="teal-btn" onclick="generatePDFReport()">⬇ Export Array Report (PDF)</button>
+        </div>
+        <div class="panel-body table-panel">
+          <table class="data-table">
+            <thead><tr>
+              <th>Defect ID</th><th>String</th><th>Panel No.</th><th>Defect Type</th><th>Confidence</th>
+              <th>Severity</th><th>Recommended Action</th><th>Priority</th><th>Status</th><th>Review</th>
+            </tr></thead>
+            <tbody id="defects-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: INSPECTION REPORT
+    =========================================== -->
+    <section class="view" id="view-report">
+      <div class="report-layout">
+        <div class="panel flex-3">
+          <div class="panel-header">
+            <h3 id="report-viewer-title">Thermal Inspection Viewer</h3>
+            <div class="viewer-controls">
+              <label class="toggle-wrap"><input type="checkbox" id="mask-toggle" checked><span class="tog-slider"></span>Defect Overlay</label>
+              <div class="slider-wrap">
+                <span>RGB</span>
+                <input type="range" id="therm-slider" min="0" max="100" value="0">
+                <span>Thermal</span>
+              </div>
+            </div>
+          </div>
+          <div class="panel-body viewer-body">
+            <div class="img-frame" id="img-frame">
+              <img id="img-rgb" src="images/solar_teal.png" alt="RGB View">
+              <img id="img-therm" src="images/solar_teal.png" alt="Thermal View" style="opacity:0;filter:sepia(1) hue-rotate(300deg) saturate(3);">
+              <svg id="overlay-svg" class="overlay-svg" viewBox="0 0 800 500"></svg>
+              <div class="zoom-badge" id="zoom-badge">Zoom: 100%</div>
+              <div class="provenance-tag" id="provenance-tag">Campaign: 2026_Q2_Solar | DJI M300 RTK | Zenmuse H20T</div>
+            </div>
+            <div class="viewer-actions">
+              <button class="icon-btn" onclick="zoomIn()">+ Zoom In</button>
+              <button class="icon-btn" onclick="zoomOut()">− Zoom Out</button>
+              <button class="icon-btn" onclick="resetZoom()">↺ Reset</button>
+              <button class="teal-btn" onclick="generatePDFReport()">⬇ Download Full Report PDF</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel flex-2">
+          <div class="panel-header">
+            <h3>Engineering Assessment</h3>
+            <span class="priority-badge" id="report-priority-badge">—</span>
+          </div>
+          <div class="panel-body" id="report-decision-body"></div>
+          <div class="panel-footer">
+            <button class="orange-btn" id="dispatch-btn" onclick="approveDispatch()">Approve Maintenance Order</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW: ANALYTICS
+    =========================================== -->
+    <section class="view" id="view-analytics">
+      <div class="analytics-grid">
+        <div class="panel">
+          <div class="panel-header"><h3>Fleet Health Trend</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-health" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-defects" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Severity Distribution</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-severity" width="400" height="200"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>DC Power Output Trend</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-timeline" width="400" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MANUAL DATA ENTRY -->
+    <section class="view" id="view-manual">
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Manual Solar Array &amp; Defect Entry</h3>
+          <p style="font-size:0.8rem;color:var(--c-muted)">Add real-world solar array data and inspection observations</p>
+        </div>
+        <div class="panel-body">
+          <div style="display:flex;gap:8px;margin-bottom:20px;">
+            <button class="fbtn active" id="mtab-array" onclick="switchSolarManualTab('array')">Add New Array</button>
+            <button class="fbtn" id="mtab-defect" onclick="switchSolarManualTab('defect')">Add Defect / Observation</button>
+          </div>
+          <!-- ADD ARRAY -->
+          <div id="mform-array">
+            <form onsubmit="handleAddArray(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Array ID *</label><input type="text" id="ma-id" class="styled-input" required></div>
+                <div class="fg"><label>Site / Solar Park *</label><input type="text" id="ma-site" class="styled-input" required></div>
+                <div class="fg"><label>GPS (Lat, Long) *</label><input type="text" id="ma-gps" placeholder="27.53, 71.90" class="styled-input" required></div>
+                <div class="fg"><label>Capacity (MW)</label><input type="number" id="ma-capacity" step="0.1" value="100" class="styled-input"></div>
+                <div class="fg"><label>Total Panels</label><input type="number" id="ma-panels" value="4000" class="styled-input"></div>
+                <div class="fg"><label>Manufacturer</label><input type="text" id="ma-mfr" class="styled-input"></div>
+                <div class="fg"><label>Module Model</label><input type="text" id="ma-model" class="styled-input"></div>
+                <div class="fg"><label>Commission Year</label><input type="number" id="ma-year" value="2023" class="styled-input"></div>
+                <div class="fg"><label>Initial Health (%)</label><input type="number" id="ma-health" value="97" min="0" max="100" class="styled-input"></div>
+                <div class="fg"><label>DC Power (MW)</label><input type="number" id="ma-dcpower" step="0.1" value="90" class="styled-input"></div>
+                <div class="fg"><label>PR Ratio</label><input type="number" id="ma-pr" step="0.01" value="0.80" class="styled-input"></div>
+                <div class="fg"><label>Irradiance (W/m²)</label><input type="number" id="ma-irr" value="900" class="styled-input"></div>
+              </div>
+              <div class="form-actions" style="margin-top:16px;">
+                <button type="submit" class="teal-btn">Add Array to Fleet</button>
+                <button type="button" class="ghost-btn" onclick="this.closest('form').reset()">Reset</button>
+              </div>
+            </form>
+          </div>
+          <!-- ADD DEFECT -->
+          <div id="mform-defect" style="display:none;">
+            <form onsubmit="handleAddSolarDefect(event)">
+              <div class="form-grid-3">
+                <div class="fg"><label>Target Array *</label><select id="md-array" class="styled-select"></select></div>
+                <div class="fg"><label>String Group *</label><input type="text" id="md-string" placeholder="SG-1" class="styled-input" required></div>
+                <div class="fg"><label>Panel Number *</label><input type="text" id="md-panel" placeholder="P-001" class="styled-input" required></div>
+                <div class="fg"><label>Defect Type *</label>
+                  <select id="md-type" class="styled-select">
+                    <option>Hotspot</option><option>Delamination</option><option>Soiling</option>
+                    <option>Micro-crack</option><option>Bypass Diode Failure</option><option>Frame Corrosion</option>
+                  </select>
+                </div>
+                <div class="fg"><label>Severity (1–5) *</label><input type="number" id="md-sev" min="1" max="5" value="3" class="styled-input" required></div>
+                <div class="fg"><label>Confidence (%)</label><input type="number" id="md-conf" value="85" class="styled-input"></div>
+                <div class="fg"><label>Detection Method</label>
+                  <select id="md-method" class="styled-select">
+                    <option>Drone RGB</option><option>Thermal Imaging</option><option>EL Imaging</option><option>Visual (Manual)</option>
+                  </select>
+                </div>
+                <div class="fg"><label>Inspection Date</label><input type="date" id="md-date" class="styled-input"></div>
+                <div class="fg"><label>Campaign ID</label><input type="text" id="md-campaign" placeholder="INSP-2026-Q2" class="styled-input"></div>
+              </div>
+              <div class="fg" style="margin-top:12px"><label>Recommended Action *</label><input type="text" id="md-action" class="styled-input" value="Schedule validation inspection" required></div>
+              <div class="fg" style="margin-top:8px"><label>Observations</label><textarea id="md-notes" rows="3" class="styled-input" placeholder="Describe the defect..."></textarea></div>
+              <div class="fg" style="margin-top:12px">
+                <label>Evidence Media (Images / Thermal / JSON)</label>
+                <div class="dropzone" id="solar-dropzone" onclick="document.getElementById('solar-file-inp').click()" style="padding:20px;text-align:center;border:2px dashed var(--c-border);border-radius:10px;cursor:pointer;transition:border-color 0.2s;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28" style="color:var(--c-teal);margin-bottom:6px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <p style="font-size:0.82rem;color:var(--c-muted);">Drop image/thermal/JSON here or <span style="color:var(--c-teal);font-weight:600;">browse</span></p>
+                  <input type="file" id="solar-file-inp" accept="image/*,.json" multiple style="display:none" onchange="handleSolarFileUpload(this)">
+                </div>
+                <div id="solar-file-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
+              </div>
+              <div class="form-actions" style="margin-top:16px;">
+                <button type="submit" class="teal-btn">Record Defect</button>
+                <button type="button" class="ghost-btn" onclick="this.closest('form').reset()">Reset</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      <!-- Records log -->
+      <div class="panel full-panel" style="margin-top:20px;">
+        <div class="panel-header">
+          <h3>Manual Records Log</h3>
+          <button class="ghost-btn" onclick="clearSolarManualRecords()">Clear All</button>
+        </div>
+        <div class="panel-body">
+          <div id="solar-manual-list"><p style="color:var(--c-muted);font-size:0.85rem;padding:16px 0">No manual records yet.</p></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- FLOATING AI COPILOT -->
+<div class="ai-float-wrap" id="ai-float">
+  <button class="ai-trigger-btn" id="ai-trigger">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span>AI Copilot</span>
+    <span class="ai-pulse"></span>
+  </button>
+  <div class="ai-chat-box" id="ai-chat-box">
+    <div class="ai-chat-header">
+      <div class="ai-header-info">
+        <div class="ai-avatar">AI</div>
+        <div><h4>CompliQ Solar Copilot</h4><span class="ai-status">● Online • Powered by DSL Engine</span></div>
+      </div>
+      <button onclick="document.getElementById('ai-chat-box').classList.remove('open')">✕</button>
+    </div>
+    <div class="ai-messages" id="ai-messages">
+      <div class="ai-bubble bot">
+        Hello! I'm the CompliQ Solar AI Copilot with access to your live array database. Try asking:<br><br>
+        • "Show all critical hotspot defects"<br>
+        • "Which array has lowest health?"<br>
+        • "What is the PR ratio of ARR-003?"
+      </div>
+    </div>
+    <div class="ai-suggestions" id="ai-suggestions">
+      <button class="sugg-btn" data-q="Show all critical defects">Critical defects</button>
+      <button class="sugg-btn" data-q="Which array has lowest health?">Lowest health</button>
+      <button class="sugg-btn" data-q="Show all hotspot defects">Hotspots</button>
+    </div>
+    <div class="ai-input-row">
+      <input type="text" id="ai-input" placeholder="Ask about your solar fleet...">
+      <button id="ai-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════
+// 1. SESSION & AUTH GATE
+// ══════════════════════════════════════════════════
+const SESSION_KEY = 'compliq_session';
+
+function checkAuth() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) {
+    document.getElementById('auth-gate').style.display = 'flex';
+    document.getElementById('app-wrap').style.display = 'none';
+    return;
+  }
+  try {
+    const session = JSON.parse(raw);
+    if (!session || session.sector !== 'solar') {
+      document.getElementById('auth-gate').style.display = 'flex';
+      document.getElementById('app-wrap').style.display = 'none';
+      return;
+    }
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('app-wrap').style.display = 'flex';
+    const initials = `${session.firstName?.[0] || 'S'}${session.lastName?.[0] || 'E'}`;
+    document.getElementById('user-av').textContent = initials;
+    document.getElementById('user-display-name').textContent = `${session.firstName || 'Solar'} ${session.lastName || 'Engineer'}`.trim();
+    document.getElementById('user-display-role').textContent = session.role || 'Solar Fleet Engineer';
+    
+    // Show admin button if user is administrator
+    const adminBtn = document.getElementById('admin-nav-btn');
+    if (session.role === 'Administrator' || session.email === 'admin@reude.tech') {
+      if (adminBtn) {
+        adminBtn.style.display = 'flex';
+        adminBtn.onclick = () => window.location.href = 'admin-solar.html';
+      }
+    }
+    
+    initApp();
+    // Save solar session for sector switching
+    const solarRaw = localStorage.getItem('compliq_session');
+    if (solarRaw) {
+      const solarUser = JSON.parse(solarRaw);
+      if (solarUser.sector === 'solar') {
+        localStorage.setItem('compliq_solar_session', solarRaw);
+      }
+    }
+  } catch (e) {
+    document.getElementById('auth-gate').style.display = 'flex';
+    document.getElementById('app-wrap').style.display = 'none';
+  }
+}
+
+function goHome() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) { const user = JSON.parse(raw); user.sector = 'solar'; localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
+  } catch(e) {}
+  window.location.href = 'index.html';
+}
+
+function handleLogout() {
+  localStorage.removeItem(SESSION_KEY);
+  window.location.href = 'index.html';
+}
+
+function switchDashboard(targetSector) {
+  const raw = localStorage.getItem('compliq_session');
+  if (!raw) { window.location.href = 'auth.html'; return; }
+  const session = JSON.parse(raw);
+  const targetKey = targetSector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
+  const targetSession = localStorage.getItem(targetKey);
+  if (targetSession) {
+    // Already registered and logged in for this sector — switch directly
+    const targetUser = JSON.parse(targetSession);
+    localStorage.setItem('compliq_session', JSON.stringify({...targetUser, sector: targetSector}));
+    window.location.href = targetSector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
+  } else {
+    // Not registered for this sector yet
+    showToast(`Register for the ${targetSector === 'solar' ? 'Solar Farm' : 'Wind Turbine'} dashboard first`, 'error');
+    setTimeout(() => {
+      window.location.href = `auth.html?tab=register&sector=${targetSector}`;
+    }, 1800);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 2. DATABASE / STATE
+// ══════════════════════════════════════════════════
+const DEFAULT_ARRAYS = [
+  {
+    id: 1, assetId: 'ARR-001', name: 'Rajasthan Alpha',
+    site: 'Bhadla Solar Park', state: 'Rajasthan',
+    gps: { lat: 27.5330, lng: 71.9050 }, location: 'Bhadla, Jodhpur District, Rajasthan',
+    status: 'normal', health: 94,
+    dcPower: 142.6, stringVoltage: 820, irradiance: 985, temperature: 48, prRatio: 0.82,
+    capacity: 150, panels: 6000, commYear: 2021,
+    manufacturer: 'LONGi Solar', model: 'Hi-MO 5 550W',
+    lastInspection: '2026-04-18', campaign: 'INSP-2026-Q1',
+    inspCoverage: 97, anomalies: 2, defects: ['SDF-001', 'SDF-002']
+  },
+  {
+    id: 2, assetId: 'ARR-002', name: 'Gujarat Prime',
+    site: 'Charanka Solar Park', state: 'Gujarat',
+    gps: { lat: 23.9600, lng: 71.1900 }, location: 'Charanka, Patan District, Gujarat',
+    status: 'warning', health: 73,
+    dcPower: 98.2, stringVoltage: 760, irradiance: 910, temperature: 54, prRatio: 0.69,
+    capacity: 130, panels: 5200, commYear: 2020,
+    manufacturer: 'JA Solar', model: 'JAM72S20 460W',
+    lastInspection: '2026-03-30', campaign: 'INSP-2026-Q1',
+    inspCoverage: 89, anomalies: 5, defects: ['SDF-003', 'SDF-004', 'SDF-005', 'SDF-006', 'SDF-007']
+  },
+  {
+    id: 3, assetId: 'ARR-003', name: 'Tamil Nadu Surya',
+    site: 'Kamuthi Solar Power Project', state: 'Tamil Nadu',
+    gps: { lat: 9.3500, lng: 78.4167 }, location: 'Kamuthi, Ramanathapuram District, Tamil Nadu',
+    status: 'critical', health: 51,
+    dcPower: 72.4, stringVoltage: 690, irradiance: 880, temperature: 62, prRatio: 0.57,
+    capacity: 140, panels: 5600, commYear: 2019,
+    manufacturer: 'Trina Solar', model: 'TALLMAX TSM-500',
+    lastInspection: '2026-05-05', campaign: 'INSP-2026-Q2',
+    inspCoverage: 94, anomalies: 7, defects: ['SDF-008', 'SDF-009', 'SDF-010', 'SDF-011', 'SDF-012', 'SDF-013', 'SDF-014']
+  },
+  {
+    id: 4, assetId: 'ARR-004', name: 'Andhra Kiran',
+    site: 'Ananthapuramu Ultra Mega Solar', state: 'Andhra Pradesh',
+    gps: { lat: 14.6845, lng: 77.6010 }, location: 'Ananthapuramu District, Andhra Pradesh',
+    status: 'normal', health: 91,
+    dcPower: 134.8, stringVoltage: 805, irradiance: 970, temperature: 50, prRatio: 0.80,
+    capacity: 145, panels: 5800, commYear: 2022,
+    manufacturer: 'Canadian Solar', model: 'HiKu CS6W-550',
+    lastInspection: '2026-05-22', campaign: 'INSP-2026-Q2',
+    inspCoverage: 100, anomalies: 1, defects: ['SDF-015']
+  }
+];
+
+const DEFAULT_DEFECTS = [
+  { id: 'SDF-001', assetId: 1, string: 'SG-3', panel: 'P-144', type: 'Soiling', confidence: 0.90, severity: 2, priority: 'LOW', action: 'Schedule cleaning at next maintenance cycle', status: 'Pending', method: 'Drone RGB', campaign: 'INSP-2026-Q1', inspDate: '2026-04-18', notes: 'Heavy dust accumulation on panel surface (~35% area). Standard seasonal soiling in Rajasthan.' },
+  { id: 'SDF-002', assetId: 1, string: 'SG-5', panel: 'P-212', type: 'Hotspot', confidence: 0.88, severity: 3, priority: 'MEDIUM', action: 'Thermal re-inspection, check bypass diode continuity', status: 'Pending', method: 'Thermal Imaging', campaign: 'INSP-2026-Q1', inspDate: '2026-04-18', notes: 'Localised hotspot at 68°C delta T above ambient. Likely shading or bypass diode issue.' },
+  { id: 'SDF-003', assetId: 2, string: 'SG-1', panel: 'P-023', type: 'Bypass Diode Failure', confidence: 0.93, severity: 4, priority: 'HIGH', action: 'Replace bypass diode module, dispatch EL-inspection team', status: 'Dispatched', method: 'EL Imaging', campaign: 'INSP-2026-Q1', inspDate: '2026-03-30', notes: 'Bypass diode failure confirmed via EL imaging. String voltage drop of ~12V observed.' },
+  { id: 'SDF-004', assetId: 2, string: 'SG-2', panel: 'P-089', type: 'Micro-crack', confidence: 0.86, severity: 3, priority: 'MEDIUM', action: 'EL imaging validation within 21 days, monitor for power degradation', status: 'Pending', method: 'Drone RGB', campaign: 'INSP-2026-Q1', inspDate: '2026-03-30', notes: 'Multiple finger cracks visible under UV illumination. ~15% cell area affected.' },
+  { id: 'SDF-005', assetId: 2, string: 'SG-4', panel: 'P-178', type: 'Delamination', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Panel replacement recommended — delamination extent exceeds 30% module area', status: 'Pending', method: 'Thermal Imaging', campaign: 'INSP-2026-Q1', inspDate: '2026-03-30', notes: 'Encapsulant delamination at module edges. Moisture ingress risk. Replace before monsoon season.' },
+  { id: 'SDF-006', assetId: 2, string: 'SG-3', panel: 'P-101', type: 'Soiling', confidence: 0.95, severity: 2, priority: 'LOW', action: 'Include in batch cleaning schedule', status: 'Resolved', method: 'Drone RGB', campaign: 'INSP-2026-Q1', inspDate: '2026-03-30', notes: 'Bird droppings hotspot. Cleaned during 2026-04-12 maintenance visit.' },
+  { id: 'SDF-007', assetId: 2, string: 'SG-6', panel: 'P-267', type: 'Frame Corrosion', confidence: 0.87, severity: 3, priority: 'MEDIUM', action: 'Apply anti-corrosion treatment; assess structural integrity', status: 'Pending', method: 'Drone RGB', campaign: 'INSP-2026-Q1', inspDate: '2026-03-30', notes: 'Frame corner corrosion at multiple fastener points. Coastal proximity accelerating oxidation.' },
+  { id: 'SDF-008', assetId: 3, string: 'SG-2', panel: 'P-055', type: 'Hotspot', confidence: 0.97, severity: 5, priority: 'CRITICAL', action: 'IMMEDIATE — isolate string SG-2, risk of fire due to severe hotspot (ΔT > 100°C)', status: 'Pending', method: 'Thermal Imaging', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Catastrophic hotspot — 127°C above ambient. Possible internal short circuit. Fire risk confirmed by site manager.' },
+  { id: 'SDF-009', assetId: 3, string: 'SG-1', panel: 'P-012', type: 'Bypass Diode Failure', confidence: 0.96, severity: 5, priority: 'CRITICAL', action: 'Shut down string, emergency module replacement', status: 'Pending', method: 'EL Imaging', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Complete bypass diode failure across 3 cells. Full string power loss of 8.4 kW.' },
+  { id: 'SDF-010', assetId: 3, string: 'SG-4', panel: 'P-189', type: 'Delamination', confidence: 0.94, severity: 4, priority: 'HIGH', action: 'Replace panel batch SG-4 P180–P200 within 2 weeks', status: 'Dispatched', method: 'Thermal Imaging', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Progressive delamination, 45% module area. Moisture ingress confirmed. Power loss ~22%.' },
+  { id: 'SDF-011', assetId: 3, string: 'SG-3', panel: 'P-141', type: 'Micro-crack', confidence: 0.89, severity: 4, priority: 'HIGH', action: 'Full string EL scan, isolate cracked cells for replacement', status: 'Pending', method: 'EL Imaging', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Spider-web micro-cracking pattern visible across entire cell. Likely hail damage from May 3rd storm.' },
+  { id: 'SDF-012', assetId: 3, string: 'SG-5', panel: 'P-220', type: 'Frame Corrosion', confidence: 0.83, severity: 3, priority: 'MEDIUM', action: 'Anti-rust coating application, re-torque mounting bolts', status: 'Pending', method: 'Drone RGB', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Severe corrosion at mounting rail contact points. Structural fasteners partially seized.' },
+  { id: 'SDF-013', assetId: 3, string: 'SG-6', panel: 'P-305', type: 'Soiling', confidence: 0.92, severity: 3, priority: 'MEDIUM', action: 'Immediate robotic cleaning deployment; assess soiling index', status: 'Resolved', method: 'Drone RGB', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Extreme dust storm soiling (May 3). PR ratio dropped from 0.78 to 0.57 over 48h. Cleaned 2026-05-10.' },
+  { id: 'SDF-014', assetId: 3, string: 'SG-2', panel: 'P-073', type: 'Hotspot', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Thermal scan across full string SG-2, replace affected modules', status: 'Pending', method: 'Thermal Imaging', campaign: 'INSP-2026-Q2', inspDate: '2026-05-05', notes: 'Secondary hotspot cluster on same string as SDF-008. Possible systemic string-level issue.' },
+  { id: 'SDF-015', assetId: 4, string: 'SG-1', panel: 'P-019', type: 'Soiling', confidence: 0.85, severity: 1, priority: 'LOW', action: 'Include in next scheduled robotic cleaning run', status: 'Pending', method: 'Drone RGB', campaign: 'INSP-2026-Q2', inspDate: '2026-05-22', notes: 'Light uniform dust deposition. Expected for age and location. No measurable power impact yet.' }
+];
+
+let STATE = {
+  arrays: [...DEFAULT_ARRAYS],
+  defects: [...DEFAULT_DEFECTS],
+  selectedArrayId: 1,
+  selectedString: 'SG-1',
+  activeDefect: null,
+  zoomLevel: 1,
+  filterMode: 'all'
+};
+
+// ══════════════════════════════════════════════════
+// 3. NAVIGATION
+// ══════════════════════════════════════════════════
+const PAGE_TITLES = {
+  fleet:    ['Solar Fleet Overview',      'Real-time monitoring of all solar panel array assets'],
+  asset:    ['Panel Array Detail',        'Interactive array thermal map & defect explorer'],
+  report:   ['Inspection Report',         'Thermal & EL inspection evidence & engineering assessment'],
+  manual:   ['Manual Entry',              'Add solar array data and defect observations'],
+  analytics:['Analytics',                 'Fleet performance trends & defect analysis charts']
+};
+
+function setupNav() {
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(`view-${tab}`).classList.add('active');
+      const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
+      document.getElementById('page-title').textContent = title;
+      document.getElementById('page-sub').textContent = sub;
+      if (tab === 'analytics') renderCharts();
+      if (tab === 'asset') renderAssetView();
+    });
+  });
+}
+
+function navigateTo(tab) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const navBtn = document.querySelector(`.nav-item[data-tab="${tab}"]`);
+  if (navBtn) navBtn.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${tab}`).classList.add('active');
+  const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-sub').textContent = sub;
+  if (tab === 'asset') renderAssetView();
+  if (tab === 'analytics') renderCharts();
+}
+
+// ══════════════════════════════════════════════════
+// 4. METRICS
+// ══════════════════════════════════════════════════
+function renderMetrics() {
+  const arrays = STATE.arrays;
+  const avgHealth = arrays.reduce((s, a) => s + a.health, 0) / arrays.length;
+  const totalDefects = arrays.reduce((s, a) => s + a.anomalies, 0);
+  const avgCoverage = arrays.reduce((s, a) => s + a.inspCoverage, 0) / arrays.length;
+  const avgIrradiance = arrays.reduce((s, a) => s + a.irradiance, 0) / arrays.length;
+
+  animateNumber('m-health', avgHealth.toFixed(1) + '%');
+  document.getElementById('m-health-sub').textContent =
+    `${arrays.filter(a => a.status === 'normal').length} nominal, ${arrays.filter(a => a.status !== 'normal').length} flagged`;
+  animateNumber('m-anomalies', totalDefects);
+  document.getElementById('m-anomalies-sub').textContent =
+    `${STATE.defects.filter(d => d.severity >= 4).length} critical / high severity`;
+  animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
+  document.getElementById('m-cov-sub').textContent = `${arrays.length} arrays monitored`;
+  animateNumber('m-conf', Math.round(avgIrradiance) + ' W/m²');
+}
+
+function animateNumber(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const numVal = parseFloat(target);
+  const suffix = target.toString().replace(/[0-9.]/g, '');
+  const duration = 1000;
+  const start = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    el.textContent = (numVal * ease).toFixed(numVal % 1 === 0 ? 0 : 1) + suffix;
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ══════════════════════════════════════════════════
+// 5. FLEET GRID — Solar panel SVG nodes
+// ══════════════════════════════════════════════════
+function solarPanelSVG(status) {
+  const color = status === 'critical' ? '#EB5757' : status === 'warning' ? '#F2C94C' : '#0FA4AF';
+  const glow = status === 'critical' ? '#EB5757' : status === 'warning' ? '#F2C94C' : '#2ECC71';
+  return `<svg viewBox="0 0 64 64" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="12" width="56" height="38" rx="3" fill="rgba(2,73,80,0.6)" stroke="${color}" stroke-width="1.5"/>
+    <line x1="4" y1="25" x2="60" y2="25" stroke="${color}" stroke-width="1" opacity="0.5"/>
+    <line x1="4" y1="37" x2="60" y2="37" stroke="${color}" stroke-width="1" opacity="0.5"/>
+    <line x1="22" y1="12" x2="22" y2="50" stroke="${color}" stroke-width="1" opacity="0.5"/>
+    <line x1="42" y1="12" x2="42" y2="50" stroke="${color}" stroke-width="1" opacity="0.5"/>
+    <circle cx="32" cy="6" r="4" fill="#F2C94C" opacity="0.85"/>
+    <line x1="32" y1="1" x2="32" y2="0" stroke="#F2C94C" stroke-width="1.5" opacity="0.7"/>
+    <line x1="37" y1="3" x2="39" y2="1" stroke="#F2C94C" stroke-width="1.5" opacity="0.7"/>
+    <line x1="27" y1="3" x2="25" y2="1" stroke="#F2C94C" stroke-width="1.5" opacity="0.7"/>
+    <rect x="28" y="50" width="8" height="4" rx="1" fill="${color}" opacity="0.6"/>
+    <rect x="20" y="54" width="24" height="3" rx="1" fill="${color}" opacity="0.4"/>
+    <circle cx="54" cy="14" r="2.5" fill="${glow}" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2s" repeatCount="indefinite"/>
+    </circle>
+  </svg>`;
+}
+
+function renderFleetGrid() {
+  const grid = document.getElementById('fleet-grid');
+  grid.innerHTML = '';
+  STATE.arrays.forEach(arr => {
+    const cls = arr.status === 'critical' ? 'crit' : arr.status === 'warning' ? 'warn' : 'good';
+    const card = document.createElement('div');
+    card.className = `turbine-node ${arr.id === STATE.selectedArrayId ? 'active' : ''}`;
+    card.dataset.id = arr.id;
+    card.innerHTML = `
+      <div class="t-status-dot ${cls}"></div>
+      <div class="solar-graphic">${solarPanelSVG(arr.status)}</div>
+      <div class="t-name">${arr.assetId}</div>
+      <div class="t-health">${arr.health}% Health · ${arr.dcPower} MW DC</div>
+      <div class="t-loc">${arr.site}</div>
+    `;
+    card.addEventListener('click', () => {
+      STATE.selectedArrayId = arr.id;
+      document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
+      card.classList.add('active');
+      navigateTo('asset');
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ══════════════════════════════════════════════════
+// 6. ASSET LIST
+// ══════════════════════════════════════════════════
+function renderAssetList(filter = 'all') {
+  const list = document.getElementById('asset-list');
+  let arrays = STATE.arrays;
+  if (filter === 'warn') arrays = arrays.filter(a => a.status !== 'normal');
+  if (filter === 'ok') arrays = arrays.filter(a => a.status === 'normal');
+  list.innerHTML = '';
+  arrays.forEach(arr => {
+    const cls = arr.status === 'critical' ? 'crit' : arr.status === 'warning' ? 'warn' : 'good';
+    const anomClass = arr.anomalies >= 5 ? 'has-crit' : arr.anomalies > 0 ? 'has-warn' : 'ok';
+    const row = document.createElement('div');
+    row.className = 'asset-row';
+    row.innerHTML = `
+      <div class="asset-thumb" style="display:flex;align-items:center;justify-content:center;background:rgba(0,49,53,0.6);">
+        ${solarPanelSVG(arr.status)}
+      </div>
+      <div class="asset-name">
+        <h4>${arr.assetId} — ${arr.name}</h4>
+        <p>${arr.manufacturer} ${arr.model}</p>
+      </div>
+      <div class="asset-health-col">
+        <span>${arr.health}% Health</span>
+        <div class="hbar-bg"><div class="hbar-fill ${cls}" style="width:${arr.health}%"></div></div>
+      </div>
+      <div class="asset-anom ${anomClass}">${arr.anomalies} defects</div>
+      <div class="asset-loc">
+        <span>${arr.location}</span>
+        <span class="asset-gps">📍 ${arr.gps.lat}°N, ${arr.gps.lng}°E</span>
+      </div>
+      <div style="font-size:0.7rem;color:var(--c-muted)">
+        DC: ${arr.dcPower} MW<br>PR: ${arr.prRatio}
+      </div>
+      <button class="view-btn" data-id="${arr.id}">View Detail →</button>
+    `;
+    row.querySelector('.view-btn').addEventListener('click', () => {
+      STATE.selectedArrayId = arr.id;
+      navigateTo('asset');
+    });
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('view-btn')) return;
+      STATE.selectedArrayId = arr.id;
+      navigateTo('asset');
+    });
+    list.appendChild(row);
+  });
+}
+
+document.querySelectorAll('.fbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderAssetList(btn.dataset.f);
+  });
+});
+
+// ══════════════════════════════════════════════════
+// 7. ASSET DETAIL VIEW
+// ══════════════════════════════════════════════════
+function renderAssetView() {
+  populateArraySelector();
+  const arr = STATE.arrays.find(x => x.id === STATE.selectedArrayId) || STATE.arrays[0];
+  renderArrayInfo(arr);
+  renderArraySchematic(arr);
+  renderDefectsTable(arr);
+}
+
+function populateArraySelector() {
+  const sel = document.getElementById('turbine-selector');
+  sel.innerHTML = STATE.arrays.map(a =>
+    `<option value="${a.id}" ${a.id === STATE.selectedArrayId ? 'selected' : ''}>${a.assetId} — ${a.name} (${a.state})</option>`
+  ).join('');
+  sel.onchange = () => {
+    STATE.selectedArrayId = parseInt(sel.value);
+    renderAssetView();
+  };
+}
+
+function renderArrayInfo(arr) {
+  const panel = document.getElementById('turbine-info-panel');
+  const hClass = arr.health >= 85 ? '#2ECC71' : arr.health >= 65 ? '#F2C94C' : '#EB5757';
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:${hClass};box-shadow:0 0 8px ${hClass};"></div>
+      <span style="font-size:1.1rem;font-weight:800;color:#fff">${arr.assetId} — ${arr.name}</span>
+    </div>
+    ${stat('Location', arr.location)}
+    ${stat('GPS', `${arr.gps.lat}°N, ${arr.gps.lng}°E`)}
+    ${stat('Site', arr.site)}
+    ${stat('State', arr.state)}
+    ${stat('Manufacturer', arr.manufacturer)}
+    ${stat('Module Model', arr.model)}
+    ${stat('Capacity', arr.capacity + ' MW')}
+    ${stat('Total Panels', arr.panels.toLocaleString())}
+    ${stat('Commission Year', arr.commYear)}
+    ${stat('DC Power Output', arr.dcPower + ' MW')}
+    ${stat('String Voltage', arr.stringVoltage + ' V')}
+    ${stat('Irradiance', arr.irradiance + ' W/m²')}
+    ${stat('Module Temp.', arr.temperature + ' °C')}
+    ${stat('PR Ratio', arr.prRatio)}
+    ${stat('Health Index', arr.health + '%')}
+    ${stat('Active Defects', arr.anomalies)}
+    ${stat('Last Inspection', arr.lastInspection)}
+    ${stat('Campaign', arr.campaign)}
+  `;
+}
+
+function stat(label, value) {
+  return `<div class="info-stat"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+// Array schematic — top-view panel grid with defect hotspots
+function renderArraySchematic(arr) {
+  const container = document.getElementById('blade-schematic');
+  const defects = STATE.defects.filter(d => d.assetId === arr.id);
+  const W = container.offsetWidth || 600;
+  const H = 200;
+  const COLS = 12, ROWS = 6;
+  const cellW = (W - 40) / COLS, cellH = (H - 30) / ROWS;
+
+  const colorMap = {
+    'Hotspot': '#EB5757',
+    'Delamination': '#F2C94C',
+    'Soiling': '#0FA4AF',
+    'Micro-crack': '#BB86FC',
+    'Bypass Diode Failure': '#FF8C42',
+    'Frame Corrosion': '#A8D8A8'
+  };
+
+  // Scatter defects across grid cells deterministically
+  const usedCells = new Set();
+  const defectPositions = defects.map((d, i) => {
+    let col = (i * 3 + 1) % COLS;
+    let row = Math.floor(i / COLS) % ROWS;
+    const key = `${col},${row}`;
+    if (usedCells.has(key)) { col = (col + 2) % COLS; }
+    usedCells.add(`${col},${row}`);
+    return { ...d, col, row };
+  });
+
+  let cells = '';
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = 20 + c * cellW;
+      const y = 15 + r * cellH;
+      const def = defectPositions.find(dp => dp.col === c && dp.row === r);
+      const fillOpacity = def ? '0.25' : '0.08';
+      const stroke = def ? colorMap[def.type] || '#0FA4AF' : 'rgba(15,164,175,0.2)';
+      cells += `<rect x="${x+1}" y="${y+1}" width="${cellW-3}" height="${cellH-3}" rx="2" fill="${stroke}" fill-opacity="${fillOpacity}" stroke="${stroke}" stroke-width="${def ? 1.5 : 0.5}" opacity="0.9"/>`;
+    }
+  }
+
+  const hotspots = defectPositions.map(d => {
+    const x = 20 + d.col * cellW + cellW / 2;
+    const y = 15 + d.row * cellH + cellH / 2;
+    const col = colorMap[d.type] || '#AFDDE5';
+    const r = 4 + d.severity;
+    return `
+      <g cursor="pointer" onclick="openReport('${d.id}')">
+        <circle cx="${x}" cy="${y}" r="${r+5}" fill="${col}" opacity="0.15"/>
+        <circle cx="${x}" cy="${y}" r="${r}" fill="${col}" opacity="0.9">
+          <animate attributeName="r" values="${r};${r+3};${r}" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <text x="${x}" y="${y-r-4}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="${col}">${d.type[0]}${d.severity}</text>
+      </g>`;
+  }).join('');
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="display:block;">
+      <defs>
+        <linearGradient id="arrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0FA4AF" stop-opacity="0.05"/>
+          <stop offset="100%" stop-color="#AFDDE5" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <rect x="18" y="13" width="${W-36}" height="${H-26}" rx="4" fill="url(#arrGrad)" stroke="rgba(15,164,175,0.2)" stroke-width="1"/>
+      ${cells}
+      ${hotspots}
+      <text x="${W/2}" y="${H-3}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="rgba(175,221,229,0.3)">${arr.assetId} · ${arr.panels.toLocaleString()} panels · ${COLS}×${ROWS} schematic view</text>
+    </svg>`;
+}
+
+function renderDefectsTable(arr) {
+  const tbody = document.getElementById('defects-tbody');
+  const defects = arr
+    ? STATE.defects.filter(d => d.assetId === arr.id)
+    : STATE.defects;
+  tbody.innerHTML = defects.length ? defects.map(d => `
+    <tr>
+      <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${d.id}</span></td>
+      <td>${d.string}</td>
+      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.panel}</span></td>
+      <td>${d.type}</td>
+      <td><span style="font-family:var(--font-mono);color:${d.confidence>=0.9?'#2ECC71':'#F2C94C'}">${(d.confidence*100).toFixed(0)}%</span></td>
+      <td><span class="sev-pill sev-${d.severity}">SEV-${d.severity}</span></td>
+      <td style="font-size:0.72rem;max-width:200px;">${d.action}</td>
+      <td><span class="prio-pill prio-${d.priority.toLowerCase()}">${d.priority}</span></td>
+      <td><span class="stat-dot-pill ${d.status.toLowerCase()}">${d.status}</span></td>
+      <td><button class="review-btn" onclick="openReport('${d.id}')">Review</button></td>
+    </tr>
+  `).join('') : `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--c-muted)">No defects recorded for this array</td></tr>`;
+}
+
+// ══════════════════════════════════════════════════
+// 8. INSPECTION REPORT VIEWER
+// ══════════════════════════════════════════════════
+function openReport(defectId) {
+  STATE.activeDefect = STATE.defects.find(d => d.id === defectId);
+  if (!STATE.activeDefect) return;
+  navigateTo('report');
+  renderReport();
+}
+
+function renderReport() {
+  const d = STATE.activeDefect;
+  if (!d) return;
+  const arr = STATE.arrays.find(a => a.id === d.assetId);
+  document.getElementById('report-viewer-title').textContent = `${d.id} — ${d.type} on ${arr?.assetId} ${d.string} ${d.panel}`;
+  document.getElementById('provenance-tag').textContent = `Campaign: ${d.campaign} | ${d.method} | ${arr?.manufacturer} ${arr?.model}`;
+  const badge = document.getElementById('report-priority-badge');
+  badge.textContent = d.priority;
+  badge.className = `priority-badge ${d.priority}`;
+
+  const svg = document.getElementById('overlay-svg');
+  const col = d.severity >= 4 ? '#EB5757' : d.severity >= 3 ? '#F2C94C' : '#0FA4AF';
+  svg.innerHTML = `
+    <rect x="15%" y="20%" width="50%" height="60%" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="8,4" opacity="0.85"/>
+    <text x="16%" y="19%" font-family="JetBrains Mono,monospace" font-size="11" fill="${col}">${d.type} | SEV-${d.severity} | ${(d.confidence*100).toFixed(0)}%</text>
+    <circle cx="38%" cy="50%" r="6" fill="${col}" opacity="0.6">
+      <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite"/>
+    </circle>`;
+
+  document.getElementById('report-decision-body').innerHTML = `
+    <div class="assess-section">
+      <h4>Asset &amp; Location</h4>
+      <p><strong>${arr?.assetId}</strong> — ${arr?.name}<br>
+      ${arr?.location}<br>GPS: ${arr?.gps.lat}°N, ${arr?.gps.lng}°E<br>
+      ${d.string}, Panel ${d.panel}</p>
+    </div>
+    <div class="assess-section">
+      <h4>Telemetry at Detection</h4>
+      <p>DC Power: <strong>${arr?.dcPower} MW</strong><br>
+      String Voltage: <strong>${arr?.stringVoltage} V</strong><br>
+      Irradiance: <strong>${arr?.irradiance} W/m²</strong><br>
+      Module Temp: <strong>${arr?.temperature} °C</strong><br>
+      PR Ratio: <strong>${arr?.prRatio}</strong></p>
+    </div>
+    <div class="assess-section">
+      <h4>Detection Details</h4>
+      <p>Type: <strong>${d.type}</strong><br>
+      Severity: <strong>Level ${d.severity}/5</strong><br>
+      Confidence: <strong>${(d.confidence*100).toFixed(0)}%</strong><br>
+      Status: <strong style="color:${d.status==='Dispatched'?'#F2C94C':d.status==='Resolved'?'#2ECC71':'#EB5757'}">${d.status}</strong><br>
+      Method: ${d.method}<br>Detected: ${d.inspDate}</p>
+    </div>
+    <div class="assess-section">
+      <h4>Observations</h4>
+      <p>${d.notes}</p>
+    </div>
+    <div class="assess-section">
+      <h4>Recommended Action</h4>
+      <ul class="rules-list">
+        <li class="rule-li">🔧 ${d.action}</li>
+        ${d.severity >= 4 ? '<li class="rule-li">⚠️ Escalate to Site Manager within 24h</li>' : ''}
+        ${d.severity >= 5 ? '<li class="rule-li" style="color:#EB5757">🛑 CONSIDER ISOLATING AFFECTED STRING</li>' : ''}
+      </ul>
+    </div>
+    <div class="assess-section">
+      <h4>Integrity Assessment</h4>
+      <p>IEC 61215 ${d.severity >= 4 ? 'FAIL — Mandatory maintenance action' : d.severity >= 3 ? 'ADVISORY — Schedule remediation' : 'PASS — Monitor and log'}</p>
+    </div>`;
+
+  const btn = document.getElementById('dispatch-btn');
+  if (btn) {
+    if (d.status === 'Dispatched') {
+      btn.disabled = true; btn.textContent = '✓ Maintenance Order Approved'; btn.style.opacity = '0.6'; btn.style.cursor = 'not-allowed';
+    } else if (d.status === 'Resolved') {
+      btn.disabled = true; btn.textContent = '✓ Defect Resolved'; btn.style.opacity = '0.6'; btn.style.cursor = 'not-allowed';
+    } else {
+      btn.disabled = false; btn.textContent = 'Approve Maintenance Order'; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+    }
+  }
+}
+
+document.getElementById('therm-slider')?.addEventListener('input', function() {
+  const v = this.value / 100;
+  document.getElementById('img-therm').style.opacity = v;
+  document.getElementById('img-rgb').style.opacity = 1 - v;
+});
+document.getElementById('mask-toggle')?.addEventListener('change', function() {
+  document.getElementById('overlay-svg').style.opacity = this.checked ? 1 : 0;
+});
+function zoomIn() { STATE.zoomLevel = Math.min(STATE.zoomLevel + 0.25, 3); applyZoom(); }
+function zoomOut() { STATE.zoomLevel = Math.max(STATE.zoomLevel - 0.25, 0.5); applyZoom(); }
+function resetZoom() { STATE.zoomLevel = 1; applyZoom(); }
+function applyZoom() {
+  document.getElementById('img-frame').querySelectorAll('img').forEach(img => {
+    img.style.transform = `scale(${STATE.zoomLevel})`;
+    img.style.transformOrigin = 'center center';
+  });
+  document.getElementById('zoom-badge').textContent = `Zoom: ${Math.round(STATE.zoomLevel * 100)}%`;
+}
+function approveDispatch() {
+  if (STATE.activeDefect) {
+    STATE.activeDefect.status = 'Dispatched';
+    showToast(`Maintenance order approved for ${STATE.activeDefect.id}`, 'success');
+    renderReport();
+    addNotification(`Maintenance approved: ${STATE.activeDefect.id}`, 'info');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 9. PDF REPORT
+// ══════════════════════════════════════════════════
+function generatePDFReport() {
+  const { jsPDF } = window.jspdf || {};
+  if (!jsPDF) { showToast('PDF library not loaded.', 'error'); return; }
+  showToast('Generating PDF report…', 'success');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const arr = STATE.arrays.find(a => a.id === STATE.selectedArrayId) || STATE.arrays[0];
+  const defects = STATE.defects.filter(d => d.assetId === arr.id);
+  const now = new Date();
+
+  doc.setFillColor(0, 49, 53); doc.rect(0, 0, 210, 297, 'F');
+  doc.setFillColor(15, 164, 175); doc.rect(0, 0, 210, 42, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22); doc.text('CompliQ Solar', 14, 16);
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+  doc.text('Solar Panel Array Inspection Report', 14, 24);
+  doc.text(`Generated: ${now.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})}`, 14, 32);
+  doc.text(`Report ID: RPT-${Date.now().toString().slice(-6)}`, 140, 32);
+
+  doc.setTextColor(175, 221, 229); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+  doc.text(`${arr.assetId} — ${arr.name}`, 14, 56);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(175, 221, 229);
+  doc.text(`${arr.site} | ${arr.state} | ${arr.capacity} MW`, 14, 64);
+  doc.text(`GPS: ${arr.gps.lat}°N, ${arr.gps.lng}°E | Campaign: ${arr.campaign}`, 14, 70);
+  doc.text(`Panels: ${arr.panels.toLocaleString()} | Module: ${arr.manufacturer} ${arr.model}`, 14, 76);
+
+  const metrics = [
+    ['Health Index', arr.health + '%'], ['DC Power Output', arr.dcPower + ' MW'],
+    ['String Voltage', arr.stringVoltage + ' V'], ['Irradiance', arr.irradiance + ' W/m²'],
+    ['Module Temp.', arr.temperature + ' °C'], ['PR Ratio', arr.prRatio],
+    ['Insp. Coverage', arr.inspCoverage + '%'], ['Active Defects', arr.anomalies]
+  ];
+  doc.setFillColor(2, 73, 80);
+  doc.rect(14, 82, 182, 28, 'F');
+  metrics.forEach(([k, v], i) => {
+    const x = 14 + (i % 4) * 46; const y = 92 + Math.floor(i / 4) * 12;
+    doc.setTextColor(15, 164, 175); doc.setFontSize(7); doc.text(k, x, y - 4);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text(String(v), x, y + 2);
+    doc.setFont('helvetica', 'normal');
+  });
+
+  doc.setTextColor(15, 164, 175); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+  doc.text('Detected Defects', 14, 122);
+  doc.setDrawColor(15, 164, 175); doc.setLineWidth(0.4); doc.line(14, 124, 196, 124);
+
+  let y = 132;
+  defects.forEach((d, i) => {
+    if (y > 260) { doc.addPage(); doc.setFillColor(0,49,53); doc.rect(0,0,210,297,'F'); y = 20; }
+    const rowBg = i % 2 === 0 ? [2,73,80] : [0,49,53];
+    doc.setFillColor(...rowBg); doc.rect(14, y-6, 182, 14, 'F');
+    doc.setTextColor(175,221,229); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text(d.id, 16, y+1);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(d.severity>=4?[235,87,87]:d.severity>=3?[242,201,76]:[46,204,113]);
+    doc.text(d.type, 40, y+1);
+    doc.setTextColor(255,255,255);
+    doc.text(`SEV-${d.severity}`, 80, y+1);
+    doc.text(d.string + ' ' + d.panel, 100, y+1);
+    doc.text(d.status, 132, y+1);
+    doc.setTextColor(175,221,229);
+    const actionTrunc = d.action.length > 50 ? d.action.substring(0,47)+'...' : d.action;
+    doc.setFontSize(7); doc.text(actionTrunc, 16, y+8);
+    y += 18;
+  });
+
+  doc.setFillColor(2,73,80); doc.rect(0,280,210,17,'F');
+  doc.setTextColor(15,164,175); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('CompliQ Solar by Reude Technologies - Confidential Inspection Report', 14, 291);
+  doc.text(`Page 1 | ${arr.campaign}`, 170, 291);
+
+  const safeName = arr.assetId.replace(/[^a-z0-9]/gi,'_');
+  doc.save(`CompliQ_Solar_${safeName}_${now.toISOString().slice(0,10)}.pdf`);
+  showToast(`PDF saved: ${safeName}_report.pdf`, 'success');
+}
+
+// ══════════════════════════════════════════════════
+// 10. LIVE TELEMETRY LOG
+// ══════════════════════════════════════════════════
+const DEFECT_TYPES_SOLAR = ['Hotspot', 'Delamination', 'Soiling', 'Micro-crack', 'Bypass Diode Failure', 'Frame Corrosion'];
+const TELEM_FIELDS = ['DC Power Output', 'String Voltage', 'Irradiance', 'Temperature', 'PR Ratio'];
+
+function addLogEntry() {
+  const log = document.getElementById('mqtt-log');
+  if (!log) return;
+  const arr = STATE.arrays[Math.floor(Math.random() * STATE.arrays.length)];
+  const isTelem = Math.random() > 0.35;
+  const severity = Math.random() > 0.7 ? 'crit' : Math.random() > 0.4 ? 'warn' : 'ok';
+  const now = new Date();
+  const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  let payload;
+  if (isTelem) {
+    const field = TELEM_FIELDS[Math.floor(Math.random() * TELEM_FIELDS.length)];
+    const val = field === 'DC Power Output' ? (arr.dcPower + (Math.random()-0.5)*2).toFixed(1) + ' MW'
+              : field === 'String Voltage' ? (arr.stringVoltage + Math.round((Math.random()-0.5)*30)) + ' V'
+              : field === 'Irradiance' ? (arr.irradiance + Math.round((Math.random()-0.5)*40)) + ' W/m²'
+              : field === 'Temperature' ? (arr.temperature + (Math.random()-0.5*4)).toFixed(1) + ' °C'
+              : (arr.prRatio + (Math.random()-0.5)*0.04).toFixed(3);
+    payload = `${field}: ${val}`;
+  } else {
+    const type = DEFECT_TYPES_SOLAR[Math.floor(Math.random() * DEFECT_TYPES_SOLAR.length)];
+    payload = `⚠ ${type} detected | Conf: ${(0.75+Math.random()*0.24).toFixed(2)}`;
+  }
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${isTelem ? 'ok' : severity}`;
+  entry.innerHTML = `
+    <div class="log-head"><span>${arr.assetId}</span><span>${ts}</span></div>
+    <div class="log-payload">${payload}</div>`;
+  log.insertBefore(entry, log.firstChild);
+  while (log.children.length > 12) log.removeChild(log.lastChild);
+}
+
+// ══════════════════════════════════════════════════
+// 11. ANALYTICS CHARTS
+// ══════════════════════════════════════════════════
+let chartInstances = {};
+function renderCharts() {
+  const PALETTE = ['#0FA4AF','#AFDDE5','#F2C94C','#EB5757','#2ECC71','#BB86FC'];
+
+  function mkChart(id, type, labels, datasets, opts = {}) {
+    if (chartInstances[id]) chartInstances[id].destroy();
+    const ctx = document.getElementById(id)?.getContext('2d');
+    if (!ctx) return;
+    chartInstances[id] = new Chart(ctx, {
+      type, data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#AFDDE5', font: { family: 'Outfit' } } } },
+        scales: type !== 'doughnut' && type !== 'pie' ? {
+          x: { ticks: { color: '#AFDDE5' }, grid: { color: 'rgba(15,164,175,0.1)' } },
+          y: { ticks: { color: '#AFDDE5' }, grid: { color: 'rgba(15,164,175,0.1)' } }
+        } : {},
+        ...opts
+      }
+    });
+  }
+
+  mkChart('chart-health', 'line',
+    STATE.arrays.map(a => a.assetId),
+    [{
+      label: 'Health Index (%)', data: STATE.arrays.map(a => a.health),
+      borderColor: '#0FA4AF', backgroundColor: 'rgba(15,164,175,0.15)',
+      borderWidth: 2, fill: true, tension: 0.4
+    }]);
+
+  const typeCounts = {};
+  STATE.defects.forEach(d => { typeCounts[d.type] = (typeCounts[d.type] || 0) + 1; });
+  mkChart('chart-defects', 'doughnut',
+    Object.keys(typeCounts),
+    [{ data: Object.values(typeCounts), backgroundColor: PALETTE }]);
+
+  const sevCounts = [0,0,0,0,0];
+  STATE.defects.forEach(d => { if (d.severity >= 1 && d.severity <= 5) sevCounts[d.severity-1]++; });
+  mkChart('chart-severity', 'bar',
+    ['SEV-1','SEV-2','SEV-3','SEV-4','SEV-5'],
+    [{ label: 'Count', data: sevCounts, backgroundColor: ['#2ECC71','#AFDDE5','#F2C94C','#EB5757','#964734'] }]);
+
+  mkChart('chart-timeline', 'bar',
+    STATE.arrays.map(a => a.assetId),
+    [{
+      label: 'DC Power Output (MW)', data: STATE.arrays.map(a => a.dcPower),
+      backgroundColor: 'rgba(15,164,175,0.5)', borderColor: '#0FA4AF', borderWidth: 1.5
+    }, {
+      label: 'Capacity (MW)', data: STATE.arrays.map(a => a.capacity),
+      backgroundColor: 'rgba(175,221,229,0.1)', borderColor: '#AFDDE5', borderWidth: 1, type: 'line', fill: false, tension: 0.3
+    }]);
+}
+
+// ══════════════════════════════════════════════════
+// 12. NOTIFICATIONS
+// ══════════════════════════════════════════════════
+let notifList = [
+  { msg: 'ARR-003 Tamil Nadu Surya: Critical hotspot detected — SEV-5', type: 'crit', time: '2 min ago' },
+  { msg: 'ARR-002 Gujarat Prime: Bypass diode failure in SG-1, power loss 8.4 kW', type: 'warn', time: '14 min ago' },
+  { msg: 'ARR-001 Rajasthan Alpha: Soiling index above threshold — cleaning required', type: 'info', time: '1 hr ago' }
+];
+
+function renderNotifications() {
+  const container = document.getElementById('notif-list-items');
+  const badge = document.getElementById('notif-badge');
+  if (!container) return;
+  container.innerHTML = notifList.map(n => `
+    <div class="notif-item ${n.type}">
+      ${n.msg}
+      <span class="notif-time">${n.time}</span>
+    </div>`).join('') || `<p style="padding:16px;color:var(--c-muted);font-size:0.8rem">No active alerts</p>`;
+  if (badge) badge.textContent = notifList.length;
+}
+
+function clearNotifs() { notifList = []; renderNotifications(); }
+
+function addNotification(msg, type = 'info') {
+  notifList.unshift({ msg, type, time: 'Just now' });
+  renderNotifications();
+}
+
+document.getElementById('notif-bell')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('notif-panel').classList.toggle('show');
+});
+document.addEventListener('click', () => document.getElementById('notif-panel')?.classList.remove('show'));
+
+// ══════════════════════════════════════════════════
+// 13. TOAST
+// ══════════════════════════════════════════════════
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ══════════════════════════════════════════════════
+// 14. THEME TOGGLE
+// ══════════════════════════════════════════════════
+function setupTheme() {
+  const saved = localStorage.getItem('site_theme') || 'light';
+  if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  const btn = document.getElementById('theme-toggle-dash');
+  if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
+  btn?.addEventListener('click', () => {
+    const current = localStorage.getItem('site_theme') || 'light';
+    const next = current === 'light' ? 'dark' : 'light';
+    if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('site_theme', next);
+    btn.textContent = next === 'light' ? '🌙' : '☀️';
+  });
+}
+
+// ══════════════════════════════════════════════════
+// 15. NL SEARCH (stub)
+// ══════════════════════════════════════════════════
+function setupNLSearch() {
+  const btn = document.getElementById('nl-btn');
+  const inp = document.getElementById('nl-input');
+  if (!btn || !inp) return;
+  btn.addEventListener('click', () => runNLQuery(inp.value.trim()));
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') runNLQuery(inp.value.trim()); });
+}
+
+function runNLQuery(q) {
+  if (!q) return;
+  const lower = q.toLowerCase();
+  let result = '';
+  if (lower.includes('critical') || lower.includes('sev-5') || lower.includes('sev 5')) {
+    const critical = STATE.defects.filter(d => d.severity >= 5);
+    result = critical.length ? `Found ${critical.length} SEV-5 defect(s): ${critical.map(d=>d.id).join(', ')}` : 'No SEV-5 defects found.';
+  } else if (lower.includes('hotspot')) {
+    const hs = STATE.defects.filter(d => d.type === 'Hotspot');
+    result = `${hs.length} hotspot defect(s): ${hs.map(d=>d.id+' ('+d.assetId+')').join(', ')}`;
+  } else if (lower.includes('health') || lower.includes('lowest')) {
+    const worst = [...STATE.arrays].sort((a,b) => a.health - b.health)[0];
+    result = `Lowest health: ${worst.assetId} — ${worst.name} at ${worst.health}%`;
+  } else if (lower.includes('power') || lower.includes('output')) {
+    result = STATE.arrays.map(a => `${a.assetId}: ${a.dcPower} MW DC`).join(' | ');
+  } else {
+    result = `Query "${q}" processed. Try: "show critical defects", "hotspots", "lowest health", "power output".`;
+  }
+  showToast(result, 'success');
+}
+
+// ══════════════════════════════════════════════════
+// 16. BACKGROUND CANVAS ANIMATION
+// ══════════════════════════════════════════════════
+function initBgCanvas() {
+  const canvas = document.getElementById('bg-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const particles = Array.from({ length: 40 }, () => ({
+    x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+    r: Math.random() * 1.5 + 0.5, vx: (Math.random()-0.5) * 0.3, vy: (Math.random()-0.5) * 0.3
+  }));
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(15,164,175,0.4)'; ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+  window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+}
+
+// ══════════════════════════════════════════════════
+// 17. INIT
+// ══════════════════════════════════════════════════
+function initApp() {
+  setupTheme();
+  setupNav();
+  renderMetrics();
+  renderFleetGrid();
+  renderAssetList();
+  renderNotifications();
+  setupNLSearch();
+  initBgCanvas();
+  setInterval(addLogEntry, 2200);
+  // Add initial log entries
+  for (let i = 0; i < 6; i++) setTimeout(addLogEntry, i * 100);
+}
+
+// ── MANUAL ENTRY (SOLAR) ──────────────────────────
+function switchSolarManualTab(tab) {
+  document.getElementById('mform-array').style.display = tab === 'array' ? 'block' : 'none';
+  document.getElementById('mform-defect').style.display = tab === 'defect' ? 'block' : 'none';
+  document.getElementById('mtab-array').classList.toggle('active', tab === 'array');
+  document.getElementById('mtab-defect').classList.toggle('active', tab === 'defect');
+  if (tab === 'defect') populateArrayDropdown();
+}
+function populateArrayDropdown() {
+  const sel = document.getElementById('md-array');
+  if (!sel) return;
+  sel.innerHTML = STATE.arrays.map(a => `<option value="${a.id}">${a.assetId} — ${a.name}</option>`).join('');
+}
+function handleAddArray(e) {
+  e.preventDefault();
+  const gpsStr = document.getElementById('ma-gps').value.split(',');
+  const id = STATE.arrays.length + 1 + (Date.now() % 1000);
+  const assetId = document.getElementById('ma-id').value.trim();
+  const newArr = {
+    id, assetId, name: assetId,
+    site: document.getElementById('ma-site').value.trim(),
+    state: 'Manual Entry',
+    gps: { lat: parseFloat(gpsStr[0])||0, lng: parseFloat(gpsStr[1])||0 },
+    location: document.getElementById('ma-site').value.trim(),
+    status: 'normal', health: parseInt(document.getElementById('ma-health').value)||97,
+    dcPower: parseFloat(document.getElementById('ma-dcpower').value)||90,
+    capacity: parseFloat(document.getElementById('ma-capacity').value)||100,
+    panels: parseInt(document.getElementById('ma-panels').value)||4000,
+    manufacturer: document.getElementById('ma-mfr').value||'Unknown',
+    model: document.getElementById('ma-model').value||'—',
+    commYear: parseInt(document.getElementById('ma-year').value)||2023,
+    prRatio: parseFloat(document.getElementById('ma-pr').value)||0.8,
+    irradiance: parseInt(document.getElementById('ma-irr').value)||900,
+    stringVoltage: 800, temperature: 50,
+    lastInspection: new Date().toISOString().slice(0,10),
+    campaign: 'MANUAL-ENTRY', inspCoverage: 100, anomalies: 0, defects: []
+  };
+  STATE.arrays.push(newArr);
+  renderMetrics(); renderFleetGrid(); renderAssetList();
+  logManualRecord(`Array Added: ${assetId} — ${newArr.site}`);
+  showToast(`Array ${assetId} added to fleet`, 'success');
+  e.target.reset();
+}
+function handleAddSolarDefect(e) {
+  e.preventDefault();
+  const arrId = parseInt(document.getElementById('md-array').value);
+  const sev = parseInt(document.getElementById('md-sev').value);
+  const newDef = {
+    id: 'SDF-M' + Date.now().toString().slice(-4),
+    assetId: arrId,
+    string: document.getElementById('md-string').value.trim(),
+    panel: document.getElementById('md-panel').value.trim(),
+    type: document.getElementById('md-type').value,
+    severity: sev,
+    confidence: parseInt(document.getElementById('md-conf').value)/100,
+    priority: sev >= 4 ? 'HIGH' : sev === 3 ? 'MEDIUM' : 'LOW',
+    action: document.getElementById('md-action').value.trim(),
+    status: 'Pending',
+    method: document.getElementById('md-method').value,
+    campaign: document.getElementById('md-campaign').value||'MANUAL',
+    inspDate: document.getElementById('md-date').value||new Date().toISOString().slice(0,10),
+    notes: document.getElementById('md-notes').value||'Manually entered observation.'
+  };
+  STATE.defects.push(newDef);
+  const arr = STATE.arrays.find(a => a.id === arrId);
+  if (arr) { arr.anomalies++; if (!arr.defects) arr.defects = []; arr.defects.push(newDef.id); }
+  logManualRecord(`Defect Recorded: ${newDef.id} — ${newDef.type} on ${arr?.assetId} ${newDef.string} (SEV-${sev})`);
+  showToast(`Defect ${newDef.id} recorded`, 'success');
+  e.target.reset();
+}
+let solarManualRecords = [];
+function logManualRecord(text) {
+  solarManualRecords.unshift({ text, time: new Date().toLocaleTimeString() });
+  const el = document.getElementById('solar-manual-list');
+  if (!el) return;
+  el.innerHTML = solarManualRecords.map(r =>
+    `<div style="padding:10px 0;border-bottom:1px solid var(--c-border);font-size:0.82rem;color:var(--c-sky);">${r.text} <span style="font-size:0.7rem;color:var(--c-muted)">· ${r.time}</span></div>`
+  ).join('');
+}
+function clearSolarManualRecords() {
+  solarManualRecords = [];
+  document.getElementById('solar-manual-list').innerHTML = '<p style="color:var(--c-muted);font-size:0.85rem;padding:16px 0">No manual records yet.</p>';
+}
+
+function handleSolarFileUpload(input) {
+  const preview = document.getElementById('solar-file-preview');
+  if (!preview) return;
+  Array.from(input.files).forEach(file => {
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:8px;border:2px solid var(--c-border);cursor:zoom-in;';
+        img.title = file.name;
+        img.onclick = () => { window.open(e.target.result, '_blank'); };
+        preview.appendChild(img);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const tag = document.createElement('div');
+      tag.style.cssText = 'padding:8px 12px;background:rgba(15,164,175,0.08);border:1px solid var(--c-border);border-radius:8px;font-size:0.75rem;color:var(--c-teal);';
+      tag.textContent = '📄 ' + file.name;
+      preview.appendChild(tag);
+    }
+  });
+  showToast(`${input.files.length} file(s) attached`, 'success');
+}
+
+// Kick off
+window.addEventListener('DOMContentLoaded', () => {
+  setupTheme();
+  checkAuth();
+});
+
+// ── AI COPILOT ────────────────────────────────────
+document.getElementById('ai-trigger')?.addEventListener('click', () => {
+  document.getElementById('ai-chat-box').classList.toggle('open');
+});
+document.getElementById('ai-send')?.addEventListener('click', sendAIMessage);
+document.getElementById('ai-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') sendAIMessage(); });
+document.querySelectorAll('.sugg-btn').forEach(btn => {
+  btn.addEventListener('click', () => { document.getElementById('ai-input').value = btn.dataset.q; sendAIMessage(); });
+});
+
+function sendAIMessage() {
+  const input = document.getElementById('ai-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  addAIMessage(q, 'user');
+  setTimeout(() => addAIMessage(processSolarQuery(q), 'bot'), 600 + Math.random() * 400);
+}
+
+function addAIMessage(text, role) {
+  const msgs = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = `ai-bubble ${role}`;
+  div.innerHTML = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function processSolarQuery(q) {
+  const query = q.toLowerCase();
+  if (query.includes('health') && query.includes('fleet')) {
+    const avg = STATE.arrays.reduce((s,a) => s+a.health, 0) / STATE.arrays.length;
+    return `Fleet health index: <strong>${avg.toFixed(1)}%</strong><br>${STATE.arrays.filter(a=>a.status==='critical').length} critical, ${STATE.arrays.filter(a=>a.status==='warning').length} advisory.`;
+  }
+  if (query.includes('critical') || query.includes('high') || query.includes('sev-4') || query.includes('sev-5')) {
+    const crits = STATE.defects.filter(d => d.severity >= 4);
+    if (!crits.length) return 'No critical defects found. ✓';
+    return `<strong>${crits.length} critical/high defects:</strong><br>` + crits.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• ${d.id} — ${d.type} on ${a?.assetId} ${d.string} (SEV-${d.severity})`; }).join('<br>');
+  }
+  if (query.includes('hotspot')) {
+    const hs = STATE.defects.filter(d => d.type === 'Hotspot');
+    return `Found <strong>${hs.length} hotspot defect(s)</strong>:<br>` + hs.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• ${d.id} on ${a?.assetId} ${d.string} ${d.panel} — SEV-${d.severity}`; }).join('<br>');
+  }
+  if (query.includes('lowest') || query.includes('worst')) {
+    const worst = [...STATE.arrays].sort((a,b) => a.health - b.health)[0];
+    return `Lowest health: <strong>${worst.assetId} — ${worst.name}</strong><br>Health: ${worst.health}% | PR Ratio: ${worst.prRatio}<br>DC Power: ${worst.dcPower} MW<br>Location: ${worst.location}`;
+  }
+  if (query.includes('pr ratio') || query.includes('performance')) {
+    return `<strong>PR Ratios:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.prRatio} (${a.health}% health)`).join('<br>');
+  }
+  if (query.includes('power') || query.includes('output')) {
+    return `<strong>DC Power Output:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.dcPower} MW / ${a.capacity} MW capacity`).join('<br>');
+  }
+  if (query.includes('irradiance')) {
+    return `<strong>Irradiance Readings:</strong><br>` + STATE.arrays.map(a => `• ${a.assetId}: ${a.irradiance} W/m²`).join('<br>');
+  }
+  if (query.includes('action') || query.includes('recommend')) {
+    const pending = STATE.defects.filter(d => d.status === 'Pending').slice(0,4);
+    return `<strong>Top Pending Actions:</strong><br>` + pending.map(d => { const a = STATE.arrays.find(x=>x.id===d.assetId); return `• [${d.priority}] ${a?.assetId} ${d.id}: ${d.action}`; }).join('<br>');
+  }
+  if (query.includes('count') || query.includes('how many')) {
+    return `Arrays: <strong>${STATE.arrays.length}</strong><br>Total defects: <strong>${STATE.defects.length}</strong><br>Critical: <strong>${STATE.defects.filter(d=>d.severity>=4).length}</strong><br>Pending: <strong>${STATE.defects.filter(d=>d.status==='Pending').length}</strong>`;
+  }
+  const match = STATE.arrays.find(a => query.includes(a.assetId.toLowerCase()) || query.includes(a.name.toLowerCase()) || query.includes(a.state.toLowerCase()));
+  if (match) return `<strong>${match.assetId} — ${match.name}</strong><br>Health: ${match.health}% | Status: ${match.status.toUpperCase()}<br>PR Ratio: ${match.prRatio} | DC: ${match.dcPower} MW<br>Location: ${match.location}<br>Defects: ${match.anomalies}`;
+  return `Try asking: "Show critical defects", "Fleet health", "PR ratios", "Power output", "Hotspot defects", or "Recommended actions".`;
+}
+
+// Wire NL topbar to copilot
+document.getElementById('nl-btn')?.addEventListener('click', () => {
+  const q = document.getElementById('nl-input').value.trim();
+  if (!q) return;
+  document.getElementById('ai-chat-box').classList.add('open');
+  document.getElementById('ai-input').value = q;
+  document.getElementById('nl-input').value = '';
+  setTimeout(sendAIMessage, 100);
+});
+document.getElementById('nl-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('nl-btn').click(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CompliQ by REUDE Technologies | Sign In / Register</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: #F0F9FF;
+      min-height: 100vh;
+      display: flex;
+      color: #063235;
+    }
+
+    /* ── Left panel ── */
+    .auth-left {
+      width: 420px;
+      flex-shrink: 0;
+      background: linear-gradient(160deg, #003135 0%, #024950 60%, #0FA4AF 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    .auth-left::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(15,164,175,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15,164,175,0.07) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .left-brand {
+      position: relative;
+      z-index: 1;
+    }
+    .left-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+    .left-brand-row img {
+      height: 50px;
+      width: auto;
+      object-fit: contain;
+    }
+    .left-compliq {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #0FA4AF;
+      text-transform: uppercase;
+    }
+    .left-tagline {
+      position: relative;
+      z-index: 1;
+    }
+    .left-tagline h2 {
+      font-size: 2rem;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.25;
+      margin-bottom: 14px;
+    }
+    .left-tagline h2 span { color: #0FA4AF; }
+    .left-tagline p {
+      font-size: 0.9rem;
+      color: rgba(175,221,229,0.7);
+      line-height: 1.7;
+    }
+    .left-footer {
+      position: relative;
+      z-index: 1;
+      font-size: 0.72rem;
+      color: rgba(175,221,229,0.4);
+    }
+
+    /* ── Right panel ── */
+    .auth-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      overflow-y: auto;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 500px;
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 40px rgba(2,73,80,0.1);
+    }
+
+    /* Tabs */
+    .auth-tabs {
+      display: flex;
+      background: #F0F9FF;
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 32px;
+    }
+    .auth-tab {
+      flex: 1;
+      padding: 11px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #28666E;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .auth-tab.active {
+      background: #0FA4AF;
+      color: #003135;
+      box-shadow: 0 4px 12px rgba(15,164,175,0.3);
+    }
+
+    /* Form heading */
+    .auth-heading { margin-bottom: 24px; }
+    .auth-heading h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #063235;
+      margin-bottom: 4px;
+    }
+    .auth-heading p { font-size: 0.85rem; color: #28666E; }
+
+    /* Form */
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .form-group label { font-size: 0.82rem; font-weight: 600; color: #063235; }
+    .form-group input,
+    .form-group select {
+      background: #F7FBFB;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 8px;
+      padding: 11px 14px;
+      color: #063235;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: #0FA4AF;
+      box-shadow: 0 0 0 3px rgba(15,164,175,0.12);
+      background: #fff;
+    }
+    .form-group input::placeholder { color: #94a3b8; }
+
+    /* Password wrapper */
+    .pwd-wrap { position: relative; }
+    .pwd-wrap input { padding-right: 42px; }
+    .pwd-eye {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: transparent; border: none;
+      cursor: pointer; font-size: 1rem; opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+    .pwd-eye:hover { opacity: 0.9; }
+
+    /* Password strength indicators */
+    .pwd-rules {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 8px;
+      font-size: 0.75rem;
+    }
+    .pwd-rule {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #dc2626;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .pwd-rule.met { color: #16a34a; }
+    .pwd-rule::before {
+      content: '✕';
+      font-size: 0.7rem;
+      font-weight: 700;
+      width: 14px;
+      text-align: center;
+    }
+    .pwd-rule.met::before { content: '✓'; }
+
+    /* Checkbox */
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+      font-size: 0.82rem;
+      color: #28666E;
+    }
+    .checkbox-row input[type=checkbox] {
+      width: 16px; height: 16px;
+      accent-color: #0FA4AF;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .checkbox-row a { color: #0FA4AF; font-weight: 600; text-decoration: none; }
+    .checkbox-row a:hover { text-decoration: underline; }
+
+    /* Buttons */
+    .btn-submit {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px;
+      background: #0FA4AF;
+      color: #003135;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.25s;
+      box-shadow: 0 6px 20px rgba(15,164,175,0.3);
+    }
+    .btn-submit:hover {
+      background: #0D8A94;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(15,164,175,0.4);
+    }
+    .switch-text {
+      text-align: center;
+      font-size: 0.83rem;
+      color: #28666E;
+      margin-top: 16px;
+    }
+    .switch-text a { color: #0FA4AF; font-weight: 700; text-decoration: none; cursor: pointer; }
+
+    /* Form sections */
+    .form-section { display: none; }
+    .form-section.active { display: block; }
+
+    /* Forgot / remember row */
+    .form-meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+    .form-meta-row label {
+      display: flex; align-items: center; gap: 6px;
+      color: #28666E; cursor: pointer;
+    }
+    .forgot { color: #0FA4AF; text-decoration: none; font-weight: 600; }
+    .forgot:hover { text-decoration: underline; }
+
+    /* Auth messages */
+    .auth-msg {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      margin-bottom: 14px;
+    }
+    .auth-msg.error { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2); color: #dc2626; }
+    .auth-msg.success { background: rgba(15,164,175,0.08); border: 1px solid rgba(15,164,175,0.2); color: #0FA4AF; }
+
+    /* ── Image slider ── */
+    .auth-slider {
+      position: relative; z-index: 2;
+      width: 100%; border-radius: 14px;
+      overflow: hidden; background: rgba(0,0,0,0.2);
+    }
+    .auth-slide { display: none; position: relative; }
+    .auth-slide.active { display: block; animation: slide-in 0.5s ease; }
+    @keyframes slide-in { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+    .auth-slide img { width: 100%; height: 200px; object-fit: cover; border-radius: 14px; }
+    .slide-caption {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,49,53,0.85));
+      color: #fff; padding: 28px 16px 12px;
+      font-size: 0.88rem; font-weight: 700; border-radius: 0 0 14px 14px;
+    }
+    .slider-dots {
+      display: flex; justify-content: center; gap: 6px;
+      padding: 10px 0 6px; background: transparent;
+    }
+    .slider-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(175,221,229,0.35); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .slider-dot.active { background: #0FA4AF; transform: scale(1.3); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .auth-left { display: none; }
+      .auth-card { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left branding panel -->
+  <div class="auth-left">
+    <div class="left-brand">
+      <div class="left-brand-row">
+        <span class="left-compliq">CompliQ by</span>
+        <img src="images/reude-logo.png" alt="Reude Technologies">
+      </div>
+    </div>
+
+    <!-- R logo centered -->
+    <div style="text-align:center;position:relative;z-index:2;margin-bottom:24px;">
+      <img src="images/reude R logo.png" style="width:90px;height:90px;border-radius:18px;border:2px solid rgba(15,164,175,0.5);box-shadow:0 0 28px rgba(15,164,175,0.4);display:inline-block;">
+    </div>
+
+    <!-- Image slider -->
+    <div class="auth-slider" id="auth-slider">
+      <div class="auth-slide active">
+        <img src="images/turbine_teal.png" alt="Wind Turbine">
+        <div class="slide-caption">🌀 Wind Turbine Inspection</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/solar_teal.png" alt="Solar Farm">
+        <div class="slide-caption">☀️ Solar Farm Analytics</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/turbine_inspect_rgb.png" alt="RGB Inspection">
+        <div class="slide-caption">🔍 RGB Defect Detection</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/turbine_inspect_thermal.png" alt="Thermal Inspection">
+        <div class="slide-caption">🌡️ Thermal Imaging Analysis</div>
+      </div>
+      <div class="auth-slide">
+        <img src="images/drone_inspection.png" alt="Drone Inspection">
+        <div class="slide-caption">🚁 Autonomous UAV Systems</div>
+      </div>
+      <div class="slider-dots" id="slider-dots"></div>
+    </div>
+
+    <div class="left-tagline" style="margin-top:20px;">
+      <h2>Inspect Smarter.<br><span>Decide Faster.</span></h2>
+      <p>CompliQ's AI-powered drone inspection platform for wind turbines, solar farms and renewable energy infrastructure.</p>
+    </div>
+    <div class="left-footer">© 2026 REUDE Technologies Pvt. Ltd. All Rights Reserved.</div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="auth-right">
+    <div class="auth-card">
+
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="showTab('login')">Sign In</button>
+        <button class="auth-tab" onclick="showTab('register')">Create Account</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div class="form-section active" id="section-login">
+        <div class="auth-heading">
+          <h1>Welcome Back</h1>
+          <p>Sign in to your CompliQ dashboard</p>
+        </div>
+        <div id="login-msg"></div>
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="login-email" placeholder="" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="pwd-wrap">
+              <input type="password" id="login-pwd" placeholder="" required>
+              <button type="button" class="pwd-eye" onclick="toggleEye('login-pwd',this)">👁</button>
+            </div>
+          </div>
+          <div class="form-meta-row">
+            <label><input type="checkbox"> Remember me</label>
+            <a href="#" class="forgot" onclick="showForgotPassword(event)">Forgot password?</a>
+          </div>
+          <div class="form-group">
+            <label>Dashboard Type</label>
+            <select id="login-sector" style="background:#F7FBFB;border:1.5px solid #CBD5E1;border-radius:8px;padding:11px 14px;color:#063235;font-family:Outfit,sans-serif;font-size:0.88rem;width:100%;outline:none;">
+              <option value="wind">🌀 Wind Turbine Dashboard</option>
+              <option value="solar">☀️ Solar Farm Dashboard</option>
+            </select>
+          </div>
+          <button type="submit" class="btn-submit">Sign In to Dashboard →</button>
+        </form>
+        <p class="switch-text">Don't have an account? <a onclick="showTab('register')">Register here</a></p>
+      </div>
+
+      <!-- REGISTER -->
+      <div class="form-section" id="section-register">
+        <div id="sector-select-step" style="display:block">
+          <h2 style="font-size:1.4rem;font-weight:800;color:#063235;margin-bottom:8px;">Select Your Sector</h2>
+          <p style="font-size:0.85rem;color:#28666E;margin-bottom:24px;">Choose the energy sector for your dashboard</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+            <button type="button" id="btn-wind" onclick="selectSector('wind')" style="padding:24px 16px;background:#F7FBFB;border:2px solid #CBD5E1;border-radius:14px;cursor:pointer;transition:all 0.2s;font-family:Outfit,sans-serif;">
+              <div style="font-size:2rem;margin-bottom:8px;">🌀</div>
+              <div style="font-weight:800;color:#063235;font-size:1rem;">Wind Turbine</div>
+              <div style="font-size:0.78rem;color:#28666E;margin-top:4px;">Blade inspection & turbine fleet management</div>
+            </button>
+            <button type="button" id="btn-solar" onclick="selectSector('solar')" style="padding:24px 16px;background:#F7FBFB;border:2px solid #CBD5E1;border-radius:14px;cursor:pointer;transition:all 0.2s;font-family:Outfit,sans-serif;">
+              <div style="font-size:2rem;margin-bottom:8px;">☀️</div>
+              <div style="font-weight:800;color:#063235;font-size:1rem;">Solar Farm</div>
+              <div style="font-size:0.78rem;color:#28666E;margin-top:4px;">Panel array inspection & solar fleet analytics</div>
+            </button>
+          </div>
+        </div>
+        <div id="register-form-step" style="display:none">
+        <div class="auth-heading">
+          <h1>Join CompliQ</h1>
+          <p>Create your operator account</p>
+        </div>
+        <div id="register-msg"></div>
+        <form onsubmit="handleRegister(event)">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>First Name</label>
+              <input type="text" id="reg-fname" placeholder="" required>
+            </div>
+            <div class="form-group">
+              <label>Last Name</label>
+              <input type="text" id="reg-lname" placeholder="" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Organisation / Wind Farm</label>
+            <input type="text" id="reg-org" placeholder="" required>
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="reg-email" placeholder="" required>
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <select id="reg-role">
+              <option>Fleet Operator</option>
+              <option>Maintenance Engineer</option>
+              <option>Data Analyst</option>
+              <option>Site Manager</option>
+              <option>Administrator</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="pwd-wrap">
+              <input type="password" id="reg-pwd" placeholder="" required oninput="checkPwd(this.value)">
+              <button type="button" class="pwd-eye" onclick="toggleEye('reg-pwd',this)">👁</button>
+            </div>
+            <div class="pwd-rules" id="pwd-rules">
+              <span class="pwd-rule" id="rule-len">At least 8 characters</span>
+              <span class="pwd-rule" id="rule-upper">At least one uppercase letter (A–Z)</span>
+              <span class="pwd-rule" id="rule-num">At least one number (0–9)</span>
+              <span class="pwd-rule" id="rule-special">At least one special character (!@#$%^&*)</span>
+            </div>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="agree-terms" required>
+            <label for="agree-terms">
+              I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="privacy.html" target="_blank">Privacy Policy</a>
+            </label>
+          </div>
+          <button type="submit" class="btn-submit">Create Account →</button>
+        </form>
+        <p class="switch-text">Already have an account? <a onclick="showTab('login')">Sign in</a></p>
+        </div><!-- end register-form-step -->
+
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const SESSION_KEY = 'compliq_session';
+    const USERS_KEY   = 'compliq_users';
+
+    let selectedSector = 'wind';
+
+    function selectSector(sector) {
+      selectedSector = sector;
+      document.getElementById('sector-select-step').style.display = 'none';
+      document.getElementById('register-form-step').style.display = 'block';
+      document.getElementById('btn-wind').style.borderColor = sector === 'wind' ? '#0FA4AF' : '#CBD5E1';
+      document.getElementById('btn-solar').style.borderColor = sector === 'solar' ? '#0FA4AF' : '#CBD5E1';
+      document.getElementById('btn-wind').style.background = sector === 'wind' ? 'rgba(15,164,175,0.08)' : '#F7FBFB';
+      document.getElementById('btn-solar').style.background = sector === 'solar' ? 'rgba(15,164,175,0.08)' : '#F7FBFB';
+    }
+
+    function showTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1)));
+      document.getElementById('section-login').classList.toggle('active', tab==='login');
+      document.getElementById('section-register').classList.toggle('active', tab==='register');
+      if (tab === 'register') {
+        document.getElementById('sector-select-step').style.display = 'block';
+        document.getElementById('register-form-step').style.display = 'none';
+      }
+    }
+
+    function toggleEye(id, btn) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.style.opacity = inp.type === 'text' ? '0.9' : '0.5';
+    }
+
+    function checkPwd(val) {
+      toggle('rule-len',   val.length >= 8);
+      toggle('rule-upper', /[A-Z]/.test(val));
+      toggle('rule-num',   /[0-9]/.test(val));
+      toggle('rule-special', /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val));
+    }
+    function toggle(id, met) {
+      document.getElementById(id).classList.toggle('met', met);
+    }
+
+    function pwdValid(val) {
+      return val.length >= 8 && /[A-Z]/.test(val) && /[0-9]/.test(val) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val);
+    }
+
+    function showMsg(id, type, text) {
+      const el = document.getElementById(id);
+      el.innerHTML = `<div class="auth-msg ${type}">${text}</div>`;
+    }
+
+    // ── Default role accounts (seeded automatically) ──────────────
+    const DEFAULT_ACCOUNTS = [
+      { firstName:'Admin',     lastName:'REUDE',    email:'admin@reude.tech',           password:'Admin@Reude2026',   org:'REUDE Technologies', role:'Administrator',        sector:'wind', status:'active' },
+      { firstName:'Fleet',     lastName:'Operator', email:'operator@reude.tech',        password:'Operator@2026',     org:'REUDE Technologies', role:'Fleet Operator',       sector:'wind', status:'active' },
+      { firstName:'Maintenance',lastName:'Engineer',email:'engineer@reude.tech',        password:'Engineer@2026',     org:'REUDE Technologies', role:'Maintenance Engineer', sector:'wind', status:'active' },
+      { firstName:'Data',      lastName:'Analyst',  email:'analyst@reude.tech',         password:'Analyst@2026',      org:'REUDE Technologies', role:'Data Analyst',         sector:'wind', status:'active' },
+      { firstName:'Site',      lastName:'Manager',  email:'sitemanager@reude.tech',     password:'SiteMan@2026',      org:'REUDE Technologies', role:'Site Manager',         sector:'wind', status:'active' },
+      { firstName:'Solar',     lastName:'Admin',    email:'solar-admin@reude.tech',     password:'Admin@Solar2026',   org:'REUDE Technologies', role:'Administrator',        sector:'solar', status:'active' },
+      { firstName:'Solar',     lastName:'Operator', email:'solar@reude.tech',           password:'Solar@Reude2026',   org:'REUDE Technologies', role:'Fleet Operator',       sector:'solar', status:'active' },
+      { firstName:'Solar',     lastName:'Engineer', email:'solar-engineer@reude.tech',  password:'Engineer@Solar2026',org:'REUDE Technologies', role:'Maintenance Engineer', sector:'solar', status:'active' },
+      { firstName:'Solar',     lastName:'Analyst',  email:'solar-analyst@reude.tech',   password:'Analyst@Solar2026', org:'REUDE Technologies', role:'Data Analyst',         sector:'solar', status:'active' },
+    ];
+
+    function seedDefaultAccounts() {
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      let updated = false;
+      DEFAULT_ACCOUNTS.forEach(acc => {
+        if (!users.find(u => u.email === acc.email)) {
+          users.push({ ...acc, createdAt: new Date(2026,0,1).toISOString() });
+          updated = true;
+        }
+      });
+      if (updated) localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    }
+
+    // Seed on page load
+    window.addEventListener('DOMContentLoaded', () => { seedDefaultAccounts(); });
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email  = document.getElementById('login-email').value.trim();
+      const pwd    = document.getElementById('login-pwd').value;
+      const sector = document.getElementById('login-sector').value;
+
+      // ── Seed default role accounts on first use ────────────────
+      seedDefaultAccounts();
+
+      let users  = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+
+      // ── Admin super-login ──────────────────────────────────────
+      if (email === 'admin@reude.tech' && pwd === 'Admin@Reude2026') {
+        // Ensure admin exists in users array
+        if (!users.find(u => u.email === 'admin@reude.tech')) {
+          users.unshift({ firstName:'Admin', lastName:'REUDE', email:'admin@reude.tech', org:'REUDE Technologies', role:'Administrator', password:'Admin@Reude2026', sector:'wind', status:'active', createdAt: new Date().toISOString() });
+          localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        }
+        const adminUser = { firstName:'Admin', lastName:'REUDE', org:'REUDE Technologies', email:'admin@reude.tech', role:'Administrator', sector };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
+        showMsg('login-msg','success','Welcome back, Admin! Redirecting to Admin Dashboard…');
+        setTimeout(() => { window.location.href = 'admin.html'; }, 1200);
+        return;
+      }
+
+      // ── Regular users ──────────────────────────────────────────
+      let found = users.find(u => u.email === email && u.password === pwd && u.sector === sector);
+      if (!found) found = users.find(u => u.email === email && u.password === pwd);
+      if (!found) { showMsg('login-msg','error','Invalid email or password.'); return; }
+
+      // Block pending users
+      if (!found.status || found.status === 'pending') {
+        showMsg('login-msg','error','⏳ Your account is pending admin approval. Please wait.');
+        return;
+      }
+      // Block rejected users
+      if (found.status === 'rejected') {
+        showMsg('login-msg','error','❌ Your account has been rejected. Please contact support: cmo_ira@reude.tech');
+        return;
+      }
+
+      found = { ...found, sector };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(found));
+      const sectorKey = sector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
+      localStorage.setItem(sectorKey, JSON.stringify({...found, sector}));
+      
+      // TRACK ACTIVE SESSION - User is now logged in RIGHT NOW
+      const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
+      let activeSessions = JSON.parse(localStorage.getItem(ACTIVE_SESSIONS_KEY) || '{}');
+      activeSessions[found.email] = {
+        email: found.email,
+        firstName: found.firstName,
+        lastName: found.lastName,
+        role: found.role,
+        sector: sector,
+        loginTime: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        status: 'online'
+      };
+      localStorage.setItem(ACTIVE_SESSIONS_KEY, JSON.stringify(activeSessions));
+      
+      showMsg('login-msg','success',`Welcome back, ${found.firstName}! Redirecting…`);
+      const redirect = sector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
+      setTimeout(() => { window.location.href = redirect; }, 1200);
+    }
+
+    function handleRegister(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('reg-pwd').value;
+      if (!pwdValid(pwd)) { showMsg('register-msg','error','Password does not meet all requirements.'); return; }
+      const email = document.getElementById('reg-email').value.trim();
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      if (users.find(u => u.email === email && u.sector === selectedSector)) {
+        showMsg('register-msg','error','You already have a ' + (selectedSector === 'solar' ? 'Solar Farm' : 'Wind Turbine') + ' account with this email.');
+        return;
+      }
+      const user = {
+        firstName: document.getElementById('reg-fname').value.trim(),
+        lastName:  document.getElementById('reg-lname').value.trim(),
+        org:       document.getElementById('reg-org').value.trim(),
+        email, role: document.getElementById('reg-role').value, password: pwd,
+        sector: selectedSector,
+        status: 'pending',   // Awaiting admin approval
+        createdAt: new Date().toISOString()
+      };
+      users.push(user);
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      // Do NOT set session — user must wait for admin approval
+      showMsg('register-msg','success',`✅ Account created! Your account is pending admin approval. Please wait — you will be able to sign in once approved.`);
+      setTimeout(() => { showTab('login'); }, 3000);
+    }
+
+    // Check URL param to open correct tab
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'register') showTab('register');
+    const sectorParam = params.get('sector');
+    if (sectorParam && (sectorParam === 'solar' || sectorParam === 'wind')) {
+      selectSector(sectorParam);
+    }
+
+    // ── Image Slider ──────────────────────────────
+    (function initSlider() {
+      const slides = document.querySelectorAll('.auth-slide');
+      const dotsWrap = document.getElementById('slider-dots');
+      let current = 0;
+      // Build dots
+      slides.forEach((_, i) => {
+        const dot = document.createElement('div');
+        dot.className = 'slider-dot' + (i === 0 ? ' active' : '');
+        dot.onclick = () => goTo(i);
+        dotsWrap.appendChild(dot);
+      });
+      function goTo(n) {
+        slides[current].classList.remove('active');
+        document.querySelectorAll('.slider-dot')[current].classList.remove('active');
+        current = (n + slides.length) % slides.length;
+        slides[current].classList.add('active');
+        document.querySelectorAll('.slider-dot')[current].classList.add('active');
+      }
+      setInterval(() => goTo(current + 1), 3000);
+    })();
+
+    // ── FORGOT PASSWORD & PASSWORD RESET ──
+    function showForgotPassword(e) {
+      e.preventDefault();
+      document.getElementById('forgot-modal').style.display = 'flex';
+      document.getElementById('forgot-msg').innerHTML = '';
+    }
+    function closeForgotPassword() {
+      document.getElementById('forgot-modal').style.display = 'none';
+    }
+    function sendPasswordReset() {
+      const email = document.getElementById('forgot-email').value.trim();
+      if (!email) {
+        showForgotMsg('Please enter your email address', 'error');
+        return;
+      }
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      const user = users.find(u => u.email === email);
+      if (!user) {
+        showForgotMsg('Email not found in system', 'error');
+        return;
+      }
+      // Generate reset token (valid for 1 hour)
+      const resetToken = Math.random().toString(36).substring(2, 12);
+      const resetData = JSON.parse(localStorage.getItem('compliq_resets') || '{}');
+      resetData[email] = { token: resetToken, expires: Date.now() + 3600000 };
+      localStorage.setItem('compliq_resets', JSON.stringify(resetData));
+      showForgotMsg(`✅ Reset link sent to ${email}. Check your email (demo: token saved in localStorage)`, 'success');
+      setTimeout(() => closeForgotPassword(), 3000);
+    }
+    function showForgotMsg(msg, type) {
+      const el = document.getElementById('forgot-msg');
+      el.className = type === 'success' ? 'auth-msg success' : 'auth-msg error';
+      el.textContent = msg;
+    }
+  </script>
+
+  <!-- FORGOT PASSWORD MODAL -->
+  <div class="modal-overlay" id="forgot-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+    <div style="background:#fff;border-radius:16px;padding:40px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+      <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:8px;color:#063235;">Reset Password</h3>
+      <p style="font-size:0.88rem;color:#64a0a6;margin-bottom:24px;">Enter your email and we'll send a password reset link</p>
+      <input type="email" id="forgot-email" placeholder="your@email.com" style="width:100%;padding:11px 14px;border:1.5px solid #E2F0F0;border-radius:8px;font-family:Outfit,sans-serif;margin-bottom:16px;outline:none;" />
+      <div id="forgot-msg" style="margin-bottom:16px;font-size:0.85rem;"></div>
+      <div style="display:flex;gap:12px;">
+        <button onclick="sendPasswordReset()" style="flex:1;background:#0FA4AF;color:#fff;border:none;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Send Reset Link</button>
+        <button onclick="closeForgotPassword()" style="flex:1;background:#F0F9FF;color:#063235;border:1.5px solid #E2F0F0;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
+</body>
+</html>
