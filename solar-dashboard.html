@@ -343,8 +343,8 @@
           </div>
           <div class="panel-body viewer-body">
             <div class="img-frame" id="img-frame">
-              <img id="img-rgb" src="images/solar_teal.png" alt="RGB View">
-              <img id="img-therm" src="images/solar_teal.png" alt="Thermal View" style="opacity:0;filter:sepia(1) hue-rotate(300deg) saturate(3);">
+              <img id="img-rgb" src="images/solar_teal.jpg" alt="RGB View">
+              <img id="img-therm" src="images/solar_teal.jpg" alt="Thermal View" style="opacity:0;filter:sepia(1) hue-rotate(300deg) saturate(3);">
               <svg id="overlay-svg" class="overlay-svg" viewBox="0 0 800 500"></svg>
               <div class="zoom-badge" id="zoom-badge">Zoom: 100%</div>
               <div class="provenance-tag" id="provenance-tag">Campaign: 2026_Q2_Solar | DJI M300 RTK | Zenmuse H20T</div>
@@ -1358,6 +1358,7 @@ function setupTheme() {
   const saved = localStorage.getItem('site_theme') || 'light';
   if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
+  document.documentElement.style.colorScheme = saved === 'light' ? 'light' : 'dark';
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
   btn?.addEventListener('click', () => {
@@ -1365,6 +1366,7 @@ function setupTheme() {
     const next = current === 'light' ? 'dark' : 'light';
     if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
     else document.documentElement.removeAttribute('data-theme');
+    document.documentElement.style.colorScheme = next === 'light' ? 'light' : 'dark';
     localStorage.setItem('site_theme', next);
     btn.textContent = next === 'light' ? '🌙' : '☀️';
   });

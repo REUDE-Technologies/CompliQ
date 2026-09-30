@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Chart.js for interactive charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=g97wide2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -40,6 +40,9 @@
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
+    <button type="button" class="sidebar-collapse" id="sidebar-collapse" aria-expanded="true" title="Collapse sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
     <div class="sidebar-brand">
       <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;">
         <span class="sidebar-compliq-text">CompliQ by</span>
@@ -61,14 +64,6 @@
       <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none;background:rgba(150,71,52,0.15);border-left:3px solid #964734;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin Panel</span></button>
     </nav>
 
-    <div class="mqtt-status">
-      <div class="status-dot pulsing"></div>
-      <div class="status-text">
-        <span>Edge Gateway</span>
-        <small>MQTT: Live Stream</small>
-      </div>
-    </div>
-
     <div class="sidebar-user" id="sidebar-user">
       <div class="user-av" id="user-av">OP</div>
       <div class="user-info">
@@ -82,7 +77,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </button>
     </div>
-    <button onclick="switchDashboard('solar')" class="sidebar-switch-link" id="switch-solar-btn">☀️ Switch to Solar Dashboard</button>
+    <button onclick="switchDashboard('solar')" class="sidebar-switch-link" id="switch-solar-btn" title="Switch to Solar Dashboard"><span class="sidebar-switch-icon">☀️</span><span class="sidebar-switch-label">Switch to Solar</span></button>
   </aside>
 
   <!-- MAIN CONTENT -->
@@ -116,9 +111,9 @@
           </div>
         </div>
         <!-- Download Report Button -->
-        <button class="icon-btn download-btn" id="download-report-btn" title="Download PDF Report" onclick="generatePDFReport()">
+        <button class="icon-btn download-btn" id="download-report-btn" title="Download AI inspection report" onclick="generatePDFReport()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>PDF Report</span>
+          <span>AI Report</span>
         </button>
         <!-- Back to Landing -->
         <a href="javascript:goHome()" class="icon-btn home-btn" title="Back to Home">
@@ -167,27 +162,18 @@
         </div>
       </div>
 
-      <!-- Fleet Grid + Live Log -->
-      <div class="two-col-row">
-        <div class="panel flex-3">
-          <div class="panel-header">
-            <h3>Interactive Fleet Grid</h3>
-            <div class="legend-row">
-              <span class="leg-dot good"></span>Normal
-              <span class="leg-dot warn"></span>Warning
-              <span class="leg-dot crit"></span>Critical
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="fleet-grid" id="fleet-grid"></div>
+      <!-- Fleet Grid -->
+      <div class="panel full-panel">
+        <div class="panel-header">
+          <h3>Interactive Fleet Grid</h3>
+          <div class="legend-row">
+            <span class="leg-dot good"></span>Normal
+            <span class="leg-dot warn"></span>Warning
+            <span class="leg-dot crit"></span>Critical
           </div>
         </div>
-        <div class="panel flex-2">
-          <div class="panel-header">
-            <h3>MQTT Telemetry</h3>
-            <span class="live-badge">● LIVE</span>
-          </div>
-          <div class="panel-body log-body" id="mqtt-log"></div>
+        <div class="panel-body">
+          <div class="fleet-grid" id="fleet-grid"></div>
         </div>
       </div>
 
@@ -211,78 +197,167 @@
          VIEW: ASSET DETAIL
     =========================================== -->
     <section class="view" id="view-asset">
-      <div class="two-col-row">
-        <!-- Left: Asset info -->
-        <div class="panel flex-1">
-          <div class="panel-header"><h3>Select Turbine</h3></div>
-          <div class="panel-body">
+      <!-- Compact turbine strip -->
+      <div class="panel asset-turbine-bar">
+        <div class="panel-body asset-turbine-bar-body">
+          <div class="asset-turbine-pick">
+            <label for="turbine-selector">Turbine</label>
             <select id="turbine-selector" class="styled-select"></select>
-            <div id="turbine-info-panel" style="margin-top:20px"></div>
           </div>
+          <div class="asset-turbine-pick">
+            <label for="part-selector">Component</label>
+            <select id="part-selector" class="styled-select">
+              <option value="full">🔧 Full Turbine Overview</option>
+              <optgroup label="Rotor">
+                <option value="blade-A" selected>🌀 Blade A</option>
+                <option value="blade-B">🌀 Blade B</option>
+                <option value="blade-C">🌀 Blade C</option>
+                <option value="hub">⚙️ Hub</option>
+                <option value="pitch-system">🔩 Pitch System</option>
+              </optgroup>
+              <optgroup label="Drive Train">
+                <option value="main-shaft">🔄 Main Shaft</option>
+                <option value="gearbox">⚙️ Gearbox</option>
+                <option value="generator">⚡ Generator</option>
+                <option value="brake">🛑 Brake System</option>
+              </optgroup>
+              <optgroup label="Nacelle">
+                <option value="nacelle">🏠 Nacelle Housing</option>
+                <option value="yaw-system">🧭 Yaw System</option>
+                <option value="cooling">❄️ Cooling System</option>
+                <option value="anemometer">📡 Anemometer / Sensors</option>
+              </optgroup>
+              <optgroup label="Tower & Foundation">
+                <option value="tower">🗼 Tower</option>
+                <option value="foundation">⬛ Foundation</option>
+                <option value="cables">🔌 Power Cables</option>
+              </optgroup>
+            </select>
+          </div>
+          <div id="turbine-info-panel" class="turbine-info-compact"></div>
+          <button type="button" class="turbine-more-btn" id="turbine-details-toggle" aria-expanded="false">More details</button>
         </div>
-        <!-- Right: Turbine Part Schematic -->
-        <div class="panel flex-2">
-          <div class="panel-header">
-            <h3 id="schematic-title">Component Schematic</h3>
-            <div class="part-select-wrap">
-              <label style="font-size:0.75rem;color:var(--c-muted);margin-right:8px;">Component:</label>
-              <select id="part-selector" class="styled-select" style="width:auto;padding:6px 12px;font-size:0.82rem;">
-                <option value="full">🔧 Full Turbine Overview</option>
-                <optgroup label="Rotor">
-                  <option value="blade-A">🌀 Blade A</option>
-                  <option value="blade-B">🌀 Blade B</option>
-                  <option value="blade-C">🌀 Blade C</option>
-                  <option value="hub">⚙️ Hub</option>
-                  <option value="pitch-system">🔩 Pitch System</option>
-                </optgroup>
-                <optgroup label="Drive Train">
-                  <option value="main-shaft">🔄 Main Shaft</option>
-                  <option value="gearbox">⚙️ Gearbox</option>
-                  <option value="generator">⚡ Generator</option>
-                  <option value="brake">🛑 Brake System</option>
-                </optgroup>
-                <optgroup label="Nacelle">
-                  <option value="nacelle">🏠 Nacelle Housing</option>
-                  <option value="yaw-system">🧭 Yaw System</option>
-                  <option value="cooling">❄️ Cooling System</option>
-                  <option value="anemometer">📡 Anemometer / Sensors</option>
-                </optgroup>
-                <optgroup label="Tower & Foundation">
-                  <option value="tower">🗼 Tower</option>
-                  <option value="foundation">⬛ Foundation</option>
-                  <option value="cables">🔌 Power Cables</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-          <div class="panel-body schematic-body">
-            <div id="blade-schematic"></div>
-            <div class="blade-legend-row">
-              <span id="schematic-hint">Click hotspots → Report Viewer</span>
-              <div class="bleg-items">
-                <span class="bleg-item"><span class="bleg-dot crack"></span>Crack</span>
-                <span class="bleg-item"><span class="bleg-dot delam"></span>Delamination</span>
-                <span class="bleg-item"><span class="bleg-dot erosion"></span>Erosion</span>
-                <span class="bleg-item"><span class="bleg-dot lightning"></span>Lightning</span>
-              </div>
+        <div id="turbine-details-extra" class="turbine-details-extra" hidden></div>
+      </div>
+
+      <!-- Non–Blade-A schematic (hidden in POC mode) -->
+      <div class="panel full-panel is-hidden" id="asset-default-schematic-panel" hidden>
+        <div class="panel-header">
+          <h3 id="schematic-title-default">Component Schematic</h3>
+        </div>
+        <div class="panel-body schematic-body">
+          <div id="blade-schematic-default"></div>
+          <div class="blade-legend-row" id="schematic-legend">
+            <span id="schematic-hint">Click hotspots → Report Viewer</span>
+            <div class="bleg-items">
+              <span class="bleg-item"><span class="bleg-dot crack"></span>Crack</span>
+              <span class="bleg-item"><span class="bleg-dot delam"></span>Delamination</span>
+              <span class="bleg-item"><span class="bleg-dot erosion"></span>Erosion</span>
+              <span class="bleg-item"><span class="bleg-dot lightning"></span>Lightning</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Defects Table -->
-      <div class="panel full-panel">
+      <!-- Blade A POC stage: portrait profile | preview 75% + defects 25% -->
+      <div id="asset-poc-workspace" class="asset-poc-workspace">
+        <div class="panel asset-poc-profile-panel">
+          <div class="panel-header">
+            <h3 id="schematic-title">Blade A — PS Profile</h3>
+            <span class="asset-poc-pane-label" id="asset-poc-span-label">48.5 m</span>
+          </div>
+          <div class="panel-body asset-poc-profile-body">
+            <div id="blade-schematic"></div>
+          </div>
+        </div>
+
+        <div class="panel asset-poc-preview-panel">
+          <div class="panel-header asset-poc-viewer-bar">
+            <span class="asset-poc-pane-label" id="asset-poc-station-label">Annotated Image</span>
+            <div class="asset-poc-zoom-controls">
+              <button type="button" class="asset-zoom-btn is-on" id="asset-pan" title="Pan — drag the image">Pan</button>
+              <button type="button" class="asset-zoom-btn" id="asset-zoom-out" title="Zoom out">−</button>
+              <button type="button" class="asset-zoom-btn" id="asset-zoom-fit" title="Fit to view">Fit</button>
+              <button type="button" class="asset-zoom-btn" id="asset-zoom-in" title="Zoom in">+</button>
+              <button type="button" class="asset-zoom-btn" id="asset-zoom-100" title="Actual size">100%</button>
+              <button type="button" class="asset-zoom-btn" id="asset-image-full" title="Full screen">Full</button>
+              <button type="button" class="asset-zoom-btn" id="asset-image-min" title="Minimize image">Min</button>
+              <span class="asset-zoom-level" id="asset-zoom-level">100%</span>
+            </div>
+          </div>
+          <div class="panel-body asset-poc-preview-body">
+            <div class="asset-poc-viewport" id="asset-poc-viewport">
+              <div class="asset-poc-stage" id="asset-poc-stage">
+                <img id="asset-poc-annotated" src="" alt="Annotated station capture" draggable="false">
+                <svg class="asset-poc-bbox-overlay" id="asset-poc-bbox-overlay" aria-hidden="true"></svg>
+              </div>
+              <div class="asset-poc-defect-callout" id="asset-poc-defect-callout" hidden></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel asset-poc-defects-panel" id="asset-defects-panel">
+          <div class="panel-header">
+            <h3>Detected Defects &amp; Decisions</h3>
+            <button class="teal-btn" id="asset-pdf-btn" onclick="exportAssetReport()">⬇ AI inspection report (PDF)</button>
+          </div>
+          <div id="defect-review-bar" class="defect-review-bar" hidden>
+            <p class="defect-review-summary" id="defect-review-summary"></p>
+            <label>Category
+              <select id="defect-review-cat" class="styled-select">
+                <option value="1">CAT 1</option>
+                <option value="2">CAT 2</option>
+                <option value="3">CAT 3</option>
+                <option value="4">CAT 4</option>
+                <option value="5">CAT 5</option>
+              </select>
+            </label>
+            <label>Defect name
+              <input id="defect-review-name" class="styled-input" type="text" maxlength="120" autocomplete="off">
+            </label>
+            <div class="defect-review-actions">
+              <button type="button" class="teal-btn" id="defect-review-save">Save override</button>
+              <button type="button" class="review-btn" id="defect-review-reset">Reset</button>
+              <button type="button" class="review-btn" id="defect-review-details">Defect details</button>
+              <button type="button" class="review-btn" id="defect-review-columns">Customize table</button>
+              <button type="button" class="review-btn" id="defect-review-hide">Hide</button>
+            </div>
+            <div id="defect-column-picker" class="defect-column-picker" hidden></div>
+          </div>
+          <div class="panel-body table-panel asset-poc-defects-body">
+            <table class="data-table" id="asset-defects-table">
+              <thead><tr>
+                <th data-col="id">Defect ID</th>
+                <th data-col="surface">Surface</th>
+                <th data-col="radial">Radial Pos.</th>
+                <th data-col="dist">Dist. from Root</th>
+                <th data-col="location">Location</th>
+                <th data-col="type">Defect Type</th>
+                <th data-col="intensity">Intensity</th>
+                <th data-col="size">Length / Size</th>
+                <th data-col="priority">Priority</th>
+                <th data-col="status">Status</th>
+                <th data-col="review">Review</th>
+              </tr></thead>
+              <tbody id="defects-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Non-POC defects (only when not Blade A) -->
+      <div class="panel full-panel is-hidden" id="asset-defects-standalone" hidden>
         <div class="panel-header">
           <h3>Detected Defects &amp; Decisions</h3>
-          <button class="teal-btn" onclick="generatePDFReport()">⬇ Export Asset Report (PDF)</button>
+          <button class="teal-btn" onclick="exportAssetReport()">⬇ Export Asset Report (PDF)</button>
         </div>
         <div class="panel-body table-panel">
           <table class="data-table">
             <thead><tr>
-              <th>Defect ID</th><th>Component</th><th>Location</th><th>Defect Type</th><th>Confidence</th>
-              <th>Severity</th><th>Recommended Action</th><th>Priority</th><th>Status</th><th>Review</th>
+              <th>Defect ID</th><th>Surface</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Location</th><th>Defect Type</th>
+              <th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>
             </tr></thead>
-            <tbody id="defects-tbody"></tbody>
+            <tbody id="defects-tbody-standalone"></tbody>
           </table>
         </div>
       </div>
@@ -292,6 +367,29 @@
          VIEW: REPORT VIEWER
     =========================================== -->
     <section class="view" id="view-report">
+      <div class="report-picker" id="report-picker">
+        <label>Turbine
+          <select id="report-turbine" class="styled-select"></select>
+        </label>
+        <label>Blade
+          <select id="report-blade" class="styled-select">
+            <option value="A">Blade A</option>
+            <option value="B">Blade B</option>
+            <option value="C">Blade C</option>
+          </select>
+        </label>
+        <label>Side
+          <select id="report-side" class="styled-select">
+            <option value="SS">SS</option>
+            <option value="LE">LE</option>
+            <option value="PS">PS</option>
+            <option value="TE">TE</option>
+          </select>
+        </label>
+        <label>Defect
+          <select id="report-defect" class="styled-select"></select>
+        </label>
+      </div>
       <div class="report-layout">
         <!-- Image Viewer Panel -->
         <div class="panel flex-3">
@@ -308,8 +406,8 @@
           </div>
           <div class="panel-body viewer-body">
             <div class="img-frame" id="img-frame">
-              <img id="img-rgb" src="images/turbine_inspect_rgb.png" alt="RGB View">
-              <img id="img-therm" src="images/turbine_inspect_thermal.png" alt="Thermal View" style="opacity:0">
+              <img id="img-rgb" src="images/turbine_inspect_rgb.jpg" alt="RGB View">
+              <img id="img-therm" src="images/turbine_inspect_thermal.jpg" alt="Thermal View" style="opacity:0">
               <svg id="overlay-svg" class="overlay-svg" viewBox="0 0 800 500"></svg>
               <div class="zoom-badge" id="zoom-badge">Zoom: 100%</div>
               <div class="provenance-tag" id="provenance-tag">Campaign: 2026_Q2_North | DJI M300 RTK | Zenmuse H20T</div>
@@ -318,7 +416,7 @@
               <button class="icon-btn" onclick="zoomIn()">+ Zoom In</button>
               <button class="icon-btn" onclick="zoomOut()">− Zoom Out</button>
               <button class="icon-btn" onclick="resetZoom()">↺ Reset</button>
-              <button class="teal-btn" onclick="generatePDFReport()">⬇ Download Full Report PDF</button>
+              <button class="teal-btn" onclick="generatePDFReport()">⬇ AI inspection report (PDF)</button>
             </div>
           </div>
         </div>
@@ -343,8 +441,7 @@
          VIEW: INGEST DATA
     =========================================== -->
     <section class="view" id="view-ingest">
-      <div class="two-col-row">
-        <div class="panel flex-3">
+      <div class="panel full-panel">
           <div class="panel-header"><h3>Ingest Real-Time CV Payload</h3><p style="font-size:0.8rem;color:var(--c-muted)">Simulate MQTT or API ingestion from edge device</p></div>
           <div class="panel-body">
             <form id="ingest-form" onsubmit="handleIngest(event)">
@@ -395,40 +492,6 @@
               </div>
             </form>
           </div>
-        </div>
-
-        <!-- Contract Reference -->
-        <div class="panel flex-2">
-          <div class="panel-header"><h3>API Data Contracts</h3></div>
-          <div class="panel-body contracts-body">
-            <div class="contract-block">
-              <div class="contract-header">MQTT Anomaly Event</div>
-              <pre><code id="contract-mqtt">{
-  "device_id": "WTG-003",
-  "timestamp_ms": 1718450000,
-  "anomaly_type": "Crack",
-  "confidence": 0.92,
-  "severity": 4,
-  "feature_window_id": "FW-9812",
-  "signature": "sha256-abc..."
-}</code></pre>
-            </div>
-            <div class="contract-block" style="margin-top:16px">
-              <div class="contract-header">CV Detection Record</div>
-              <pre><code>{
-  "detection_id": "DET-201",
-  "inspection_id": "INSP-888",
-  "asset_id": 3,
-  "defect_class": "Delamination",
-  "confidence": 0.94,
-  "bounding_box": [120,200,380,360],
-  "area_px": 2840,
-  "detected_at": "2026-06-15T09:12:00Z",
-  "model_version": "YOLOv8-WT-3.2"
-}</code></pre>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -547,29 +610,30 @@
          VIEW: ANALYTICS
     =========================================== -->
     <section class="view" id="view-analytics">
+      <div class="analytics-summary" id="analytics-summary"></div>
       <div class="analytics-grid">
-        <div class="panel">
-          <div class="panel-header"><h3>Fleet Health Trend</h3></div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-live-pill">Live</span></div>
           <div class="panel-body chart-body">
-            <canvas id="chart-health" width="400" height="200"></canvas>
+            <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Defect Distribution by Type</h3><span class="analytics-live-pill">Live</span></div>
           <div class="panel-body chart-body">
-            <canvas id="chart-defects" width="400" height="200"></canvas>
+            <canvas id="chart-defects" aria-label="Defect type distribution"></canvas>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-header"><h3>Severity Distribution</h3></div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Severity Distribution</h3><span class="analytics-live-pill">Live</span></div>
           <div class="panel-body chart-body">
-            <canvas id="chart-severity" width="400" height="200"></canvas>
+            <canvas id="chart-severity" aria-label="Severity distribution"></canvas>
           </div>
         </div>
-        <div class="panel">
-          <div class="panel-header"><h3>Inspections Timeline</h3></div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Inspections Timeline</h3><span class="analytics-live-pill">Live · 6 mo</span></div>
           <div class="panel-body chart-body">
-            <canvas id="chart-timeline" width="400" height="200"></canvas>
+            <canvas id="chart-timeline" aria-label="Inspections timeline"></canvas>
           </div>
         </div>
       </div>
@@ -580,9 +644,9 @@
 
 <!-- FLOATING AI ASSISTANT -->
 <div class="ai-float-wrap" id="ai-float">
-  <button class="ai-trigger-btn" id="ai-trigger">
+  <button class="ai-trigger-btn" id="ai-trigger" title="AI Copilot">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    <span>AI Copilot</span>
+    <span class="ai-trigger-label">AI Copilot</span>
     <span class="ai-pulse"></span>
   </button>
   <div class="ai-chat-box" id="ai-chat-box">
@@ -630,6 +694,12 @@
 <!-- TOAST NOTIFICATION -->
 <div class="toast" id="toast"></div>
 
-<script src="dashboard.js"></script>
+<!-- BLADE PROFILE LIGHTBOX -->
+<div class="bp-lightbox" id="bp-lightbox" aria-hidden="true">
+  <button type="button" class="bp-lightbox-close" id="bp-lightbox-close" aria-label="Close">✕</button>
+  <img id="bp-lightbox-img" src="" alt="Expanded station image">
+</div>
+
+<script src="dashboard.js?v=g97rpt2"></script>
 </body>
 </html>

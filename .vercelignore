@@ -1,0 +1,33 @@
+# Static CompliQ frontend. Inspection photos stay off this deploy.
+.git
+.vscode
+.vercel
+__pycache__
+*.pyc
+backend/
+dist
+build
+extracted_images
+output
+temp
+utils
+Input
+INPUT
+*.exe
+*.spec
+*.bat
+*.lnk
+*.docx
+*.py
+requirements.txt
+CompliQ.spec
+CompliqAI.lnk
+turbine video.MP4
+turbine-video.mp4
+solar panel videos.MP4
+*.MP4
+*.mp4
+node_modules
+.env
+.env.*
+main.py
