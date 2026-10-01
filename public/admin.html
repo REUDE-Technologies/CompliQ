@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | CompliQ by REUDE Technologies</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --deep: #003135;
+      --teal: #0FA4AF;
+      --bg: #F0F9FF;
+      --text: #063235;
+      --border: #E2F0F0;
+      --mid: #024950;
+      --light-teal: #AFDDE5;
+    }
+    body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── HEADER ── */
+    .admin-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--deep);
+      border-bottom: 2px solid var(--teal);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 64px;
+      box-shadow: 0 4px 20px rgba(0,49,53,0.4);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left .gear { font-size: 1.5rem; }
+    .header-left h1 { font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: 0.5px; }
+    .badge-super {
+      background: var(--teal); color: var(--deep);
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 1.5px;
+      padding: 3px 10px; border-radius: 20px; text-transform: uppercase;
+    }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .admin-email { font-size: 0.82rem; color: var(--light-teal); font-weight: 500; }
+    .btn-back {
+      font-size: 0.82rem; color: var(--light-teal); text-decoration: none;
+      font-weight: 600; transition: color 0.2s;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .btn-back:hover { color: var(--teal); }
+    .btn-signout {
+      background: transparent; border: 1.5px solid rgba(15,164,175,0.4);
+      color: var(--light-teal); padding: 7px 16px; border-radius: 8px;
+      font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-signout:hover { background: rgba(15,164,175,0.15); color: #fff; border-color: var(--teal); }
+
+    /* ── TABS ── */
+    .tab-nav {
+      background: #fff; border-bottom: 2px solid var(--border);
+      display: flex; gap: 0; padding: 0 32px; position: sticky; top: 64px; z-index: 90;
+      box-shadow: 0 2px 8px rgba(2,73,80,0.06);
+    }
+    .tab-btn {
+      padding: 16px 22px; background: transparent; border: none;
+      font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 600;
+      color: #64a0a6; cursor: pointer; border-bottom: 4px solid transparent;
+      transition: all 0.2s; margin-bottom: -2px;
+    }
+    .tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); border-bottom-width: 4px; background: rgba(15,164,175,0.04); }
+    .tab-btn:hover:not(.active) { color: var(--text); background: rgba(15,164,175,0.04); }
+
+    /* ── MAIN CONTENT ── */
+    .main-content { flex: 1; padding: 28px 32px; max-width: 1400px; width: 100%; margin: 0 auto; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── METRIC CARDS ── */
+    .metrics-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+    .metrics-row-2 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .metric-card {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .metric-card:hover { box-shadow: 0 6px 24px rgba(2,73,80,0.1); transform: translateY(-2px); }
+    .metric-label { font-size: 0.75rem; font-weight: 600; color: #64a0a6; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .metric-value { font-size: 2rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .metric-sub { font-size: 0.75rem; color: #94b3b6; margin-top: 6px; }
+    .metric-icon { font-size: 1.4rem; margin-bottom: 8px; }
+
+    /* ── CHARTS ── */
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .chart-card {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 22px; position: relative;
+    }
+    .chart-card h3 { font-size: 0.9rem; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+    .chart-wrap { position: relative; height: 240px; }
+
+    /* ── TABLES ── */
+    .table-card {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 22px; margin-bottom: 24px; overflow-x: auto;
+    }
+    .table-card h3 { font-size: 0.95rem; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      background: var(--bg); color: #64a0a6; font-weight: 700;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px;
+      padding: 10px 14px; text-align: left; border-bottom: 1.5px solid var(--border);
+    }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(15,164,175,0.03); }
+
+    /* ── BADGES ── */
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+    .badge-active { background: rgba(22,163,74,0.1); color: #16a34a; }
+    .badge-pending { background: rgba(234,179,8,0.12); color: #b45309; }
+    .badge-rejected { background: rgba(220,38,38,0.1); color: #dc2626; }
+    .badge-role { background: rgba(15,164,175,0.1); color: var(--teal); }
+
+    /* ── SEARCH / FILTER ── */
+    .filter-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-row input, .filter-row select {
+      padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-family: 'Outfit', sans-serif; font-size: 0.85rem; color: var(--text);
+      background: #fff; outline: none; transition: border-color 0.2s;
+    }
+    .filter-row input:focus, .filter-row select:focus { border-color: var(--teal); }
+    .filter-row input { min-width: 240px; }
+    .filter-label { font-size: 0.8rem; font-weight: 600; color: #64a0a6; }
+
+    /* ── AVATAR ── */
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--teal), var(--deep));
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+    }
+
+    /* ── BUTTONS ── */
+    .btn { padding: 7px 14px; border-radius: 7px; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-teal { background: var(--teal); color: var(--deep); }
+    .btn-teal:hover { background: #0d8a94; }
+    .btn-danger { background: rgba(220,38,38,0.1); color: #dc2626; border: 1.5px solid rgba(220,38,38,0.2); }
+    .btn-danger:hover { background: rgba(220,38,38,0.18); }
+    .btn-approve { background: rgba(22,163,74,0.1); color: #16a34a; border: 1.5px solid rgba(22,163,74,0.25); padding: 8px 16px; border-radius: 8px; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:700; cursor:pointer; transition: all 0.2s; }
+    .btn-approve:hover { background: rgba(22,163,74,0.2); }
+    .btn-reject { background: rgba(220,38,38,0.1); color: #dc2626; border: 1.5px solid rgba(220,38,38,0.25); padding: 8px 16px; border-radius: 8px; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:700; cursor:pointer; transition: all 0.2s; }
+    .btn-reject:hover { background: rgba(220,38,38,0.2); }
+
+    /* ── SECTION HEADING ── */
+    .section-heading { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+
+    /* ── APPROVAL CARDS ── */
+    .approval-card {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 14px;
+      padding: 20px 24px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .approval-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 240px; }
+    .approval-meta h4 { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+    .approval-meta p { font-size: 0.8rem; color: #64a0a6; margin-top: 2px; }
+    .approval-actions { display: flex; gap: 10px; }
+    .info-banner {
+      background: rgba(15,164,175,0.08); border: 1.5px solid rgba(15,164,175,0.2);
+      border-radius: 10px; padding: 14px 18px; font-size: 0.88rem; color: var(--teal);
+      font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── ORG ACCORDION ── */
+    .org-accordion { margin-bottom: 12px; background: #fff; border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .org-acc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; cursor: pointer; transition: background 0.2s;
+    }
+    .org-acc-header:hover { background: var(--bg); }
+    .org-acc-header h4 { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+    .org-acc-header span { font-size: 0.8rem; color: #64a0a6; font-weight: 600; }
+    .org-acc-body { display: none; border-top: 1px solid var(--border); padding: 12px 20px; }
+    .org-acc-body.open { display: block; }
+
+    /* ── CREATE ORG FORM ── */
+    .create-org-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 20px; background: var(--teal); color: var(--deep);
+      border: none; border-radius: 9px; font-family: 'Outfit',sans-serif;
+      font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-bottom: 20px;
+    }
+    .create-org-btn:hover { background: #0d8a94; }
+    .create-org-form {
+      background: #fff; border: 1.5px solid var(--border); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px; display: none;
+    }
+    .create-org-form.open { display: block; }
+    .create-org-form input {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-family: 'Outfit',sans-serif; font-size: 0.88rem;
+      color: var(--text); margin-bottom: 12px; outline: none;
+    }
+    .create-org-form input:focus { border-color: var(--teal); }
+
+    /* ── ANALYTICS EXTRAS ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+    .export-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn-export { display: flex; align-items: center; gap: 8px; padding: 10px 18px; background: var(--deep); color: #fff; border: none; border-radius: 8px; font-family:'Outfit',sans-serif; font-size:0.84rem; font-weight:600; cursor:pointer; transition: background 0.2s; }
+    .btn-export:hover { background: var(--mid); }
+
+    /* ── ROLE SELECT IN TABLE ── */
+    .role-select { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; font-family:'Outfit',sans-serif; font-size:0.8rem; color: var(--text); background: #fff; outline:none; cursor:pointer; }
+    .role-select:focus { border-color: var(--teal); }
+
+    /* ── EMPTY STATE ── */
+    .empty-state { text-align: center; padding: 48px 24px; color: #94b3b6; font-size: 0.9rem; }
+    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 12px; }
+
+    /* ── FOOTER ── */
+    .admin-footer {
+      position: sticky; bottom: 0; z-index: 80;
+      background: var(--deep); border-top: 1px solid rgba(15,164,175,0.2);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 32px; flex-wrap: wrap; gap: 8px;
+    }
+    .admin-footer span { font-size: 0.75rem; color: rgba(175,221,229,0.55); }
+    .admin-footer a { color: var(--teal); text-decoration: none; font-size: 0.75rem; }
+    .admin-footer a:hover { text-decoration: underline; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .metrics-row { grid-template-columns: repeat(3, 1fr); }
+      .metrics-row-2 { grid-template-columns: 1fr 1fr; }
+      .charts-row, .two-col { grid-template-columns: 1fr; }
+      .main-content { padding: 20px 16px; }
+      .admin-header { padding: 0 16px; }
+      .tab-nav { padding: 0 16px; overflow-x: auto; }
+    }
+    @media (max-width: 600px) {
+      .metrics-row { grid-template-columns: 1fr 1fr; }
+      .metrics-row-2 { grid-template-columns: 1fr; }
+      .header-left h1 { display: none; }
+      .admin-email { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     HEADER
+══════════════════════════════════════ -->
+<header class="admin-header">
+  <div class="header-left">
+    <span class="gear">⚙️</span>
+    <h1>Admin Dashboard</h1>
+    <span class="badge-super">Super Admin</span>
+  </div>
+  <div class="header-right">
+    <span class="admin-email" id="admin-email-display">admin@reude.tech</span>
+    <a href="dashboard.html" class="btn-back">← Back to Dashboard</a>
+    <button class="btn-signout" onclick="signOut()">Sign Out</button>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════
+     TAB NAV
+══════════════════════════════════════ -->
+<nav class="tab-nav" id="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('overview')">📊 Overview</button>
+  <button class="tab-btn" onclick="switchTab('access')">🔐 Access Control</button>
+  <button class="tab-btn" onclick="switchTab('analytics')">📈 Analytics</button>
+  <button class="tab-btn" onclick="switchTab('users')">👥 Users</button>
+  <button class="tab-btn" onclick="switchTab('orgs')">🏢 Organizations</button>
+  <button class="tab-btn" onclick="switchTab('approvals')">⏳ Pending Approvals <span id="pending-badge" style="background:var(--teal);color:var(--deep);border-radius:20px;padding:1px 7px;font-size:0.7rem;margin-left:4px;font-weight:800;"></span></button>
+</nav>
+
+<!-- ══════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════ -->
+<div class="main-content">
+
+  <!-- ─────────────────────────
+       TAB 1: OVERVIEW
+  ───────────────────────────── -->
+  <section class="tab-panel active" id="tab-overview">
+    <div class="section-heading">📊 Platform Overview</div>
+
+    <!-- 5 metric cards -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-icon">👥</div>
+        <div class="metric-label">Total Users</div>
+        <div class="metric-value" id="ov-total-users">0</div>
+        <div class="metric-sub">Registered accounts</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📁</div>
+        <div class="metric-label">Files Uploaded</div>
+        <div class="metric-value" id="ov-files">0</div>
+        <div class="metric-sub">Across all users</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📄</div>
+        <div class="metric-label">Reports Generated</div>
+        <div class="metric-value" id="ov-reports">0</div>
+        <div class="metric-sub">All time</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">🏢</div>
+        <div class="metric-label">Organizations</div>
+        <div class="metric-value" id="ov-orgs">0</div>
+        <div class="metric-sub">Distinct orgs</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">🟢</div>
+        <div class="metric-label">Active (30d)</div>
+        <div class="metric-value" id="ov-active">0</div>
+        <div class="metric-sub">Active users</div>
+      </div>
+    </div>
+
+    <!-- 3 wider metric cards -->
+    <div class="metrics-row-2">
+      <div class="metric-card">
+        <div class="metric-icon">⏳</div>
+        <div class="metric-label">Approval Queue</div>
+        <div class="metric-value" id="ov-pending">0</div>
+        <div class="metric-sub">Awaiting review</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📊</div>
+        <div class="metric-label">Adoption Rate</div>
+        <div class="metric-value" id="ov-adoption">0%</div>
+        <div class="metric-sub">Active / total users</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">📋</div>
+        <div class="metric-label">Reports Per User</div>
+        <div class="metric-value" id="ov-rpu">0</div>
+        <div class="metric-sub">Average</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Users by Organization</h3>
+        <div class="chart-wrap"><canvas id="chart-org-doughnut"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Users by Role</h3>
+        <div class="chart-wrap"><canvas id="chart-role-bar"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Top Organizations table -->
+    <div class="table-card">
+      <h3>Top Organizations</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Organization</th>
+            <th>Members</th>
+            <th>Active</th>
+            <th>Admins</th>
+            <th>Editors</th>
+            <th>Viewers</th>
+          </tr>
+        </thead>
+        <tbody id="org-table-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Recent Signups -->
+    <div class="table-card">
+      <h3>Recent Signups (Last 7 Days)</h3>
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Organization</th><th>Role</th><th>Registered</th></tr>
+        </thead>
+        <tbody id="recent-signups-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB: ACCESS CONTROL
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-access">
+    <div class="section-heading">🔐 Access Control & Permissions</div>
+    
+    <div class="table-card">
+      <h3>Role-Based Access Control (RBAC)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Description</th>
+            <th>Fleet View</th>
+            <th>Upload Data</th>
+            <th>Generate Reports</th>
+            <th>Manage Users</th>
+            <th>Admin Panel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-role">Administrator</span></td>
+            <td>Full platform access & user management</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Editor</span></td>
+            <td>Can upload, edit, and report</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Viewer</span></td>
+            <td>Read-only access to reports</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Fleet Operator</span></td>
+            <td>Full operational access</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-role">Maintenance Engineer</span></td>
+            <td>Inspection & maintenance data access</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>✅</td>
+            <td>❌</td>
+            <td>❌</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Active User Sessions & Access Logs</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Last Activity</th>
+            <th>Device</th>
+            <th>IP Address</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="access-logs-body">
+          <tr>
+            <td><div class="avatar">OP</div> Operator Fleet</td>
+            <td>operator@reude.tech</td>
+            <td><span class="badge badge-role">Fleet Operator</span></td>
+            <td>2 mins ago</td>
+            <td>Mac OS</td>
+            <td>192.168.x.x</td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Block</button></td>
+          </tr>
+          <tr>
+            <td><div class="avatar">ME</div> Maintenance Eng</td>
+            <td>engineer@reude.tech</td>
+            <td><span class="badge badge-role">Maintenance Engineer</span></td>
+            <td>15 mins ago</td>
+            <td>Windows</td>
+            <td>192.168.x.y</td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Block</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Data Upload Audit Trail</h3>
+      <p style="font-size:0.85rem;color:#64a0a6;margin-bottom:14px;">Track who uploaded data and when</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Upload ID</th>
+            <th>Uploaded By</th>
+            <th>File Type</th>
+            <th>Records</th>
+            <th>Timestamp</th>
+            <th>Status</th>
+            <th>View</th>
+          </tr>
+        </thead>
+        <tbody id="upload-audit-body">
+          <tr>
+            <td>#UP-001</td>
+            <td>operator@reude.tech (Fleet Operator)</td>
+            <td>CSV (Turbine Data)</td>
+            <td>42</td>
+            <td>Today 10:30 AM</td>
+            <td><span class="badge badge-active">Processed</span></td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Details</button></td>
+          </tr>
+          <tr>
+            <td>#UP-002</td>
+            <td>engineer@reude.tech (Maintenance Engineer)</td>
+            <td>JSON (Inspection)</td>
+            <td>5</td>
+            <td>Today 9:15 AM</td>
+            <td><span class="badge badge-active">Processed</span></td>
+            <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;">Details</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB 2: ANALYTICS
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-analytics">
+    <div class="section-heading">📈 Analytics</div>
+
+    <!-- Filters -->
+    <div class="filter-row">
+      <span class="filter-label">From:</span>
+      <input type="date" id="ana-from">
+      <span class="filter-label">To:</span>
+      <input type="date" id="ana-to">
+      <select id="ana-org-filter" onchange="renderAnalytics()">
+        <option value="">All Organizations</option>
+      </select>
+      <button class="btn btn-teal" onclick="renderAnalytics()">Apply</button>
+    </div>
+
+    <!-- Activity timeline chart -->
+    <div class="chart-card" style="margin-bottom:24px;">
+      <h3>Activity Timeline (Last 30 Days)</h3>
+      <div class="chart-wrap" style="height:280px;"><canvas id="chart-timeline"></canvas></div>
+    </div>
+
+    <!-- Events by type -->
+    <div class="two-col">
+      <div class="table-card" style="margin-bottom:0;">
+        <h3>Events by Type</h3>
+        <table>
+          <thead><tr><th>Event Type</th><th>Count</th><th>% of Total</th></tr></thead>
+          <tbody id="events-type-body"></tbody>
+        </table>
+      </div>
+      <div class="chart-card">
+        <h3>Event Distribution</h3>
+        <div class="chart-wrap"><canvas id="chart-events-bar"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Top 10 most active users chart -->
+    <div class="chart-card" style="margin:24px 0;">
+      <h3>Top 10 Most Active Users</h3>
+      <div class="chart-wrap" style="height:280px;"><canvas id="chart-top-users"></canvas></div>
+    </div>
+
+    <!-- Per-User Summary -->
+    <div class="table-card">
+      <h3>Per-User Summary</h3>
+      <table>
+        <thead><tr><th>User</th><th>Organization</th><th>Last Login</th><th>Files Uploaded</th><th>Reports Generated</th></tr></thead>
+        <tbody id="per-user-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Per-Org Summary -->
+    <div class="table-card">
+      <h3>Per-Organization Summary</h3>
+      <table>
+        <thead><tr><th>Organization</th><th>Active Users</th><th>Files Uploaded</th><th>Reports Generated</th><th>Last Activity</th></tr></thead>
+        <tbody id="per-org-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Export section -->
+    <div class="section-heading" style="margin-top:8px;">📥 Export & Event Log</div>
+    <div class="export-row">
+      <button class="btn-export" onclick="downloadCSV('events')">⬇ Download Events CSV</button>
+      <button class="btn-export" onclick="downloadCSV('summary')">⬇ Download Summary CSV</button>
+    </div>
+    <div class="table-card">
+      <h3>Recent Events</h3>
+      <table>
+        <thead><tr><th>Created At</th><th>Organization</th><th>User</th><th>Event Type</th><th>Details</th></tr></thead>
+        <tbody id="events-log-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB 3: USERS
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-users">
+    <div class="section-heading">👥 All Users</div>
+    <div class="filter-row">
+      <input type="text" id="users-search" placeholder="🔍 Search by name or email…" oninput="renderUsers()">
+      <select id="users-org-filter" onchange="renderUsers()">
+        <option value="">All Organizations</option>
+      </select>
+    </div>
+    <div class="table-card" style="margin-bottom:0;">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Organization</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB 4: ORGANIZATIONS
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-orgs">
+    <div class="section-heading">🏢 Organizations</div>
+    <button class="create-org-btn" onclick="toggleCreateOrg()">+ Create New Organization</button>
+    <div class="create-org-form" id="create-org-form">
+      <label style="font-size:0.82rem;font-weight:700;color:var(--text);display:block;margin-bottom:6px;">Organization Name</label>
+      <input type="text" id="new-org-name" placeholder="e.g. REUDE Energy GmbH">
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-teal" onclick="createOrg()">Create</button>
+        <button class="btn" style="background:var(--bg);border:1.5px solid var(--border);" onclick="toggleCreateOrg()">Cancel</button>
+      </div>
+    </div>
+    <div id="orgs-list"></div>
+  </section>
+
+  <!-- ─────────────────────────
+       TAB 5: PENDING APPROVALS
+  ───────────────────────────── -->
+  <section class="tab-panel" id="tab-approvals">
+    <div class="section-heading">⏳ Pending Approvals</div>
+    <div class="info-banner" id="approvals-banner">✋ Loading…</div>
+    <div id="approvals-list"></div>
+  </section>
+
+</div><!-- /main-content -->
+
+<!-- ══════════════════════════════════════
+     FOOTER
+══════════════════════════════════════ -->
+<footer class="admin-footer">
+  <span>© 2026 REUDE Technologies | All rights reserved.</span>
+  <span>Contact support: <a href="mailto:cmo_ira@reude.tech">cmo_ira@reude.tech</a></span>
+  <span>Powered by REUDE</span>
+</footer>
+
+
+<script>
+/* ══════════════════════════════════════════════════
+   CONSTANTS & HELPERS
+══════════════════════════════════════════════════ */
+const USERS_KEY   = 'compliq_users';
+const SESSION_KEY = 'compliq_session';
+const UPLOADS_KEY = 'compliq_uploads';
+const REPORTS_KEY = 'compliq_reports';
+const ADMIN_EMAIL = 'admin@reude.tech';
+const ADMIN_PASS  = 'Admin@Reude2026';
+
+const CHART_COLORS = [
+  '#0FA4AF','#003135','#024950','#AFDDE5','#5CBFCA',
+  '#28666E','#7EC8D0','#1A5F65','#3D9AA5','#62D2DB'
+];
+
+function getUsers() {
+  return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+}
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+function getNum(key) {
+  return parseInt(localStorage.getItem(key) || '0', 10);
+}
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}); }
+  catch { return iso; }
+}
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+  catch { return iso; }
+}
+function initials(u) {
+  return ((u.firstName||'?')[0]+(u.lastName||'?')[0]).toUpperCase();
+}
+function groupBy(arr, key) {
+  return arr.reduce((acc, item) => {
+    const k = item[key] || 'Unknown';
+    acc[k] = acc[k] || [];
+    acc[k].push(item);
+    return acc;
+  }, {});
+}
+function distinctOrgs(users) {
+  return [...new Set(users.map(u => u.org || 'Unknown'))].sort();
+}
+
+/* ══════════════════════════════════════════════════
+   AUTH GATE
+══════════════════════════════════════════════════ */
+(function authGate() {
+  const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+  if (!sess || (sess.email !== ADMIN_EMAIL && sess.role !== 'Administrator')) {
+    window.location.replace('auth.html');
+    return;
+  }
+  // Ensure admin is in users list
+  let users = getUsers();
+  if (!users.find(u => u.email === ADMIN_EMAIL)) {
+    users.unshift({
+      firstName: 'Admin', lastName: 'REUDE',
+      email: ADMIN_EMAIL, org: 'REUDE Technologies',
+      role: 'Administrator', password: ADMIN_PASS,
+      sector: 'wind', status: 'active',
+      createdAt: new Date(2026,0,1).toISOString()
+    });
+    saveUsers(users);
+  }
+  const currentEmail = sess.email || ADMIN_EMAIL;
+  document.getElementById('admin-email-display').textContent = currentEmail;
+})();
+
+function signOut() {
+  localStorage.removeItem(SESSION_KEY);
+  window.location.replace('auth.html');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB SWITCHING
+══════════════════════════════════════════════════ */
+let activeTab = 'overview';
+const chartInstances = {};
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  const btns = document.querySelectorAll('.tab-btn');
+  const tabOrder = ['overview','access','analytics','users','orgs','approvals'];
+  const idx = tabOrder.indexOf(tab);
+  if (idx >= 0 && btns[idx]) {
+    btns[idx].classList.add('active');
+  }
+  // Render the relevant tab
+  if (tab === 'overview')   renderOverview();
+  if (tab === 'access')     renderAccess();
+  if (tab === 'analytics')  renderAnalytics();
+  if (tab === 'users')      renderUsers();
+  if (tab === 'orgs')       renderOrgs();
+  if (tab === 'approvals')  renderApprovals();
+}
+
+/* ══════════════════════════════════════════════════
+   CHART HELPER
+══════════════════════════════════════════════════ */
+function buildChart(id, type, data, options) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); }
+  const ctx = document.getElementById(id).getContext('2d');
+  chartInstances[id] = new Chart(ctx, { type, data, options: options || {} });
+}
+
+/* ══════════════════════════════════════════════════
+   TAB 1: OVERVIEW
+══════════════════════════════════════════════════ */
+function renderOverview() {
+  const users = getUsers().filter(u => u.email !== ADMIN_EMAIL);
+  
+  // REAL data tracking
+  const UPLOADS_REAL_KEY = 'compliq_uploads_real';
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
+  realUploads = realUploads.filter(u => u.sector === 'wind');
+  
+  const files = realUploads.length;
+  const reports = users.filter(u => u.role && u.role.includes('Analyst')).length * 2; // Estimate
+
+  const orgs = distinctOrgs(users);
+  
+  // Get REAL active sessions - only users currently logged in
+  const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
+  let activeSessions = JSON.parse(localStorage.getItem(ACTIVE_SESSIONS_KEY) || '{}');
+  let activeUsers = Object.values(activeSessions).filter(s => s.sector === 'wind'); // Only wind
+  
+  const pendingUsers = users.filter(u => u.status === 'pending');
+  const totalNonAdmin = users.length;
+
+  document.getElementById('ov-total-users').textContent = totalNonAdmin;
+  document.getElementById('ov-files').textContent = files; // REAL
+  document.getElementById('ov-reports').textContent = reports;
+  document.getElementById('ov-orgs').textContent = orgs.length;
+  document.getElementById('ov-active').textContent = activeUsers.length; // REAL: Currently logged in RIGHT NOW
+  document.getElementById('ov-pending').textContent = pendingUsers.length; // REAL
+  const adoption = totalNonAdmin > 0 ? Math.round((activeUsers.length/totalNonAdmin)*100) : 0;
+  document.getElementById('ov-adoption').textContent = adoption + '%';
+  const rpu = activeUsers.length > 0 ? (reports/activeUsers.length).toFixed(1) : 0;
+  document.getElementById('ov-rpu').textContent = rpu;
+
+  // Update pending badge
+  const pb = document.getElementById('pending-badge');
+  pb.textContent = pendingUsers.length > 0 ? pendingUsers.length : '';
+
+  // Doughnut: users by org
+  const orgGroups = groupBy(users, 'org');
+  buildChart('chart-org-doughnut', 'doughnut', {
+    labels: Object.keys(orgGroups),
+    datasets: [{ data: Object.values(orgGroups).map(a=>a.length), backgroundColor: CHART_COLORS, borderWidth: 2, borderColor: '#fff' }]
+  }, { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{family:'Outfit',size:11}, boxWidth:12 } } } });
+
+  // Bar: users by role
+  const roleGroups = groupBy(users, 'role');
+  buildChart('chart-role-bar', 'bar', {
+    labels: Object.keys(roleGroups),
+    datasets: [{ label:'Users', data: Object.values(roleGroups).map(a=>a.length), backgroundColor: CHART_COLORS, borderRadius: 6 }]
+  }, { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true, ticks:{stepSize:1}, grid:{color:'rgba(2,73,80,0.06)'} }, x:{ grid:{display:false} } } });
+
+  // Top Orgs table
+  const tbody = document.getElementById('org-table-body');
+  tbody.innerHTML = '';
+  if (Object.keys(orgGroups).length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No users registered yet.</td></tr>';
+  } else {
+    Object.entries(orgGroups).sort((a,b)=>b[1].length-a[1].length).forEach(([org, members]) => {
+      const active = members.filter(u=>u.status==='active').length;
+      const admins = members.filter(u=>/(admin|administrator)/i.test(u.role)).length;
+      const editors = members.filter(u=>/(editor|engineer|manager|operator)/i.test(u.role)).length;
+      const viewers = members.filter(u=>/(viewer|analyst)/i.test(u.role)).length;
+      tbody.innerHTML += `<tr>
+        <td><strong>${org}</strong></td>
+        <td>${members.length}</td>
+        <td><span class="badge badge-active">${active}</span></td>
+        <td>${admins}</td><td>${editors}</td><td>${viewers}</td>
+      </tr>`;
+    });
+  }
+
+  // Recent signups (last 7 days)
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-7);
+  const recent = users.filter(u => u.createdAt && new Date(u.createdAt) >= cutoff)
+    .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  const rsbody = document.getElementById('recent-signups-body');
+  rsbody.innerHTML = '';
+  if (recent.length === 0) {
+    rsbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No signups in the last 7 days.</div></td></tr>';
+  } else {
+    recent.forEach(u => {
+      rsbody.innerHTML += `<tr>
+        <td>${u.firstName} ${u.lastName}</td>
+        <td>${u.email}</td>
+        <td>${u.org || '—'}</td>
+        <td><span class="badge badge-role">${u.role || '—'}</span></td>
+        <td>${fmtDateTime(u.createdAt)}</td>
+      </tr>`;
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: ACCESS CONTROL
+══════════════════════════════════════════════════ */
+function renderAccess() {
+  // Get REAL uploads from users
+  const UPLOADS_REAL_KEY = 'compliq_uploads_real';
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
+  
+  // Filter only wind sector uploads
+  realUploads = realUploads.filter(u => u.sector === 'wind');
+  
+  // Populate upload audit trail with REAL DATA
+  const tbody = document.getElementById('upload-audit-body');
+  tbody.innerHTML = '';
+  if (realUploads.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div style="text-align:center;color:#94b3b6;padding:20px;font-size:0.9rem;">No uploads yet. Users can upload files from dashboard.</div></td></tr>';
+  } else {
+    realUploads.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 50).forEach((upload) => {
+      tbody.innerHTML += `<tr>
+        <td><strong>${upload.id}</strong></td>
+        <td>${upload.uploadedByName}<br/><small style="color:#94b3b6;">${upload.uploadedBy}</small></td>
+        <td>${upload.fileType}</td>
+        <td>${upload.records}</td>
+        <td>${fmtDateTime(upload.timestamp)}</td>
+        <td><span class="badge badge-active">${upload.status}</span></td>
+        <td><button class="btn btn-teal" style="padding:4px 10px;font-size:0.75rem;" onclick="alert('Upload ID: ' + '${upload.id}' + '\\nAsset: ' + '${upload.assetId}' + '\\nSize: ' + (${upload.fileSize}/1024).toFixed(2) + ' KB')">Details</button></td>
+      </tr>`;
+    });
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   TAB 2: ANALYTICS
+══════════════════════════════════════════════════ */
+function populateAnaOrgFilter() {
+  const sel = document.getElementById('ana-org-filter');
+  const users = getUsers().filter(u=>u.email!==ADMIN_EMAIL);
+  const orgs = distinctOrgs(users);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Organizations</option>';
+  orgs.forEach(o => sel.innerHTML += `<option value="${o}" ${o===cur?'selected':''}>${o}</option>`);
+}
+
+function getSimulatedData(orgFilter) {
+  // Simulated 30-day activity timeline
+  const days = 30;
+  const logins=[], uploads=[], reps=[], labels=[];
+  const now = new Date();
+  for (let i=days-1;i>=0;i--) {
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    labels.push(d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}));
+    logins.push(Math.floor(Math.random()*20)+2);
+    uploads.push(Math.floor(Math.random()*10)+1);
+    reps.push(Math.floor(Math.random()*8));
+  }
+  return { labels, logins, uploads, reps };
+}
+
+function renderAnalytics() {
+  populateAnaOrgFilter();
+  const orgFilter = document.getElementById('ana-org-filter').value;
+  const users = getUsers().filter(u=>u.email!==ADMIN_EMAIL && (!orgFilter || u.org===orgFilter));
+
+  // Set default dates
+  const fromEl = document.getElementById('ana-from');
+  const toEl   = document.getElementById('ana-to');
+  if (!fromEl.value) { const d=new Date(); d.setDate(d.getDate()-30); fromEl.value=d.toISOString().split('T')[0]; }
+  if (!toEl.value)   { toEl.value = new Date().toISOString().split('T')[0]; }
+
+  // Timeline chart
+  const sim = getSimulatedData(orgFilter);
+  buildChart('chart-timeline','line',{
+    labels: sim.labels,
+    datasets:[
+      {label:'Logins', data:sim.logins, borderColor:'#0FA4AF', backgroundColor:'rgba(15,164,175,0.08)', tension:0.4, fill:true, pointRadius:2},
+      {label:'Uploads', data:sim.uploads, borderColor:'#003135', backgroundColor:'rgba(0,49,53,0.05)', tension:0.4, fill:true, pointRadius:2},
+      {label:'Reports', data:sim.reps, borderColor:'#AFDDE5', backgroundColor:'rgba(175,221,229,0.08)', tension:0.4, fill:true, pointRadius:2}
+    ]
+  },{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:'Outfit',size:11}}}},scales:{y:{beginAtZero:true,grid:{color:'rgba(2,73,80,0.06)'}},x:{grid:{display:false},ticks:{maxTicksLimit:10,font:{size:10}}}}});
+
+  // Events by type (simulated)
+  const evTypes = [{type:'User Login',count:sim.logins.reduce((a,b)=>a+b,0)},{type:'File Upload',count:sim.uploads.reduce((a,b)=>a+b,0)},{type:'Report Generated',count:sim.reps.reduce((a,b)=>a+b,0)},{type:'Profile Update',count:Math.floor(Math.random()*20)+5},{type:'Data Export',count:Math.floor(Math.random()*10)+2}];
+  const total = evTypes.reduce((a,e)=>a+e.count,0);
+  document.getElementById('events-type-body').innerHTML = evTypes.map(e=>`<tr><td>${e.type}</td><td><strong>${e.count}</strong></td><td>${total>0?((e.count/total)*100).toFixed(1)+'%':'—'}</td></tr>`).join('');
+  buildChart('chart-events-bar','bar',{
+    labels:evTypes.map(e=>e.type),
+    datasets:[{label:'Count',data:evTypes.map(e=>e.count),backgroundColor:CHART_COLORS,borderRadius:6}]
+  },{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(2,73,80,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}});
+
+  // Top 10 users bar chart
+  const topUsers = [...users].sort(()=>Math.random()-0.5).slice(0,10);
+  buildChart('chart-top-users','bar',{
+    labels:topUsers.map(u=>`${u.firstName} ${u.lastName}`),
+    datasets:[{label:'Activity Score',data:topUsers.map(()=>Math.floor(Math.random()*80)+10),backgroundColor:CHART_COLORS,borderRadius:6}]
+  },{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(2,73,80,0.06)'}},x:{grid:{display:false},ticks:{font:{size:10}}}}});
+
+  // Per-user summary
+  document.getElementById('per-user-body').innerHTML = users.length === 0
+    ? '<tr><td colspan="5"><div class="empty-state">No users found.</div></td></tr>'
+    : users.map(u=>`<tr>
+        <td>${u.firstName} ${u.lastName}</td>
+        <td>${u.org||'—'}</td>
+        <td>${fmtDate(u.lastLogin || u.createdAt)}</td>
+        <td>${Math.floor(Math.random()*15)}</td>
+        <td>${Math.floor(Math.random()*8)}</td>
+      </tr>`).join('');
+
+  // Per-org summary
+  const orgGroups = groupBy(users,'org');
+  document.getElementById('per-org-body').innerHTML = Object.keys(orgGroups).length === 0
+    ? '<tr><td colspan="5"><div class="empty-state">No organizations found.</div></td></tr>'
+    : Object.entries(orgGroups).map(([org,members])=>`<tr>
+        <td><strong>${org}</strong></td>
+        <td>${members.filter(u=>u.status==='active').length}</td>
+        <td>${Math.floor(Math.random()*50)+5}</td>
+        <td>${Math.floor(Math.random()*20)+1}</td>
+        <td>${fmtDate(members.map(u=>u.createdAt).sort().reverse()[0])}</td>
+      </tr>`).join('');
+
+  // Events log
+  const evLog = users.slice(0,15).map(u=>({
+    ts:u.createdAt, org:u.org||'—', user:`${u.firstName} ${u.lastName}`,
+    type:'User Registered', details:`Role: ${u.role||'—'}`
+  }));
+  document.getElementById('events-log-body').innerHTML = evLog.length === 0
+    ? '<tr><td colspan="5"><div class="empty-state">No events recorded.</div></td></tr>'
+    : evLog.map(e=>`<tr><td>${fmtDateTime(e.ts)}</td><td>${e.org}</td><td>${e.user}</td><td><span class="badge badge-role">${e.type}</span></td><td>${e.details}</td></tr>`).join('');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB 3: USERS
+══════════════════════════════════════════════════ */
+function populateUsersOrgFilter() {
+  const sel = document.getElementById('users-org-filter');
+  const users = getUsers().filter(u=>u.email!==ADMIN_EMAIL);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Organizations</option>';
+  distinctOrgs(users).forEach(o=>sel.innerHTML+=`<option value="${o}" ${o===cur?'selected':''}>${o}</option>`);
+}
+
+function renderUsers() {
+  populateUsersOrgFilter();
+  const search = (document.getElementById('users-search').value||'').toLowerCase();
+  const orgF   = document.getElementById('users-org-filter').value;
+  let users = getUsers().filter(u => u.email !== ADMIN_EMAIL);
+  if (search) users = users.filter(u=>`${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search));
+  if (orgF)   users = users.filter(u=>u.org===orgF);
+  const tbody = document.getElementById('users-table-body');
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="emoji">👤</div>No users match your filter.</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map((u,idx) => {
+    const statusBadge = u.status==='active'?'badge-active':u.status==='rejected'?'badge-rejected':'badge-pending';
+    const statusLabel = u.status||'pending';
+    return `<tr>
+      <td><div class="avatar">${initials(u)}</div></td>
+      <td><strong>${u.firstName} ${u.lastName}</strong></td>
+      <td>${u.email}</td>
+      <td>${u.org||'—'}</td>
+      <td><span class="badge badge-role">${u.role||'—'}</span></td>
+      <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
+      <td>${fmtDate(u.createdAt)}</td>
+      <td style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select class="role-select" onchange="updateRole('${u.email}', this.value)">
+          ${['Fleet Operator','Maintenance Engineer','Data Analyst','Site Manager','Administrator','Editor','Viewer'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
+        </select>
+        <button class="btn btn-danger" onclick="removeUser('${u.email}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function updateRole(email, newRole) {
+  const users = getUsers();
+  const idx = users.findIndex(u=>u.email===email);
+  if (idx>-1) { users[idx].role = newRole; saveUsers(users); }
+}
+
+function removeUser(email) {
+  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
+  saveUsers(getUsers().filter(u=>u.email!==email));
+  renderUsers();
+  updatePendingBadge();
+}
+
+/* ══════════════════════════════════════════════════
+   TAB 4: ORGANIZATIONS
+══════════════════════════════════════════════════ */
+function toggleCreateOrg() {
+  const f = document.getElementById('create-org-form');
+  f.classList.toggle('open');
+}
+
+function createOrg() {
+  const name = document.getElementById('new-org-name').value.trim();
+  if (!name) { alert('Please enter an organization name.'); return; }
+  // Store as a virtual org — just add a placeholder user note or store in a separate key
+  const orgs = JSON.parse(localStorage.getItem('compliq_orgs') || '[]');
+  if (!orgs.includes(name)) { orgs.push(name); localStorage.setItem('compliq_orgs', JSON.stringify(orgs)); }
+  document.getElementById('new-org-name').value = '';
+  document.getElementById('create-org-form').classList.remove('open');
+  renderOrgs();
+}
+
+function renderOrgs() {
+  const users = getUsers().filter(u=>u.email!==ADMIN_EMAIL);
+  const orgGroups = groupBy(users,'org');
+  // Also include manually created orgs
+  const manualOrgs = JSON.parse(localStorage.getItem('compliq_orgs')||'[]');
+  manualOrgs.forEach(o=>{ if(!orgGroups[o]) orgGroups[o]=[]; });
+
+  const container = document.getElementById('orgs-list');
+  if (Object.keys(orgGroups).length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="emoji">🏢</div>No organizations yet. Create one above or wait for users to register.</div>';
+    return;
+  }
+  container.innerHTML = Object.entries(orgGroups).sort((a,b)=>b[1].length-a[1].length).map(([org,members],idx)=>`
+    <div class="org-accordion">
+      <div class="org-acc-header" onclick="toggleAcc('acc-${idx}')">
+        <h4>🏢 ${org}</h4>
+        <span>${members.length} member${members.length!==1?'s':''} ▾</span>
+      </div>
+      <div class="org-acc-body" id="acc-${idx}">
+        ${members.length===0?'<p style="color:#94b3b6;font-size:0.84rem;">No members in this organization yet.</p>':
+          `<table><thead><tr><th></th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>
+          ${members.map(u=>`<tr>
+            <td><div class="avatar" style="width:28px;height:28px;font-size:0.7rem;">${initials(u)}</div></td>
+            <td>${u.firstName} ${u.lastName}</td>
+            <td>${u.email}</td>
+            <td><span class="badge badge-role">${u.role||'—'}</span></td>
+            <td><span class="badge ${u.status==='active'?'badge-active':u.status==='rejected'?'badge-rejected':'badge-pending'}">${u.status||'pending'}</span></td>
+          </tr>`).join('')}
+          </tbody></table>`}
+      </div>
+    </div>`).join('');
+}
+
+function toggleAcc(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+/* ══════════════════════════════════════════════════
+   TAB 5: PENDING APPROVALS
+══════════════════════════════════════════════════ */
+function renderApprovals() {
+  const pending = getUsers().filter(u=>u.email!==ADMIN_EMAIL && u.status==='pending');
+  const banner = document.getElementById('approvals-banner');
+  banner.textContent = pending.length === 0
+    ? '✅ All clear — no pending approvals right now.'
+    : `✋ ${pending.length} profile${pending.length!==1?'s':''} awaiting your review`;
+  const list = document.getElementById('approvals-list');
+  if (pending.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="emoji">🎉</div>No pending approvals. You\'re all caught up!</div>';
+    return;
+  }
+  list.innerHTML = pending.map(u=>`
+    <div class="approval-card" id="acard-${btoa(u.email).replace(/=/g,'')}">
+      <div class="approval-info">
+        <div class="avatar" style="width:44px;height:44px;font-size:1rem;">${initials(u)}</div>
+        <div class="approval-meta">
+          <h4>${u.firstName} ${u.lastName}</h4>
+          <p>${u.email} &nbsp;•&nbsp; ${u.org||'—'} &nbsp;•&nbsp; <span class="badge badge-role">${u.role||'—'}</span> &nbsp;•&nbsp; Registered: ${fmtDate(u.createdAt)}</p>
+        </div>
+      </div>
+      <div class="approval-actions">
+        <button class="btn-approve" onclick="approveUser('${u.email}')">✅ Approve</button>
+        <button class="btn-reject" onclick="rejectUser('${u.email}')">✖ Reject</button>
+      </div>
+    </div>`).join('');
+}
+
+function approveUser(email) {
+  const users = getUsers();
+  const idx = users.findIndex(u=>u.email===email);
+  if (idx>-1) { users[idx].status = 'active'; saveUsers(users); }
+  renderApprovals();
+  updatePendingBadge();
+}
+
+function rejectUser(email) {
+  const users = getUsers();
+  const idx = users.findIndex(u=>u.email===email);
+  if (idx>-1) { users[idx].status = 'rejected'; saveUsers(users); }
+  renderApprovals();
+  updatePendingBadge();
+}
+
+function updatePendingBadge() {
+  const pending = getUsers().filter(u=>u.email!==ADMIN_EMAIL&&u.status==='pending').length;
+  document.getElementById('pending-badge').textContent = pending > 0 ? pending : '';
+}
+
+/* ══════════════════════════════════════════════════
+   CSV EXPORT
+══════════════════════════════════════════════════ */
+function downloadCSV(type) {
+  const users = getUsers().filter(u=>u.email!==ADMIN_EMAIL);
+  let csv = '', filename = '';
+  if (type === 'summary') {
+    csv = 'Name,Email,Organization,Role,Status,Joined\n';
+    users.forEach(u=>{ csv += `"${u.firstName} ${u.lastName}","${u.email}","${u.org||''}","${u.role||''}","${u.status||'pending'}","${u.createdAt||''}"\n`; });
+    filename = 'compliq_user_summary.csv';
+  } else {
+    csv = 'Timestamp,Organization,User,Event Type,Details\n';
+    users.forEach(u=>{ csv += `"${u.createdAt||''}","${u.org||''}","${u.firstName} ${u.lastName}","User Registered","Role: ${u.role||''}"\n`; });
+    filename = 'compliq_events.csv';
+  }
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+
+/* ══════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  renderOverview();
+  updatePendingBadge();
+});
+
+/*
+  NOTE: For the auth.html registration flow, when a new user registers,
+  their status should be set to 'pending'. Only after admin approval does it
+  become 'active'. If a user with status 'pending' or 'rejected' tries to log
+  in, they should see the message: "Your account is pending admin approval.
+  Please wait." — Implement this check in auth.html's handleLogin() function.
+*/
+</script>
+</body>
+</html>
