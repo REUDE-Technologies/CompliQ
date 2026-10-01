@@ -273,20 +273,20 @@
             <div class="part-select-wrap">
               <label style="font-size:0.75rem;color:var(--c-muted);margin-right:8px;">Zone:</label>
               <select id="part-selector" class="styled-select" style="width:auto;padding:6px 12px;font-size:0.82rem;">
-                <option value="full">🔆 Full Array Overview</option>
+                <option value="full">Full Array Overview</option>
                 <optgroup label="String Groups">
-                  <option value="string-1">⚡ String Group 1 (North)</option>
-                  <option value="string-2">⚡ String Group 2 (South)</option>
-                  <option value="string-3">⚡ String Group 3 (East)</option>
-                  <option value="string-4">⚡ String Group 4 (West)</option>
+                  <option value="string-1">String Group 1 (North)</option>
+                  <option value="string-2">String Group 2 (South)</option>
+                  <option value="string-3">String Group 3 (East)</option>
+                  <option value="string-4">String Group 4 (West)</option>
                 </optgroup>
                 <optgroup label="Electrical">
-                  <option value="inverter">🔌 Inverter / Combiner Box</option>
-                  <option value="wiring">🔌 DC Wiring Harness</option>
+                  <option value="inverter">Inverter / Combiner Box</option>
+                  <option value="wiring">DC Wiring Harness</option>
                 </optgroup>
                 <optgroup label="Structural">
-                  <option value="frame">🔧 Mounting Frame</option>
-                  <option value="tracker">🧭 Single-Axis Tracker</option>
+                  <option value="frame">Mounting Frame</option>
+                  <option value="tracker">Single-Axis Tracker</option>
                 </optgroup>
               </select>
             </div>
@@ -343,8 +343,8 @@
           </div>
           <div class="panel-body viewer-body">
             <div class="img-frame" id="img-frame">
-              <img id="img-rgb" src="images/solar_teal.png" alt="RGB View">
-              <img id="img-therm" src="images/solar_teal.png" alt="Thermal View" style="opacity:0;filter:sepia(1) hue-rotate(300deg) saturate(3);">
+              <img id="img-rgb" src="images/solar_teal.jpg" alt="RGB View">
+              <img id="img-therm" src="images/solar_teal.jpg" alt="Thermal View" style="opacity:0;filter:sepia(1) hue-rotate(300deg) saturate(3);">
               <svg id="overlay-svg" class="overlay-svg" viewBox="0 0 800 500"></svg>
               <div class="zoom-badge" id="zoom-badge">Zoom: 100%</div>
               <div class="provenance-tag" id="provenance-tag">Campaign: 2026_Q2_Solar | DJI M300 RTK | Zenmuse H20T</div>
@@ -1358,6 +1358,7 @@ function setupTheme() {
   const saved = localStorage.getItem('site_theme') || 'light';
   if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
+  document.documentElement.style.colorScheme = saved === 'light' ? 'light' : 'dark';
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
   btn?.addEventListener('click', () => {
@@ -1365,6 +1366,7 @@ function setupTheme() {
     const next = current === 'light' ? 'dark' : 'light';
     if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
     else document.documentElement.removeAttribute('data-theme');
+    document.documentElement.style.colorScheme = next === 'light' ? 'light' : 'dark';
     localStorage.setItem('site_theme', next);
     btn.textContent = next === 'light' ? '🌙' : '☀️';
   });
