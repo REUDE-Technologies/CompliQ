@@ -155,6 +155,8 @@
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
       width: 100%;
+      min-height: 44px;
+      color-scheme: light;
     }
     .form-group input:focus,
     .form-group select:focus {
@@ -287,8 +289,10 @@
       position: relative; z-index: 2;
       width: 100%; border-radius: 14px;
       overflow: hidden; background: rgba(0,0,0,0.2);
+      flex: 0 0 auto;
+      min-height: 248px;
     }
-    .auth-slide { display: none; position: relative; }
+    .auth-slide { display: none; position: relative; min-height: 200px; }
     .auth-slide.active { display: block; animation: slide-in 0.5s ease; }
     @keyframes slide-in { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
     .auth-slide img { width: 100%; height: 200px; object-fit: cover; border-radius: 14px; }
@@ -335,23 +339,23 @@
     <!-- Image slider -->
     <div class="auth-slider" id="auth-slider">
       <div class="auth-slide active">
-        <img src="images/turbine_teal.jpg" alt="Wind Turbine">
+        <img src="images/turbine_teal.png" alt="Wind Turbine">
         <div class="slide-caption">🌀 Wind Turbine Inspection</div>
       </div>
       <div class="auth-slide">
-        <img src="images/solar_teal.jpg" alt="Solar Farm">
+        <img src="images/solar_teal.png" alt="Solar Farm">
         <div class="slide-caption">☀️ Solar Farm Analytics</div>
       </div>
       <div class="auth-slide">
-        <img src="images/turbine_inspect_rgb.jpg" alt="RGB Inspection">
+        <img src="images/turbine_inspect_rgb.png" alt="RGB Inspection">
         <div class="slide-caption">🔍 RGB Defect Detection</div>
       </div>
       <div class="auth-slide">
-        <img src="images/turbine_inspect_thermal.jpg" alt="Thermal Inspection">
+        <img src="images/turbine_inspect_thermal.png" alt="Thermal Inspection">
         <div class="slide-caption">🌡️ Thermal Imaging Analysis</div>
       </div>
       <div class="auth-slide">
-        <img src="images/drone_inspection.jpg" alt="Drone Inspection">
+        <img src="images/drone_inspection.png" alt="Drone Inspection">
         <div class="slide-caption">🚁 Autonomous UAV Systems</div>
       </div>
       <div class="slider-dots" id="slider-dots"></div>

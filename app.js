@@ -31,13 +31,13 @@ const appStore = {
     { id: 6, name: "WTG-006", location: "Sector Gamma-4", age: "5.1 yrs", power: "1.4 MW", windSpeed: 9.5, rpm: 10.0, health: 76 }
   ],
   anomalies: [
-    { id: "DEF-001", turbineId: 2, blade: "B", type: "Crack", distance: 42, severity: 4, confidence: 92, action: "Schedule localized composite reinforcement injection", status: "pending", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 340, y: 78 }, details: "Spanwise crack starting at 42m from root. Depth estimated at 4.2mm. Dynamic load strain suggests micro-expansion." },
-    { id: "DEF-002", turbineId: 2, blade: "A", type: "Erosion", distance: 15, severity: 2, confidence: 87, action: "Monitor during next routine quarterly schedule", status: "resolved", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 120, y: 68 }, details: "Leading edge surface gelcoat erosion due to rain impact. Surface roughening present. No fiber laminate damage." },
-    { id: "DEF-003", turbineId: 1, blade: "C", type: "Delamination", distance: 58, severity: 3, confidence: 89, action: "Sanding and carbon-patch overlay in next dry window", status: "dispatched", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 480, y: 84 }, details: "Internal core-to-skin bond debonding detected by thermal phase thermography. Area is approx 240 sq cm." },
-    { id: "DEF-004", turbineId: 4, blade: "A", type: "Erosion", distance: 22, severity: 3, confidence: 84, action: "Apply protective leading edge tape coating", status: "pending", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 210, y: 74 }, details: "Moderate surface pitting. Exceeding 10% surface area on blade segment. Standard drag coefficient affected." },
-    { id: "DEF-005", turbineId: 6, blade: "B", type: "Crack", distance: 68, severity: 5, confidence: 96, action: "Immediate turbine aerodynamic brake, schedule blade replace", status: "pending", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 550, y: 86 }, details: "Critical transverse crack near blade tip. High risk of tip separation under gusts above 15 m/s. Structural integrity compromised." },
-    { id: "DEF-006", turbineId: 6, blade: "B", type: "Erosion", distance: 12, severity: 1, confidence: 90, action: "No engineering action, cosmetic variance only", status: "resolved", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 90, y: 72 }, details: "Minor bug debris and micro-scratches. Non-consequential." },
-    { id: "DEF-007", turbineId: 6, blade: "C", type: "Delamination", distance: 36, severity: 4, confidence: 91, action: "Schedule repair crew within 30 days", status: "dispatched", image: "images/turbine_inspect_rgb.jpg", thermal: "images/turbine_inspect_thermal.jpg", coords: { x: 290, y: 80 }, details: "Core shear delamination. Detected by acoustics and validated with thermal drone imagery. Defect area: 340 sq cm." }
+    { id: "DEF-001", turbineId: 2, blade: "B", type: "Crack", distance: 42, severity: 4, confidence: 92, action: "Schedule localized composite reinforcement injection", status: "pending", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 340, y: 78 }, details: "Spanwise crack starting at 42m from root. Depth estimated at 4.2mm. Dynamic load strain suggests micro-expansion." },
+    { id: "DEF-002", turbineId: 2, blade: "A", type: "Erosion", distance: 15, severity: 2, confidence: 87, action: "Monitor during next routine quarterly schedule", status: "resolved", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 120, y: 68 }, details: "Leading edge surface gelcoat erosion due to rain impact. Surface roughening present. No fiber laminate damage." },
+    { id: "DEF-003", turbineId: 1, blade: "C", type: "Delamination", distance: 58, severity: 3, confidence: 89, action: "Sanding and carbon-patch overlay in next dry window", status: "dispatched", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 480, y: 84 }, details: "Internal core-to-skin bond debonding detected by thermal phase thermography. Area is approx 240 sq cm." },
+    { id: "DEF-004", turbineId: 4, blade: "A", type: "Erosion", distance: 22, severity: 3, confidence: 84, action: "Apply protective leading edge tape coating", status: "pending", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 210, y: 74 }, details: "Moderate surface pitting. Exceeding 10% surface area on blade segment. Standard drag coefficient affected." },
+    { id: "DEF-005", turbineId: 6, blade: "B", type: "Crack", distance: 68, severity: 5, confidence: 96, action: "Immediate turbine aerodynamic brake, schedule blade replace", status: "pending", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 550, y: 86 }, details: "Critical transverse crack near blade tip. High risk of tip separation under gusts above 15 m/s. Structural integrity compromised." },
+    { id: "DEF-006", turbineId: 6, blade: "B", type: "Erosion", distance: 12, severity: 1, confidence: 90, action: "No engineering action, cosmetic variance only", status: "resolved", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 90, y: 72 }, details: "Minor bug debris and micro-scratches. Non-consequential." },
+    { id: "DEF-007", turbineId: 6, blade: "C", type: "Delamination", distance: 36, severity: 4, confidence: 91, action: "Schedule repair crew within 30 days", status: "dispatched", image: "images/turbine_inspect_rgb.png", thermal: "images/turbine_inspect_thermal.png", coords: { x: 290, y: 80 }, details: "Core shear delamination. Detected by acoustics and validated with thermal drone imagery. Defect area: 340 sq cm." }
   ],
   notifs: [
     { id: 1, type: "crit", text: "Turbine WTG-006: Severity-5 Crack detected near Tip", time: "5 mins ago" },
@@ -208,7 +208,7 @@ function renderFleetOverview() {
     item.className = "asset-list-item";
     item.innerHTML = `
       <div class="asset-thumbnail">
-        <img src="images/wind_farm_hero.jpg" alt="Turbine ${t.name}">
+        <img src="images/wind_farm_hero.png" alt="Turbine ${t.name}">
       </div>
       <div class="asset-desc">
         <h4>${t.name}</h4>
@@ -665,7 +665,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
 // ----------------------------------------------------
 const dragZone = document.getElementById('drag-drop-zone');
 const fileInput = document.getElementById('ingest-file-input');
-let uploadedFileUrl = "images/turbine_inspect_rgb.jpg"; // Default image path if none uploaded
+let uploadedFileUrl = "images/turbine_inspect_rgb.png"; // Default image path if none uploaded
 let uploadedFileName = "";
 let uploadedFileSize = "";
 let uploadedFileType = "image";
@@ -729,7 +729,7 @@ function handleFile(file) {
 }
 
 document.getElementById('btn-remove-preview').addEventListener('click', () => {
-  uploadedFileUrl = "images/turbine_inspect_rgb.jpg";
+  uploadedFileUrl = "images/turbine_inspect_rgb.png";
   dragZone.style.display = 'flex';
   document.getElementById('upload-preview-container').style.display = 'none';
   fileInput.value = '';
@@ -774,7 +774,7 @@ document.getElementById('ingest-form').addEventListener('submit', (e) => {
       action: action,
       status: "pending",
       image: uploadedFileUrl,
-      thermal: uploadedFileUrl === "images/turbine_inspect_rgb.jpg" ? "images/turbine_inspect_thermal.jpg" : uploadedFileUrl, // if custom uploaded, map to both modes
+      thermal: uploadedFileUrl === "images/turbine_inspect_rgb.png" ? "images/turbine_inspect_thermal.png" : uploadedFileUrl, // if custom uploaded, map to both modes
       coords: { x: xCoord, y: yCoord },
       details: `In-situ real-time telemetry uploaded via Ingestion Portal. Located at ${dist}m on Blade ${blade}. Confidence rating is ${confidence}% relative to neural classifier.`
     };
