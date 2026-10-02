@@ -2513,3 +2513,107 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   cursor: pointer;
   font-size: 1.1rem;
 }
+
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    overflow: auto;
+  }
+  .app-wrap {
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+  }
+  .sidebar {
+    width: 100%;
+    max-height: 46vh;
+    border-right: none;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .main-area {
+    min-width: 0;
+    width: 100%;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 8px;
+  }
+  #view-asset.poc-layout {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  #view-asset.poc-layout .asset-poc-profile-panel,
+  #view-asset.poc-layout .asset-poc-preview-panel,
+  #view-asset.poc-layout .asset-poc-defects-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  #view-asset.poc-layout .asset-turbine-bar-body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "turbine"
+      "component"
+      "facts";
+  }
+  .styled-select,
+  .styled-input {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    overflow: auto;
+  }
+  .app-wrap {
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+  }
+  .sidebar {
+    width: 100%;
+    max-height: 46vh;
+    border-right: none;
+    border-bottom: 1px solid var(--c-border);
+  }
+  .main-area {
+    min-width: 0;
+    width: 100%;
+  }
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 8px;
+  }
+  #view-asset.poc-layout {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  #view-asset.poc-layout .asset-poc-profile-panel,
+  #view-asset.poc-layout .asset-poc-preview-panel,
+  #view-asset.poc-layout .asset-poc-defects-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  #view-asset.poc-layout .asset-turbine-bar-body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "turbine"
+      "component"
+      "facts";
+  }
+  .styled-select,
+  .styled-input,
+  .form-group select,
+  .form-group input {
+    font-size: 16px;
+  }
+}

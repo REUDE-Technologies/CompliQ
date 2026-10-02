@@ -14,7 +14,7 @@ window.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = ''; // Restore scrolling
         splash.style.display = 'none';
       }, 800); // Match CSS transition duration
-    }, 7000);
+    }, window.matchMedia('(max-width: 768px)').matches ? 2200 : 4200);
   }
 });
 
@@ -31,6 +31,10 @@ function saveUsers(users) {
 
 function openAuth(tab = 'login') {
   const overlay = document.getElementById('auth-overlay');
+  if (!overlay) {
+    window.location.href = tab === 'register' ? 'auth.html?tab=register' : 'auth.html';
+    return;
+  }
   overlay.classList.add('show');
   switchAuthTab(tab);
   document.body.style.overflow = 'hidden';
@@ -42,16 +46,26 @@ function closeAuth() {
 }
 
 function switchAuthTab(tab) {
+  const tabBtn = document.getElementById(`tab-${tab}`);
+  const form = document.getElementById(`form-${tab}`);
+  if (!tabBtn || !form) {
+    window.location.href = tab === 'register' ? 'auth.html?tab=register' : 'auth.html';
+    return;
+  }
   document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.getElementById(`form-${tab}`).classList.add('active');
+  tabBtn.classList.add('active');
+  form.classList.add('active');
 }
 
-document.getElementById('auth-close').addEventListener('click', closeAuth);
-document.getElementById('auth-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('auth-overlay')) closeAuth();
-});
+const authClose = document.getElementById('auth-close');
+const authOverlay = document.getElementById('auth-overlay');
+if (authClose && authOverlay) {
+  authClose.addEventListener('click', closeAuth);
+  authOverlay.addEventListener('click', (e) => {
+    if (e.target === authOverlay) closeAuth();
+  });
+}
 
 document.querySelectorAll('.auth-tab').forEach(tab => {
   tab.addEventListener('click', () => switchAuthTab(tab.dataset.tab));
