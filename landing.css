@@ -1737,7 +1737,12 @@ body {
     padding: 310px 28px 28px;
     z-index: 998;
   }
-  .nav-actions.mobile-open { display: flex; }
+  .nav-actions.mobile-open {
+    display: flex;
+    top: auto;
+    bottom: 0;
+    padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  }
   .nav-actions .btn-outline,
   .nav-actions .btn-primary { width: 100%; text-align: center; padding: 12px; }
   .nav-actions .theme-toggle { align-self: flex-start; }
@@ -1795,7 +1800,13 @@ body {
   .footer-links { gap: 16px; flex-wrap: wrap; }
 
   /* Ticker */
-  .ticker-track { font-size: 0.75rem; }
+  .nav-logo-img, .footer-logo-img { height: 44px !important; }
+  .nav-compliq-text { font-size: 0.95rem !important; letter-spacing: 1px !important; }
+  .about-col .about-img-main { min-height: 220px !important; height: 220px !important; }
+  .splash-reude-text img { height: 72px !important; }
+  .form-group input, .form-group select, .form-group textarea { font-size: 16px; }
+  .hero-content { padding-top: 88px; }
+  img { max-width: 100%; }
 }
 
 /* ── Small mobile (≤ 480px) ── */
@@ -2326,14 +2337,11 @@ body {
 
 /* ── Splash reude text image — removed ── */
 
-/* ── Footer: slim sticky bar ── */
+/* Footer scrolls with the page so it is not pinned over the content. */
 .site-footer {
-  position: fixed !important;
-  bottom: 0; left: 0; right: 0;
-  background: #fff !important;
-  border-top: 1px solid rgba(15,164,175,0.15) !important;
-  padding: 0 !important;
-  z-index: 800;
+  position: relative;
+  background: #fff;
+  border-top: 1px solid rgba(15,164,175,0.15);
 }
 .footer-bar {
   display: flex;
@@ -2350,8 +2358,7 @@ body {
 .footer-bar-center a:hover { text-decoration: underline; }
 .footer-bar-right { color: #28666E; }
 .footer-bar-right strong { color: #FF7A00; font-style: italic; }
-/* Push body content above fixed footer */
-body { padding-bottom: 44px; }
+body { padding-bottom: 0; }
 [data-theme="light"] .site-footer { background: #fff !important; border-top-color: rgba(15,164,175,0.15) !important; }
 [data-theme="dark"] .site-footer, :not([data-theme]) .site-footer {
   background: rgba(0,49,53,0.95) !important;

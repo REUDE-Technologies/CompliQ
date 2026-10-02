@@ -316,7 +316,17 @@
     /* Responsive */
     @media (max-width: 768px) {
       .auth-left { display: none; }
-      .auth-card { padding: 28px 20px; }
+      body { display: block; }
+      .auth-right {
+        padding: 16px 12px calc(20px + env(safe-area-inset-bottom));
+        min-height: 100dvh;
+        align-items: flex-start;
+      }
+      .auth-card { padding: 22px 16px; border-radius: 14px; }
+      .form-row-2 { grid-template-columns: 1fr; }
+      #sector-select-step div { grid-template-columns: 1fr !important; }
+      .form-group input, .form-group select, .form-group textarea { font-size: 16px; }
+      .auth-heading h1 { font-size: 1.35rem; }
     }
   </style>
 </head>
