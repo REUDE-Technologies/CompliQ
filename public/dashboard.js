@@ -808,6 +808,9 @@ function renderFullTurbineOverview(container, turbine) {
           </svg>
         </div>
         <div class="blade-status-col">
+          <div class="duty-legend">
+            ${Object.entries(DUTY_LABEL).map(([key, label]) => `<span><i style="background:${DUTY_COLOR[key]}"></i>${label}</span>`).join('')}
+          </div>
           ${blades.map(b => {
             const duty = bladeDuty(b.id);
             const count = bladeSummaryRows(b.id).length;
@@ -818,9 +821,6 @@ function renderFullTurbineOverview(container, turbine) {
               <small>${count} anomal${count === 1 ? 'y' : 'ies'}</small>
             </button>`;
           }).join('')}
-          <div class="duty-legend">
-            ${Object.entries(DUTY_LABEL).map(([key, label]) => `<span><i style="background:${DUTY_COLOR[key]}"></i>${label}</span>`).join('')}
-          </div>
         </div>
       </div>
       <div class="anomaly-layout">
