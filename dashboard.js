@@ -21,9 +21,12 @@ function checkAuth() {
     document.getElementById('app-wrap').style.display = 'flex';
     const user = JSON.parse(session);
     const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
-    document.getElementById('user-av').textContent = initials;
-    document.getElementById('user-display-name').textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
-    document.getElementById('user-display-role').textContent = user.role || 'Fleet Operator';
+    const av = document.getElementById('user-av');
+    const nameEl = document.getElementById('user-display-name');
+    const roleEl = document.getElementById('user-display-role');
+    if (av) av.textContent = initials;
+    if (nameEl) nameEl.textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
+    if (roleEl) roleEl.textContent = user.role || 'Fleet Operator';
     
     // Show admin button if user is administrator
     const adminBtn = document.getElementById('admin-nav-btn');
@@ -500,10 +503,38 @@ function setPocEvidenceVisible(show) {
     standalone.classList.toggle('is-hidden', !!show);
   }
   if (view) view.classList.toggle('poc-layout', !!show);
+  const pocTable = document.getElementById('asset-defects-panel');
+  if (pocTable) {
+    pocTable.hidden = !show;
+    pocTable.classList.toggle('is-hidden', !show);
+  }
+  if (show) {
+    const host = document.getElementById('asset-compare-host');
+    if (host) host.replaceChildren();
+  }
+  updateFindingsSheetMeta();
   if (pdfBtn) {
     pdfBtn.textContent = '⬇ AI inspection report (PDF)';
   }
   STATE.pocMode = !!show;
+}
+
+function updateFindingsSheetMeta() {
+  const countEl = document.getElementById('asset-sheet-count');
+  const hintEl = document.getElementById('asset-sheet-hint');
+  const sheet = document.getElementById('asset-bottom-sheet');
+  if (!countEl || !hintEl) return;
+  let n = 0;
+  if (STATE.pocMode) {
+    n = document.querySelectorAll('#defects-tbody tr.defect-row').length;
+  } else {
+    try { n = overviewAnomalyRows().length; } catch (_) { n = 0; }
+  }
+  countEl.textContent = n ? `${n} anomal${n === 1 ? 'y' : 'ies'}` : '';
+  const open = sheet?.classList.contains('is-open');
+  hintEl.textContent = open
+    ? (STATE.pocMode ? 'Hide defect table' : 'Hide comparison & table')
+    : (STATE.pocMode ? 'Show defect table' : 'Show comparison & table');
 }
 
 async function renderPartSchematic(turbine, part) {
@@ -534,6 +565,7 @@ async function renderPartSchematic(turbine, part) {
     return;
   }
 
+  clearCompareHost();
   if (part.startsWith('blade-')) {
     const blade = part.replace('blade-', '');
     if (titleDefault) titleDefault.textContent = `Blade ${blade} Schematic`;
@@ -556,6 +588,42 @@ const DUTY_COLOR = { healthy: '#2ECC71', cleaning: '#F5B400', repair: '#F97316',
 const DUTY_LABEL = { healthy: 'Healthy', cleaning: 'Cleaning needed', repair: 'Repair needed', critical: 'Critical' };
 const SIDE_NAME = { SS: 'Suction side', LE: 'Leading edge', PS: 'Pressure side', TE: 'Trailing edge' };
 const ANOMALY_BOX_KEY = 'compliq_anomaly_boxes';
+/* DNV five-category severity theme for anomaly details + drawn box */
+const SEVERITY_UI = {
+  1: { label: 'CAT 1 — Cosmetic', bg: '#DBEAFE', text: '#1D4ED8', border: '#93C5FD', stroke: '#2563EB', fill: 'rgba(37,99,235,0.18)' },
+  2: { label: 'CAT 2 — Minor', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC', stroke: '#16A34A', fill: 'rgba(22,163,74,0.18)' },
+  3: { label: 'CAT 3 — Moderate', bg: '#FEF3C7', text: '#A16207', border: '#FCD34D', stroke: '#D97706', fill: 'rgba(217,119,6,0.20)' },
+  4: { label: 'CAT 4 — Serious', bg: '#FFEDD5', text: '#C2410C', border: '#FDBA74', stroke: '#EA580C', fill: 'rgba(234,88,12,0.20)' },
+  5: { label: 'CAT 5 — Critical', bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5', stroke: '#DC2626', fill: 'rgba(220,38,38,0.20)' }
+};
+
+function currentOverviewSeverity() {
+  const n = Number(document.getElementById('overview-anomaly-severity')?.value);
+  return SEVERITY_UI[n] ? n : 2;
+}
+
+function applyOverviewSeverityTheme(cat) {
+  const sev = SEVERITY_UI[cat] ? cat : currentOverviewSeverity();
+  const theme = SEVERITY_UI[sev];
+  const frame = document.getElementById('overview-photo-frame');
+  const form = document.getElementById('overview-anomaly-form');
+  if (form) {
+    form.dataset.sev = String(sev);
+    form.style.removeProperty('--anom-bg');
+    form.style.removeProperty('--anom-text');
+    form.style.removeProperty('--anom-border');
+  }
+  if (frame) {
+    frame.dataset.sev = String(sev);
+    frame.style.setProperty('--anom-stroke', theme.stroke);
+    frame.style.setProperty('--anom-fill', theme.fill);
+  }
+  const box = overviewDraftBox() || (() => {
+    const row = ensureOverviewAnomaly();
+    return row ? (anomalyBoxes()[row.id]?.box || null) : null;
+  })();
+  if (box) paintOverviewBox(box);
+}
 
 function anomalyBoxes() {
   try { return JSON.parse(localStorage.getItem(ANOMALY_BOX_KEY) || '{}'); }
@@ -764,13 +832,13 @@ function renderFullTurbineOverview(container, turbine) {
           <label>Radius<input id="overview-anomaly-radius" class="styled-input" type="text" inputmode="decimal"></label>
           <label>Severity
             <select id="overview-anomaly-severity" class="styled-select">
-              ${[1, 2, 3, 4, 5].map(n => `<option value="${n}">${n}</option>`).join('')}
+              ${[1, 2, 3, 4, 5].map(n => `<option value="${n}">${SEVERITY_UI[n].label}</option>`).join('')}
             </select>
           </label>
           <div class="anomaly-actions">
             <button type="button" class="review-btn" id="overview-draw">Place box</button>
-            <button type="button" class="teal-btn" id="overview-save">Save anomaly</button>
             <button type="button" class="review-btn" id="overview-new">New anomaly</button>
+            <button type="button" class="teal-btn" id="overview-save">Save anomaly</button>
           </div>
         </form>
         <div class="anomaly-photo-wrap">
@@ -810,6 +878,7 @@ function renderFullTurbineOverview(container, turbine) {
   });
   bindOverviewEditors(turbine);
   paintOverviewDetail(turbine);
+  parkCompareView();
 }
 
 function overviewDraftBox() {
@@ -823,16 +892,17 @@ function paintOverviewBox(box) {
     svg.innerHTML = '';
     return;
   }
+  const theme = SEVERITY_UI[currentOverviewSeverity()];
   const [x1, y1, x2, y2] = box;
   const x = Math.min(x1, x2) * 100;
   const y = Math.min(y1, y2) * 100;
   const w = Math.abs(x2 - x1) * 100;
   const h = Math.abs(y2 - y1) * 100;
-  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="rgba(15,164,175,0.18)" stroke="#0FA4AF" stroke-width="1.6" vector-effect="non-scaling-stroke"></rect>
-    <circle cx="${x}" cy="${y}" r="1.1" fill="#fff" stroke="#0FA4AF" stroke-width="0.6"></circle>
-    <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="#0FA4AF" stroke-width="0.6"></circle>
-    <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="#0FA4AF" stroke-width="0.6"></circle>
-    <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="#0FA4AF" stroke-width="0.6"></circle>`;
+  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"></rect>
+    <circle cx="${x}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>`;
 }
 
 function normFromPointer(event, svg) {
@@ -882,6 +952,12 @@ function bindOverviewEditors(turbine) {
   }
   document.getElementById('overview-save')?.addEventListener('click', () => saveOverviewAnomaly(turbine));
   document.getElementById('overview-new')?.addEventListener('click', () => createOverviewAnomaly(turbine));
+  const severitySel = document.getElementById('overview-anomaly-severity');
+  if (severitySel && !severitySel.dataset.sevBound) {
+    severitySel.dataset.sevBound = '1';
+    severitySel.addEventListener('change', () => applyOverviewSeverityTheme(Number(severitySel.value)));
+  }
+  applyOverviewSeverityTheme(Number(severitySel?.value) || 2);
 }
 
 function paintOverviewDetail(turbine) {
@@ -916,6 +992,7 @@ function paintOverviewDetail(turbine) {
   const photos = g97StationCandidates(row.blade, row.surface, row.index);
   photo.alt = `${row.blade} ${row.surface}`;
   useFirstExistingImage(photo, photos, () => photo.removeAttribute('src'));
+  applyOverviewSeverityTheme(Number(severity?.value) || saved.severity || row.cat || 2);
   paintOverviewBox(saved.box || null);
   paintBladeComparison(turbine, row);
 }
@@ -1020,6 +1097,7 @@ function saveOverviewAnomaly(turbine) {
   const draw = document.getElementById('overview-box-svg');
   draw?.classList.remove('is-drawing');
   document.getElementById('overview-draw')?.classList.remove('is-on');
+  document.getElementById('overview-new')?.classList.remove('is-on');
   renderDefectsTable(turbine);
   paintOverviewDetail(turbine);
   showToast('Anomaly saved', 'success');
@@ -1043,6 +1121,8 @@ function createOverviewAnomaly(turbine) {
   STATE.overviewDraftBox = null;
   renderDefectsTable(turbine);
   paintOverviewDetail(turbine);
+  document.getElementById('overview-new')?.classList.add('is-on');
+  applyOverviewSeverityTheme(2);
 }
 
 function selectOverviewBlade(letter) {
@@ -1216,6 +1296,7 @@ function renderDefectsTable(turbine) {
       const selectedRow = tbody && tbody.querySelector('tr.is-selected');
       if (selectedRow) selectedRow.scrollIntoView({ block: 'nearest' });
       renderPocBboxOverlay(pt, turbine);
+      updateFindingsSheetMeta();
       return;
     }
     const pt = getSelectedPocPoint(turbine);
@@ -1245,6 +1326,7 @@ function renderDefectsTable(turbine) {
     }).join('') || `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">${pt.stationImage ? `Station ${pt.surface} ${pt.point} is linked (${formatRadial(pt, turbine)}). No boxed defects on this capture.` : `No station image for ${pt.surface} ${pt.point} (${formatRadial(pt, turbine)}).`}</td></tr>`;
     fill(tbody, html);
     renderPocBboxOverlay(pt, turbine);
+    updateFindingsSheetMeta();
     return;
   }
 
@@ -1272,6 +1354,7 @@ function renderDefectsTable(turbine) {
     </tr>
   `).join('') || `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">No defects recorded for Blade ${STATE.selectedBlade}</td></tr>`;
   fill(tbodyAlt, html);
+  updateFindingsSheetMeta();
 }
 
 function setStandaloneColumns(full) {
@@ -3678,22 +3761,52 @@ function initReportPicker() {
   else if (document.getElementById('view-report')?.classList.contains('active')) applyReportDefect();
 }
 
+function clearCompareHost() {
+  const host = document.getElementById('asset-compare-host');
+  if (host) host.replaceChildren();
+}
+
+function parkCompareView() {
+  const host = document.getElementById('asset-compare-host');
+  const compare = document.querySelector('#blade-schematic-default .compare-view');
+  if (!host || !compare) return;
+  host.replaceChildren(compare);
+  updateFindingsSheetMeta();
+}
+
 function initSidebarCollapse() {
-  const btn = document.getElementById('sidebar-collapse');
-  const wrap = document.getElementById('app-wrap');
-  if (!btn || !wrap) return;
-  const apply = (collapsed) => {
-    wrap.classList.toggle('sidebar-collapsed', collapsed);
-    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    localStorage.setItem('compliq_sidebar_collapsed', collapsed ? '1' : '0');
-  };
-  apply(localStorage.getItem('compliq_sidebar_collapsed') === '1');
-  document.querySelectorAll('.sidebar .nav-item').forEach(item => {
-    const label = item.querySelector('span');
-    if (label && !item.title) item.title = label.textContent.trim();
+  document.getElementById('app-wrap')?.classList.remove('sidebar-collapsed');
+}
+
+function initProfileMenu() {
+  const menu = document.getElementById('profile-menu');
+  const btn = document.getElementById('profile-trigger');
+  const panel = document.getElementById('profile-panel');
+  if (!btn || !panel) return;
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  btn.addEventListener('click', () => apply(!wrap.classList.contains('sidebar-collapsed')));
+  document.addEventListener('click', (event) => {
+    if (menu && !menu.contains(event.target)) {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+function initAssetSheet() {
+  const sheet = document.getElementById('asset-bottom-sheet');
+  const btn = document.getElementById('asset-sheet-toggle');
+  if (!sheet || !btn) return;
+  btn.addEventListener('click', () => {
+    const open = sheet.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    updateFindingsSheetMeta();
+  });
+  updateFindingsSheetMeta();
 }
 
 function findingsForStation(blade, surface, index) {
@@ -4194,11 +4307,6 @@ function bindAnnotatedViewerControls() {
     ANNO_VIEW.ty = 0;
     apply();
   });
-  document.getElementById('asset-pan')?.addEventListener('click', () => {
-    ANNO_VIEW.pan = !ANNO_VIEW.pan;
-    document.getElementById('asset-pan')?.classList.toggle('is-on', ANNO_VIEW.pan);
-    viewport.classList.toggle('pan-on', ANNO_VIEW.pan);
-  });
   document.getElementById('asset-image-full')?.addEventListener('click', () => {
     const panel = document.querySelector('.asset-poc-preview-panel');
     const btn = document.getElementById('asset-image-full');
@@ -4215,17 +4323,6 @@ function bindAnnotatedViewerControls() {
       document.exitFullscreen?.();
     }
     requestAnimationFrame(() => fitAnnotatedImage());
-  });
-  document.getElementById('asset-image-min')?.addEventListener('click', () => {
-    const ws = document.getElementById('asset-poc-workspace');
-    const btn = document.getElementById('asset-image-min');
-    if (!ws) return;
-    ws.classList.toggle('image-min');
-    const min = ws.classList.contains('image-min');
-    if (btn) {
-      btn.textContent = min ? 'Show' : 'Min';
-      btn.title = min ? 'Show image' : 'Minimize image';
-    }
   });
 
   viewport.addEventListener('wheel', (e) => {
@@ -4310,6 +4407,8 @@ function initApp() {
   renderNotifications();
   loadBladePocAnnotations();
   initSidebarCollapse();
+  initProfileMenu();
+  initAssetSheet();
   initDefectReview();
 
   // Start MQTT simulation
@@ -4399,7 +4498,7 @@ function initTheme() {
 
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) {
-    btn.textContent = saved === 'light' ? '🌙' : '☀️';
+    btn.textContent = saved === 'light' ? 'Dark mode' : 'Light mode';
     btn.setAttribute('aria-label', saved === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
     btn.title = saved === 'light' ? 'Dark mode' : 'Light mode';
     btn.addEventListener('click', () => {
@@ -4407,7 +4506,7 @@ function initTheme() {
       const next = current === 'light' ? 'dark' : 'light';
       localStorage.setItem('site_theme', next);
       applyDashTheme(next);
-      btn.textContent = next === 'light' ? '🌙' : '☀️';
+      btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
       btn.setAttribute('aria-label', next === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
       btn.title = next === 'light' ? 'Dark mode' : 'Light mode';
     });
