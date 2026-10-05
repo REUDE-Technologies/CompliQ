@@ -472,24 +472,44 @@ body {
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar-logo {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-end;
+  gap: 8px;
   flex: 0 0 auto;
   margin-left: 0;
   text-decoration: none;
+  padding-bottom: 2px;
 }
-.topbar-logo img { height: 72px; width: auto; display: block; }
+.topbar-logo img {
+  height: 42px;
+  width: auto;
+  display: block;
+  margin-bottom: 1px;
+}
 .brand-compliq {
   font-family: var(--font-ui);
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c-teal);
+  white-space: nowrap;
+  line-height: 0.95;
+  align-self: center;
+}
+.brand-by {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--c-teal);
   white-space: nowrap;
   line-height: 1;
+  align-self: center;
+  opacity: 0.9;
 }
-[data-theme="light"] .brand-compliq { color: #0A7A84; }
+[data-theme="light"] .brand-compliq,
+[data-theme="light"] .brand-by { color: #0A7A84; }
 .topbar-left h2 { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.15; }
 .topbar-left p { font-size: 0.7rem; color: var(--c-muted); margin-top: 0; line-height: 1.2; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
