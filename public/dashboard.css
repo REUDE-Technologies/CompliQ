@@ -463,7 +463,7 @@ body {
   flex: 0 0 auto;
   width: 100%;
   height: auto;
-  min-height: 52px;
+  min-height: 68px;
   box-sizing: border-box;
   border-bottom: 1px solid var(--c-border);
   background: rgba(0,49,53,0.5); backdrop-filter: blur(10px);
@@ -471,7 +471,7 @@ body {
 }
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar-logo { display: flex; align-items: center; flex: 0 0 auto; margin-left: 0; }
-.topbar-logo img { height: 56px; width: auto; display: block; }
+.topbar-logo img { height: 72px; width: auto; display: block; }
 .topbar-left h2 { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.15; }
 .topbar-left p { font-size: 0.7rem; color: var(--c-muted); margin-top: 0; line-height: 1.2; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
