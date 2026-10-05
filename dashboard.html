@@ -14,7 +14,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Chart.js for interactive charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="dashboard.css?v=logo72">
+  <link rel="stylesheet" href="dashboard.css?v=find45">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -399,10 +399,10 @@
               <p class="viewer-empty" id="viewer-empty">Select a defect to open its station photo.</p>
             </div>
             <div class="viewer-actions">
-              <button class="icon-btn" onclick="zoomIn()">+ Zoom In</button>
-              <button class="icon-btn" onclick="zoomOut()">− Zoom Out</button>
-              <button class="icon-btn" onclick="resetZoom()">↺ Reset</button>
-              <button class="teal-btn" onclick="generatePDFReport()">⬇ AI inspection report (PDF)</button>
+              <button type="button" class="icon-btn" onclick="zoomIn()" title="Zoom in" aria-label="Zoom in">+</button>
+              <button type="button" class="icon-btn" onclick="zoomOut()" title="Zoom out" aria-label="Zoom out">−</button>
+              <button type="button" class="icon-btn" onclick="resetZoom()" title="Reset zoom" aria-label="Reset zoom">↺</button>
+              <button type="button" class="icon-btn" onclick="generatePDFReport()" title="AI inspection report (PDF)" aria-label="Download AI inspection report PDF">⬇</button>
             </div>
           </div>
         </div>
