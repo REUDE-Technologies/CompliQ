@@ -470,14 +470,62 @@ body {
   position: relative; z-index: 50;
 }
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.topbar-logo { display: flex; align-items: center; flex: 0 0 auto; margin-left: 0; }
-.topbar-logo img {
-  height: 64px;
-  width: auto;
-  max-width: min(420px, 42vw);
-  display: block;
-  object-fit: contain;
+.topbar-logo { display: flex; align-items: center; flex: 0 0 auto; margin-left: 0; text-decoration: none; }
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  font-family: var(--font-ui);
 }
+.brand-compliq {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-teal);
+}
+.brand-r {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  background: #F07A18;
+  color: #1a1208;
+  font-size: 1.05rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.04em;
+  box-shadow: inset 0 0 0 3px rgba(26, 18, 8, 0.18);
+}
+.brand-reude {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #F07A18;
+}
+.brand-reude-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 0.95;
+}
+.brand-reude-sub {
+  font-size: 0.58rem;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  opacity: 0.95;
+}
+[data-theme="light"] .brand-compliq { color: #0A7A84; }
+[data-theme="light"] .brand-reude { color: #D96510; }
 .topbar-left h2 { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.15; }
 .topbar-left p { font-size: 0.7rem; color: var(--c-muted); margin-top: 0; line-height: 1.2; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
