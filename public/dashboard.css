@@ -471,7 +471,13 @@ body {
 }
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .topbar-logo { display: flex; align-items: center; flex: 0 0 auto; margin-left: 0; }
-.topbar-logo img { height: 72px; width: auto; display: block; }
+.topbar-logo img {
+  height: 64px;
+  width: auto;
+  max-width: min(420px, 42vw);
+  display: block;
+  object-fit: contain;
+}
 .topbar-left h2 { font-size: 1.05rem; font-weight: 800; color: #fff; line-height: 1.15; }
 .topbar-left p { font-size: 0.7rem; color: var(--c-muted); margin-top: 0; line-height: 1.2; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
