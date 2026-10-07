@@ -215,8 +215,47 @@ let STATE = {
   pocMode: false,
   pocSurface: 'PS',
   pocPointIndex: 5,
-  pocSelectedDefectId: null
+  pocSelectedDefectId: null,
+  assetEpoch: 0,
+  activeTab: 'fleet'
 };
+
+let _profileFitRO = null;
+let _profileFitRaf = 0;
+
+function bumpAssetEpoch() {
+  STATE.assetEpoch = (STATE.assetEpoch || 0) + 1;
+  return STATE.assetEpoch;
+}
+
+function disconnectProfileFit() {
+  if (_profileFitRO) {
+    try { _profileFitRO.disconnect(); } catch (_) {}
+    _profileFitRO = null;
+  }
+  if (_profileFitRaf) {
+    cancelAnimationFrame(_profileFitRaf);
+    _profileFitRaf = 0;
+  }
+}
+
+/** Stop Asset Detail heavy work so leaving the tab cannot freeze navigation. */
+function teardownAssetHeavyWork() {
+  bumpAssetEpoch();
+  disconnectProfileFit();
+  ['overview-photo', 'asset-poc-annotated'].forEach(id => {
+    const img = document.getElementById(id);
+    if (!img) return;
+    img.onload = null;
+    img.onerror = null;
+    try { img.removeAttribute('src'); } catch (_) {}
+  });
+  document.querySelectorAll('#overview-compare img, #asset-compare-host img').forEach(img => {
+    img.onload = null;
+    img.onerror = null;
+    try { img.removeAttribute('src'); } catch (_) {}
+  });
+}
 
 // ══════════════════════════════════════════════════
 // 3. NAVIGATION
@@ -230,23 +269,36 @@ const PAGE_TITLES = {
   analytics: ['Analytics', 'Fleet performance trends & defect analysis charts']
 };
 
+function activateTab(tab) {
+  const next = tab || 'fleet';
+  const leavingAsset = STATE.activeTab === 'asset' && next !== 'asset';
+  if (leavingAsset) teardownAssetHeavyWork();
+
+  STATE.activeTab = next;
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.nav-item[data-tab="${next}"]`)?.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${next}`)?.classList.add('active');
+  const [title, sub] = PAGE_TITLES[next] || ['Dashboard', ''];
+  const titleEl = document.getElementById('page-title');
+  const subEl = document.getElementById('page-sub');
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = sub;
+
+  // Defer heavy page work so the tab switch paints first.
+  requestAnimationFrame(() => {
+    if (STATE.activeTab !== next) return;
+    if (next === 'analytics') renderCharts();
+    if (next === 'asset') openAssetOverview();
+    if (next === 'report') openReportForSelection();
+    if (next === 'manual') populateManualSelects();
+    if (next === 'ingest') populateIngestSelects();
+  });
+}
+
 function setupNav() {
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(`view-${tab}`).classList.add('active');
-      const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
-      document.getElementById('page-title').textContent = title;
-      document.getElementById('page-sub').textContent = sub;
-      if (tab === 'analytics') renderCharts();
-      if (tab === 'asset') openAssetOverview();
-      if (tab === 'report') openReportForSelection();
-      if (tab === 'manual') populateManualSelects();
-      if (tab === 'ingest') populateIngestSelects();
-    });
+    btn.addEventListener('click', () => activateTab(btn.dataset.tab));
   });
 }
 
@@ -324,18 +376,7 @@ function renderFleetGrid() {
 }
 
 function navigateTo(tab) {
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById(`view-${tab}`).classList.add('active');
-  const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
-  document.getElementById('page-title').textContent = title;
-  document.getElementById('page-sub').textContent = sub;
-  if (tab === 'asset') openAssetOverview();
-  if (tab === 'report') openReportForSelection();
-  if (tab === 'analytics') renderCharts();
-  if (tab === 'manual') populateManualSelects();
-  if (tab === 'ingest') populateIngestSelects();
+  activateTab(tab);
 }
 
 // ══════════════════════════════════════════════════
@@ -396,6 +437,7 @@ document.querySelectorAll('.fbtn').forEach(btn => {
 // 7. ASSET DETAIL VIEW
 // ══════════════════════════════════════════════════
 function openAssetOverview() {
+  if (STATE.activeTab !== 'asset') return;
   STATE.selectedPart = 'full';
   const sel = document.getElementById('part-selector');
   if (sel) sel.value = 'full';
@@ -403,11 +445,13 @@ function openAssetOverview() {
 }
 
 function renderAssetView() {
+  if (STATE.activeTab !== 'asset') return;
+  const epoch = bumpAssetEpoch();
   populateTurbineSelector();
   const t = STATE.db.turbines.find(x => x.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
   bindPartSelector(t);
   renderTurbineInfo(t);
-  renderPartSchematic(t, STATE.selectedPart);
+  renderPartSchematic(t, STATE.selectedPart, epoch);
   renderDefectsTable(t);
 }
 
@@ -427,11 +471,12 @@ function bindPartSelector(turbine) {
   if (!sel) return;
   sel.value = STATE.selectedPart;
   sel.onchange = () => {
+    const epoch = bumpAssetEpoch();
     STATE.selectedPart = sel.value;
     if (sel.value.startsWith('blade-')) {
       STATE.selectedBlade = sel.value.replace('blade-', '');
     }
-    renderPartSchematic(turbine, STATE.selectedPart);
+    renderPartSchematic(turbine, STATE.selectedPart, epoch);
     renderDefectsTable(turbine);
   };
 }
@@ -537,7 +582,8 @@ function updateFindingsSheetMeta() {
     : (STATE.pocMode ? 'Show defect table' : 'Show comparison & table');
 }
 
-async function renderPartSchematic(turbine, part) {
+async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
+  if (STATE.activeTab !== 'asset') return;
   const title = document.getElementById('schematic-title');
   const titleDefault = document.getElementById('schematic-title-default');
   const hint = document.getElementById('schematic-hint');
@@ -547,10 +593,11 @@ async function renderPartSchematic(turbine, part) {
     if (title) title.textContent = `Blade ${bladeLetter}`;
     if (hint) hint.textContent = '';
     setPocEvidenceVisible(true);
-    await renderBladeAPocProfile();
+    await renderBladeAPocProfile(epoch);
     return;
   }
 
+  disconnectProfileFit();
   setPocEvidenceVisible(false);
   const container = document.getElementById('blade-schematic-default');
   const legend = document.getElementById('schematic-legend');
@@ -559,7 +606,7 @@ async function renderPartSchematic(turbine, part) {
     if (titleDefault) titleDefault.textContent = 'Full Turbine Overview';
     if (hint) hint.textContent = '';
     await loadBladeFindings();
-    if (STATE.selectedPart !== 'full') return;
+    if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch || STATE.selectedPart !== 'full') return;
     renderFullTurbineOverview(container, turbine);
     renderDefectsTable(turbine);
     return;
@@ -786,65 +833,67 @@ function renderFullTurbineOverview(container, turbine) {
   ensureOverviewAnomaly();
   container.innerHTML = `
     <div class="turbine-overview">
-      <div class="turbine-overview-layout">
-        <div class="turbine-single-card">
-          <svg class="turbine-svg turbine-svg-single" viewBox="0 0 360 400" role="img" aria-label="Rotor with blade condition">
-            <line x1="180" y1="180" x2="180" y2="372" stroke="#5a7882" stroke-width="10" stroke-linecap="round"/>
-            <path d="M148 158 h64 l-10 26 h-44 z" fill="#123038" stroke="#0FA4AF" stroke-width="1.4"/>
+      <div class="overview-main-grid">
+        <div class="overview-left-col">
+          <div class="turbine-single-card">
+            <svg class="turbine-svg turbine-svg-single" viewBox="0 0 360 400" role="img" aria-label="Rotor with blade condition">
+              <line x1="180" y1="180" x2="180" y2="372" stroke="#5a7882" stroke-width="10" stroke-linecap="round"/>
+              <path d="M148 158 h64 l-10 26 h-44 z" fill="#123038" stroke="#0FA4AF" stroke-width="1.4"/>
+              ${blades.map(b => {
+                const duty = bladeDuty(b.id);
+                const dots = bladeDutyDots(b.id, b.rot);
+                return `
+                <g class="turbine-blade-hit" data-blade="${b.id}" tabindex="0" role="button" aria-label="Blade ${b.id} ${DUTY_LABEL[duty]}">
+                  <g transform="rotate(${b.rot} ${hub.x} ${hub.y})">
+                    <path class="blade-fill" d="${bladePath}" fill="#d7e8ec" stroke="${DUTY_COLOR[duty]}" stroke-width="3"/>
+                  </g>
+                  ${dots.map(dot => `<circle class="blade-duty-dot" data-id="${escHtml(dot.id)}" cx="${dot.x}" cy="${dot.y}" r="5.5" fill="${DUTY_COLOR[dot.duty]}" stroke="#fff" stroke-width="1.4"/>`).join('')}
+                  <circle cx="${b.lx}" cy="${b.ly + 6}" r="13" fill="${DUTY_COLOR[duty]}"/>
+                  <text class="turbine-blade-label" x="${b.lx}" y="${b.ly + 11}" text-anchor="middle">${b.id}</text>
+                </g>`;
+              }).join('')}
+              <circle cx="${hub.x}" cy="${hub.y}" r="14" fill="#0e2430" stroke="#d7eef2" stroke-width="3" pointer-events="none"/>
+            </svg>
+          </div>
+          <form class="anomaly-details" id="overview-anomaly-form">
+            <h4>Anomaly details</h4>
+            <label>Anomaly ID<input id="overview-anomaly-id" class="styled-input" type="text" maxlength="80"></label>
+            <label>Anomaly type<input id="overview-anomaly-type" class="styled-input" type="text" maxlength="120"></label>
+            <label>Blade side<input id="overview-anomaly-side" class="styled-input" type="text" readonly></label>
+            <label>Radius<input id="overview-anomaly-radius" class="styled-input" type="text" inputmode="decimal"></label>
+            <label>Severity
+              <select id="overview-anomaly-severity" class="styled-select">
+                ${[1, 2, 3, 4, 5].map(n => `<option value="${n}">${SEVERITY_UI[n].label}</option>`).join('')}
+              </select>
+            </label>
+            <div class="anomaly-actions">
+              <button type="button" class="review-btn" id="overview-draw">Place box</button>
+              <button type="button" class="review-btn" id="overview-new">New anomaly</button>
+              <button type="button" class="teal-btn" id="overview-save">Save anomaly</button>
+            </div>
+          </form>
+        </div>
+        <div class="overview-right-col">
+          <div class="blade-status-col">
+            <div class="duty-legend">
+              ${Object.entries(DUTY_LABEL).map(([key, label]) => `<span><i style="background:${DUTY_COLOR[key]}"></i>${label}</span>`).join('')}
+            </div>
             ${blades.map(b => {
               const duty = bladeDuty(b.id);
-              const dots = bladeDutyDots(b.id, b.rot);
-              return `
-              <g class="turbine-blade-hit" data-blade="${b.id}" tabindex="0" role="button" aria-label="Blade ${b.id} ${DUTY_LABEL[duty]}">
-                <g transform="rotate(${b.rot} ${hub.x} ${hub.y})">
-                  <path class="blade-fill" d="${bladePath}" fill="#d7e8ec" stroke="${DUTY_COLOR[duty]}" stroke-width="3"/>
-                </g>
-                ${dots.map(dot => `<circle class="blade-duty-dot" data-id="${escHtml(dot.id)}" cx="${dot.x}" cy="${dot.y}" r="5.5" fill="${DUTY_COLOR[dot.duty]}" stroke="#fff" stroke-width="1.4"/>`).join('')}
-                <circle cx="${b.lx}" cy="${b.ly + 6}" r="13" fill="${DUTY_COLOR[duty]}"/>
-                <text class="turbine-blade-label" x="${b.lx}" y="${b.ly + 11}" text-anchor="middle">${b.id}</text>
-              </g>`;
+              const count = bladeSummaryRows(b.id).length;
+              return `<button type="button" class="blade-status-card" data-blade="${b.id}">
+                <span class="blade-status-swatch" style="background:${DUTY_COLOR[duty]}"></span>
+                <strong>Blade ${b.id}</strong>
+                <em>${DUTY_LABEL[duty]}</em>
+                <small>${count} anomal${count === 1 ? 'y' : 'ies'}</small>
+              </button>`;
             }).join('')}
-            <circle cx="${hub.x}" cy="${hub.y}" r="14" fill="#0e2430" stroke="#d7eef2" stroke-width="3" pointer-events="none"/>
-          </svg>
-        </div>
-        <div class="blade-status-col">
-          <div class="duty-legend">
-            ${Object.entries(DUTY_LABEL).map(([key, label]) => `<span><i style="background:${DUTY_COLOR[key]}"></i>${label}</span>`).join('')}
           </div>
-          ${blades.map(b => {
-            const duty = bladeDuty(b.id);
-            const count = bladeSummaryRows(b.id).length;
-            return `<button type="button" class="blade-status-card" data-blade="${b.id}">
-              <span class="blade-status-swatch" style="background:${DUTY_COLOR[duty]}"></span>
-              <strong>Blade ${b.id}</strong>
-              <em>${DUTY_LABEL[duty]}</em>
-              <small>${count} anomal${count === 1 ? 'y' : 'ies'}</small>
-            </button>`;
-          }).join('')}
-        </div>
-      </div>
-      <div class="anomaly-layout">
-        <form class="anomaly-details" id="overview-anomaly-form">
-          <h4>Anomaly details</h4>
-          <label>Anomaly ID<input id="overview-anomaly-id" class="styled-input" type="text" maxlength="80"></label>
-          <label>Anomaly type<input id="overview-anomaly-type" class="styled-input" type="text" maxlength="120"></label>
-          <label>Blade side<input id="overview-anomaly-side" class="styled-input" type="text" readonly></label>
-          <label>Radius<input id="overview-anomaly-radius" class="styled-input" type="text" inputmode="decimal"></label>
-          <label>Severity
-            <select id="overview-anomaly-severity" class="styled-select">
-              ${[1, 2, 3, 4, 5].map(n => `<option value="${n}">${SEVERITY_UI[n].label}</option>`).join('')}
-            </select>
-          </label>
-          <div class="anomaly-actions">
-            <button type="button" class="review-btn" id="overview-draw">Place box</button>
-            <button type="button" class="review-btn" id="overview-new">New anomaly</button>
-            <button type="button" class="teal-btn" id="overview-save">Save anomaly</button>
-          </div>
-        </form>
-        <div class="anomaly-photo-wrap">
-          <div class="anomaly-photo-frame" id="overview-photo-frame">
-            <img id="overview-photo" alt="" draggable="false">
-            <svg id="overview-box-svg" class="overview-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+          <div class="anomaly-photo-wrap">
+            <div class="anomaly-photo-frame" id="overview-photo-frame">
+              <img id="overview-photo" alt="" draggable="false">
+              <svg id="overview-box-svg" class="overview-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+            </div>
           </div>
         </div>
       </div>
@@ -1663,235 +1712,36 @@ async function loadSideImages(rows, limit, seen) {
 // ══════════════════════════════════════════════════
 // 9. PDF REPORT GENERATION
 // ══════════════════════════════════════════════════
+const STATIC_INSPECTION_REPORT_URL = 'reports/Gamesa_2MW_Wind_Turbine_Inspection_Report.pdf';
+
+function inspectionReportDownloadName() {
+  const turbine = STATE.db?.turbines?.find(t => t.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const site = String(turbine?.site || 'Kayathar').replace(/[^\w\-]+/g, '_');
+  const asset = String(turbine?.assetId || 'Gamesa_G97').replace(/[^\w\-]+/g, '_');
+  const date = new Date().toISOString().slice(0, 10);
+  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${date}.pdf`;
+}
+
 async function generatePDFReport() {
-  const { jsPDF } = window.jspdf || {};
-  if (!jsPDF) { showToast('PDF library not loaded. Check CDN connection.', 'error'); return; }
-
-  showToast('Generating AI inspection report…', 'success');
-  try { await loadBladeFindings(); } catch (_) {}
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const turbine = STATE.db.turbines.find(t => t.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
-  const catalog = reportFindings();
-  const seenPhotos = new Set();
-  const now = new Date().toLocaleString();
-  const W = 210;
-  let y = 20;
-
-  const ensure = (mm) => {
-    if (y + mm > 272) { doc.addPage(); y = 16; }
-  };
-  const sectionBar = (title) => {
-    ensure(16);
-    doc.setFillColor(2, 73, 80);
-    doc.rect(10, y - 6, W - 20, 8, 'F');
-    doc.setFontSize(10);
-    doc.setTextColor(15, 164, 175);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, y);
-    y += 10;
-  };
-
-  // ── Header ───────────────────────────────────
-  doc.setFillColor(0, 49, 53);
-  doc.rect(0, 0, W, 38, 'F');
-  doc.setFontSize(18);
-  doc.setTextColor(15, 164, 175);
-  doc.setFont('helvetica', 'bold');
-  doc.text('REUDE Technologies', 15, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text('AI-Powered Wind Turbine Blade Inspection Platform', 15, 20);
-  doc.setFontSize(13);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`AI Inspection Report — ${turbine.assetId}`, 15, 30);
-  doc.setFontSize(8);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Generated: ${now}  |  Campaign: ${turbine.campaign}  |  CONFIDENTIAL`, 15, 36);
-
-  y = 50;
-
-  // ── Turbine Details ───────────────────────────
-  doc.setFillColor(2, 73, 80);
-  doc.rect(10, y - 6, W - 20, 8, 'F');
-  doc.setFontSize(10);
-  doc.setTextColor(15, 164, 175);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1. TURBINE OVERVIEW', 14, y);
-  y += 10;
-
-  const assetFields = [
-    ['Turbine ID', turbine.assetId], ['Name', turbine.name], ['Site', turbine.site],
-    ['Location', turbine.location], ['GPS Coordinates', `${turbine.gps.lat}°N, ${turbine.gps.lng}°E`],
-    ['State', turbine.state], ['Manufacturer', turbine.manufacturer], ['Model', turbine.model],
-    ['Rated Power', `${turbine.power} MW`], ['Rotor Diameter', `${turbine.rotorDia} m`],
-    ['Hub Height', `${turbine.hubHeight} m`], ['Commissioning Year', turbine.commYear],
-    ['Health Index', `${turbine.health}%`], ['Status', turbine.status.toUpperCase()],
-    ['Last Inspection', turbine.lastInspection], ['Coverage', `${turbine.inspCoverage}%`]
-  ];
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  let col = 0;
-  assetFields.forEach(([label, value], i) => {
-    const xOff = col === 0 ? 14 : 115;
-    doc.setTextColor(150, 71, 52);
-    doc.setFont('helvetica', 'bold');
-    doc.text(label + ':', xOff, y);
-    doc.setTextColor(60, 60, 60);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(value), xOff + 48, y);
-    col++;
-    if (col === 2) { col = 0; y += 7; }
-    if (y > 270) { doc.addPage(); y = 20; }
-  });
-
-  y += 8;
-  doc.setFontSize(8);
-  doc.setTextColor(80, 80, 80);
-  doc.setFont('helvetica', 'normal');
-  const sideCounts = REPORT_SIDES.map(([code, label]) => {
-    const allSide = rowsForSide(catalog, code);
-    const majorRows = allSide.filter(row => row.cat >= DOT_MIN_CAT);
-    const minorRows = allSide.filter(row => row.cat < DOT_MIN_CAT);
-    const rows = majorRows.length >= 4 ? majorRows : majorRows.concat(minorRows.slice(0, Math.max(0, 4 - majorRows.length)));
-    const dominant = (majorRows[0] ? majorRows.slice() : rows.slice()).sort((a, b) => b.count - a.count)[0];
-    return { code, label, rows, allSide, majorCount: majorRows.length, dominant };
-  });
-  const intro = doc.splitTextToSize('Each side lists major findings. A side with fewer than four major findings also lists minor ones. Photographs are different captures; a repeated file is left out.', W - 28);
-  doc.text(intro, 14, y);
-  y += intro.length * 4 + 4;
-
-  sectionBar('Side summary');
-  const sumCols = [14, 70, 110, 140];
-  doc.setFillColor(0, 49, 53);
-  doc.rect(10, y - 5, W - 20, 8, 'F');
-  doc.setFontSize(7.5);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'bold');
-  ['Side', 'Major findings', 'Stations', 'Dominant condition'].forEach((h, i) => doc.text(h, sumCols[i], y));
-  y += 9;
-  sideCounts.forEach((side, idx) => {
-    ensure(10);
-    doc.setFillColor(...(idx % 2 === 0 ? [248, 252, 253] : [240, 248, 250]));
-    doc.rect(10, y - 5, W - 20, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(60, 60, 60);
-    doc.text(side.code, sumCols[0], y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(side.majorCount), sumCols[1], y);
-    doc.text(String(new Set(side.rows.map(r => r.blade + '-' + r.index)).size), sumCols[2], y);
-    const dominant = side.dominant ? doc.splitTextToSize(side.dominant.finding, 60)[0] : 'None at this category';
-    doc.text(dominant, sumCols[3], y);
-    y += 9;
-  });
-  y += 6;
-
-  let sectionNo = 2;
-  for (const side of sideCounts) {
-    sectionBar(`${sectionNo}. ${side.label}`);
-    sectionNo += 1;
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-    doc.setFont('helvetica', 'normal');
-    if (!side.rows.length) {
-      doc.text('No findings recorded on this side.', 14, y);
-      y += 10;
-      continue;
-    }
-    const minorNote = side.majorCount < 4 && side.rows.length > side.majorCount
-      ? ' Minor findings are included because major findings are few.'
-      : '';
-    doc.text(`${side.majorCount} major finding${side.majorCount === 1 ? '' : 's'} on ${side.label}.${minorNote}`, 14, y);
-    y += 8;
-
-    ensure(16);
-    const cols = [14, 32, 52, 78, 98];
-    doc.setFillColor(0, 49, 53);
-    doc.rect(10, y - 5, W - 20, 8, 'F');
-    doc.setFontSize(7.5);
-    doc.setTextColor(175, 221, 229);
-    doc.setFont('helvetica', 'bold');
-    ['Blade', 'Station', 'Category', 'Marks', 'Finding'].forEach((h, i) => doc.text(h, cols[i], y));
-    y += 9;
-    side.rows.forEach((d, idx) => {
-      ensure(10);
-      doc.setFillColor(...(idx % 2 === 0 ? [248, 252, 253] : [240, 248, 250]));
-      doc.rect(10, y - 5, W - 20, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(60, 60, 60);
-      doc.text(String(d.blade), cols[0], y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(d.index ? ('P' + String(d.index).padStart(2, '0')) : '—', cols[1], y);
-      doc.text('CAT ' + d.cat, cols[2], y);
-      doc.text(String(d.count), cols[3], y);
-      doc.text(doc.splitTextToSize(d.finding, 95)[0], cols[4], y);
-      y += 8;
-    });
-    y += 4;
-
-    const shots = await loadSideImages(side.allSide, 2, seenPhotos);
-    if (!shots.length) {
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text('No station photograph is available for this side.', 14, y);
-      y += 8;
-      continue;
-    }
-    let photoCol = 0;
-    let rowH = 0;
-    shots.forEach(shot => {
-      let boxW = 88;
-      let boxH = boxW * shot.height / Math.max(shot.width, 1);
-      if (boxH > 78) {
-        boxH = 78;
-        boxW = boxH * shot.width / Math.max(shot.height, 1);
-      }
-      if (photoCol === 0) ensure(boxH + 16);
-      const x = photoCol === 0 ? 14 : 110;
-      doc.addImage(shot.data, 'JPEG', x, y, boxW, boxH);
-      doc.setFontSize(7);
-      doc.setTextColor(40, 40, 40);
-      doc.text(doc.splitTextToSize(shot.caption, boxW)[0], x, y + boxH + 4);
-      rowH = Math.max(rowH, boxH + 10);
-      if (photoCol === 1) { y += rowH; photoCol = 0; rowH = 0; }
-      else photoCol = 1;
-    });
-    if (photoCol === 1) y += rowH;
-    y += 4;
+  const filename = inspectionReportDownloadName();
+  showToast('Preparing Gamesa G97 inspection report…', 'success');
+  try {
+    const res = await fetch(encodeURI(STATIC_INSPECTION_REPORT_URL));
+    if (!res.ok) throw new Error(`Report HTTP ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 2500);
+    showToast(`Report downloaded: ${filename}`, 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not download the inspection report PDF.', 'error');
   }
-
-  ensure(28);
-  y += 4;
-  doc.setFillColor(0, 49, 53);
-  doc.rect(0, y, W, 28, 'F');
-  y += 8;
-  doc.setFontSize(8);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text('PREPARED BY: REUDE CompliQ AI Inspection', 14, y); y += 6;
-  doc.text(`REPORT DATE: ${now}`, 14, y); y += 6;
-  doc.setTextColor(150, 71, 52);
-  doc.text('Indications from visual RGB review. Validate CAT 2 and above by close-up or NDT before repair.', 14, y);
-
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setTextColor(120, 140, 145);
-    doc.setFont('helvetica', 'normal');
-    doc.text('REUDE Technologies  |  CompliQ  |  AI Inspection Report', 14, 292);
-    doc.text(`Page ${i} of ${pageCount}`, W - 14, 292, { align: 'right' });
-  }
-
-  const filename = `AI_Inspection_Report_${turbine.assetId}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
-  showToast(`AI inspection report saved: ${filename}`, 'success');
 }
 
 // ══════════════════════════════════════════════════
@@ -3142,9 +2992,11 @@ function g97FileNumbers(blade, surface) {
 }
 
 function useFirstExistingImage(img, candidates, onMiss) {
+  if (!img) return;
+  const epoch = STATE.assetEpoch;
   let index = 0;
   const tryNext = () => {
-    if (!img.isConnected) return;
+    if (!img.isConnected || epoch !== STATE.assetEpoch) return;
     if (index >= candidates.length) {
       img.onerror = null;
       if (onMiss) onMiss();
@@ -3935,9 +3787,10 @@ function defectsForPocPoint(pt) {
   return BLADE_POC.annotations.filter(d => d.image === pt.annotationImage);
 }
 
-async function renderBladeAPocProfile() {
+async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
   await loadBladePocAnnotations();
   await loadBladeFindings();
+  if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch) return;
   const container = document.getElementById('blade-schematic');
   if (!container) return;
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
@@ -3985,6 +3838,7 @@ async function renderBladeAPocProfile() {
 }
 
 function bindProfileStageFit(root) {
+  disconnectProfileFit();
   const box = root.querySelector('.asset-bp-profile');
   const stage = root.querySelector('.asset-bp-stage');
   const img = stage?.querySelector('img');
@@ -3993,6 +3847,7 @@ function bindProfileStageFit(root) {
   if (!box || !stage || !img) return;
 
   const fit = () => {
+    if (STATE.activeTab !== 'asset' || !img.isConnected) return;
     if (!img.naturalWidth || !img.naturalHeight) return;
     const ar = img.naturalWidth / img.naturalHeight;
     stage.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
@@ -4020,21 +3875,30 @@ function bindProfileStageFit(root) {
     }
     if (w > bw) w = bw;
     if (h > bh) h = bh;
-    stage.style.width = w + 'px';
-    stage.style.height = h + 'px';
+    const nextW = w + 'px';
+    const nextH = h + 'px';
+    if (stage.style.width !== nextW) stage.style.width = nextW;
+    if (stage.style.height !== nextH) stage.style.height = nextH;
   };
 
-  if (img.complete && img.naturalWidth) fit();
-  else img.addEventListener('load', fit, { once: true });
+  const scheduleFit = () => {
+    if (_profileFitRaf) return;
+    _profileFitRaf = requestAnimationFrame(() => {
+      _profileFitRaf = 0;
+      fit();
+    });
+  };
+
+  if (img.complete && img.naturalWidth) scheduleFit();
+  else img.addEventListener('load', scheduleFit, { once: true });
 
   if (typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => fit());
-    ro.observe(box);
-    const view = document.getElementById('view-asset');
-    if (view) ro.observe(view);
-    if (workspace) ro.observe(workspace);
+    // Observe only the profile box — observing view/workspace while fit()
+    // mutates panel width caused resize loops that froze navigation.
+    _profileFitRO = new ResizeObserver(scheduleFit);
+    _profileFitRO.observe(box);
   } else {
-    window.addEventListener('resize', fit);
+    window.addEventListener('resize', scheduleFit);
   }
 }
 
