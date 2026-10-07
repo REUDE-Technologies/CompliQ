@@ -18,7 +18,7 @@ INPUT
 *.bat
 *.lnk
 *.docx
-*.pdf
+# Allow public/reports/*.pdf for the Gamesa inspection download
 _zeit_preview
 *.py
 requirements.txt
