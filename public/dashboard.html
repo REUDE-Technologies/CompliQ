@@ -22,7 +22,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=wtPhone">
+  <link rel="stylesheet" href="dashboard.css?v=wtBox2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -312,15 +312,15 @@
               <p class="defect-review-summary" id="defect-review-summary"></p>
               <label>Category
                 <select id="defect-review-cat" class="styled-select">
-                  <option value="1">CAT 1</option>
-                  <option value="2">CAT 2</option>
-                  <option value="3">CAT 3</option>
-                  <option value="4">CAT 4</option>
-                  <option value="5">CAT 5</option>
+                  <option value="1">CAT 1 – Cosmetic</option>
+                  <option value="2">CAT 2 – Minor</option>
+                  <option value="3">CAT 3 – Moderate</option>
+                  <option value="4">CAT 4 – Serious</option>
+                  <option value="5">CAT 5 – Critical</option>
                 </select>
               </label>
-              <label>Defect name
-                <input id="defect-review-name" class="styled-input" type="text" maxlength="120" autocomplete="off">
+              <label>Defect class
+                <select id="defect-review-name" class="styled-select"></select>
               </label>
               <div class="defect-review-actions">
                 <button type="button" class="teal-btn" id="defect-review-save">Save override</button>
@@ -444,14 +444,26 @@
                   <select id="ig-blade" class="styled-select"><option>A</option><option>B</option><option>C</option></select></div>
                 <div class="fg"><label>Defect Class</label>
                   <select id="ig-defect" class="styled-select">
-                    <option>Crack</option><option>Delamination</option><option>Erosion</option><option>Lightning</option>
+                    <option>Leading Edge Erosion</option>
+                    <option>Coating &amp; Gelcoat Damage</option>
+                    <option>Cracks</option>
+                    <option>Trailing Edge Split / Debonding</option>
+                    <option>Lightning Strike Damage</option>
+                    <option>Delamination</option>
                   </select></div>
-                <div class="fg"><label>Severity (1–5)</label><input type="number" id="ig-sev" min="1" max="5" value="3" class="styled-input"></div>
+                <div class="fg"><label>Severity</label>
+                  <select id="ig-sev" class="styled-select">
+                    <option value="1">CAT 1 – Cosmetic</option>
+                    <option value="2">CAT 2 – Minor</option>
+                    <option value="3" selected>CAT 3 – Moderate</option>
+                    <option value="4">CAT 4 – Serious</option>
+                    <option value="5">CAT 5 – Critical</option>
+                  </select></div>
                 <div class="fg"><label>Confidence (%)</label><input type="number" id="ig-conf" min="10" max="100" value="88" class="styled-input"></div>
                 <div class="fg"><label>Distance from Root (m)</label><input type="number" id="ig-dist" min="1" max="80" value="34" class="styled-input"></div>
               </div>
               <div class="fg" style="margin-top:12px"><label>Recommended Action</label>
-                <input type="text" id="ig-action" value="Schedule validation inspection within 14 days" class="styled-input"></div>
+                <input type="text" id="ig-action" value="Repair at next scheduled maintenance (within 6 months)" class="styled-input"></div>
 
               <!-- File Upload -->
               <div class="fg" style="margin-top:16px">
@@ -535,11 +547,25 @@
               <div class="form-grid-3">
                 <div class="fg"><label>Target Turbine *</label><select id="md-turbine" class="styled-select"></select></div>
                 <div class="fg"><label>Blade *</label><select id="md-blade" class="styled-select"><option>A</option><option>B</option><option>C</option></select></div>
-                <div class="fg"><label>Defect Type *</label>
-                  <select id="md-type" class="styled-select"><option>Crack</option><option>Delamination</option><option>Erosion</option><option>Lightning</option><option>Vortex Generator Damage</option><option>Paint Peeling</option></select></div>
+                <div class="fg"><label>Defect Class *</label>
+                  <select id="md-type" class="styled-select">
+                    <option>Leading Edge Erosion</option>
+                    <option>Coating &amp; Gelcoat Damage</option>
+                    <option>Cracks</option>
+                    <option>Trailing Edge Split / Debonding</option>
+                    <option>Lightning Strike Damage</option>
+                    <option>Delamination</option>
+                  </select></div>
                 <div class="fg"><label>Defect ID</label><input type="text" id="md-id" placeholder="Auto-generated" class="styled-input"></div>
                 <div class="fg"><label>Distance from Root (m) *</label><input type="number" id="md-dist" min="0" max="100" value="35" class="styled-input" required></div>
-                <div class="fg"><label>Severity (1–5) *</label><input type="number" id="md-sev" min="1" max="5" value="3" class="styled-input" required></div>
+                <div class="fg"><label>Severity *</label>
+                  <select id="md-sev" class="styled-select" required>
+                    <option value="1">CAT 1 – Cosmetic</option>
+                    <option value="2">CAT 2 – Minor</option>
+                    <option value="3" selected>CAT 3 – Moderate</option>
+                    <option value="4">CAT 4 – Serious</option>
+                    <option value="5">CAT 5 – Critical</option>
+                  </select></div>
                 <div class="fg"><label>Detection Confidence (%)</label><input type="number" id="md-conf" min="0" max="100" value="85" class="styled-input"></div>
                 <div class="fg"><label>Detection Method</label>
                   <select id="md-method" class="styled-select"><option>Drone RGB</option><option>Thermal Imaging</option><option>Acoustic NDT</option><option>Visual (Manual)</option><option>Ultrasonic</option></select></div>
@@ -549,7 +575,7 @@
                 <div class="fg"><label>Inspection Date</label><input type="date" id="md-date" class="styled-input"></div>
               </div>
               <div class="fg" style="margin-top:12px"><label>Engineering Recommended Action *</label>
-                <input type="text" id="md-action" class="styled-input" value="Schedule validation and remediation" required></div>
+                <input type="text" id="md-action" class="styled-input" value="Repair at next scheduled maintenance (within 6 months)" required></div>
               <div class="fg" style="margin-top:12px"><label>Detailed Observations</label>
                 <textarea id="md-notes" rows="3" class="styled-input" placeholder="Describe the defect in detail: depth, extent, propagation risk, material analysis..."></textarea></div>
               <div class="form-actions" style="margin-top:20px">
@@ -691,6 +717,6 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=wtLabel"></script>
+<script src="dashboard.js?v=wtBlade"></script>
 </body>
 </html>
