@@ -243,6 +243,7 @@ function disconnectProfileFit() {
 function teardownAssetHeavyWork() {
   bumpAssetEpoch();
   disconnectProfileFit();
+  stopTurbine3D();
   ['overview-photo', 'asset-poc-annotated'].forEach(id => {
     const img = document.getElementById(id);
     if (!img) return;
@@ -821,14 +822,484 @@ function bladeDutyDots(blade, rot) {
   });
 }
 
+let TURBINE_3D = null;
+
+function stopTurbine3D() {
+  if (!TURBINE_3D) return;
+  cancelAnimationFrame(TURBINE_3D.frame);
+  try { TURBINE_3D.ro?.disconnect(); } catch (_) {}
+  try { TURBINE_3D.renderer?.dispose(); } catch (_) {}
+  TURBINE_3D = null;
+}
+
+async function mountTurbine3D(host, turbine, onPick) {
+  if (!host) return;
+  stopTurbine3D();
+  const epoch = STATE.assetEpoch;
+  let THREE;
+  let GLTFLoader;
+  try {
+    THREE = await import('three');
+    ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+  } catch (err) {
+    console.warn('3D rotor unavailable', err);
+    host.textContent = '3D view unavailable';
+    return;
+  }
+  if (!host.isConnected || epoch !== STATE.assetEpoch || STATE.activeTab !== 'asset') return;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.replaceChildren(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 1.45);
+  key.position.set(6, 10, 8);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xd7e8ee, 0.5);
+  fill.position.set(-6, 3, -4);
+  scene.add(fill);
+
+  const pivot = new THREE.Group();
+  scene.add(pivot);
+  const pickables = [];
+  const bladeLabels = [];
+  const tagMesh = (mesh, part, label) => {
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(m => m.clone())
+      : mesh.material.clone();
+    mesh.userData.part = part;
+    mesh.userData.label = label;
+    pickables.push(mesh);
+  };
+  const splitBlades = (source) => {
+    const geo = source.geometry;
+    const pos = geo.attributes.position;
+    const norm = geo.attributes.normal;
+    const index = geo.index;
+    const groups = [0, 1, 2].map(() => ({ pos: [], norm: [] }));
+    let maxR = 0;
+    for (let i = 0; i < pos.count; i++) {
+      maxR = Math.max(maxR, Math.hypot(pos.getX(i), pos.getY(i)));
+    }
+    const samples = [];
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      if (Math.hypot(x, y) < maxR * 0.5) continue;
+      let ang = Math.atan2(x, y);
+      if (ang < 0) ang += Math.PI * 2;
+      samples.push(ang);
+    }
+    samples.sort((a, b) => a - b);
+    const axes = [];
+    if (samples.length > 12) {
+      const gaps = samples.map((ang, i) => {
+        const nxt = samples[(i + 1) % samples.length];
+        let gap = nxt - ang;
+        if (i + 1 === samples.length) gap = samples[0] + Math.PI * 2 - ang;
+        return { i, gap };
+      }).sort((a, b) => b.gap - a.gap).slice(0, 3).sort((a, b) => a.i - b.i);
+      gaps.forEach((cut, c) => {
+        const end = gaps[(c + 1) % gaps.length].i;
+        const cluster = [];
+        for (let i = cut.i + 1; ; i++) {
+          const k = i % samples.length;
+          cluster.push(samples[k]);
+          if (k === end) break;
+          if (cluster.length > samples.length) break;
+        }
+        let sx = 0;
+        let sy = 0;
+        cluster.forEach(ang => { sx += Math.sin(ang); sy += Math.cos(ang); });
+        let mean = Math.atan2(sx, sy);
+        if (mean < 0) mean += Math.PI * 2;
+        axes.push(mean);
+      });
+    }
+    while (axes.length < 3) axes.push((axes.length * Math.PI * 2) / 3);
+    const nearest = (ang) => {
+      let best = 0;
+      let gap = Infinity;
+      axes.forEach((axis, i) => {
+        let d = Math.abs(ang - axis);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        if (d < gap) { gap = d; best = i; }
+      });
+      return best;
+    };
+    const pushTri = (ia, ib, ic) => {
+      const cx = (pos.getX(ia) + pos.getX(ib) + pos.getX(ic)) / 3;
+      const cy = (pos.getY(ia) + pos.getY(ib) + pos.getY(ic)) / 3;
+      let ang = Math.atan2(cx, cy);
+      if (ang < 0) ang += Math.PI * 2;
+      const bucket = nearest(ang);
+      [ia, ib, ic].forEach(i => {
+        groups[bucket].pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+        if (norm) groups[bucket].norm.push(norm.getX(i), norm.getY(i), norm.getZ(i));
+      });
+    };
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) pushTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    } else {
+      for (let i = 0; i < pos.count; i += 3) pushTri(i, i + 1, i + 2);
+    }
+    return groups.filter(g => g.pos.length >= 3).map(g => {
+      const ggeo = new THREE.BufferGeometry();
+      ggeo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3));
+      if (g.norm.length) ggeo.setAttribute('normal', new THREE.Float32BufferAttribute(g.norm, 3));
+      else ggeo.computeVertexNormals();
+      const mesh = new THREE.Mesh(ggeo, source.material.clone());
+      mesh.position.copy(source.position);
+      mesh.quaternion.copy(source.quaternion);
+      mesh.scale.copy(source.scale);
+      source.parent.add(mesh);
+      return mesh;
+    });
+  };
+
+  try {
+    const gltf = await new GLTFLoader().loadAsync('models/wind-turbine.glb');
+    if (!host.isConnected || epoch !== STATE.assetEpoch) return;
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.sub(center);
+    pivot.add(model);
+    model.updateMatrixWorld(true);
+
+    const named = {};
+    model.traverse(obj => { if (obj.isMesh && obj.name) named[obj.name] = obj; });
+    const white = named['rotorwhite'] || named['rotor/white'];
+    const red = named['rotorred'] || named['rotor/red'];
+    const hub = named['rotorcharcoal'] || named['rotor/charcoal'];
+    if (white) {
+      const whiteSize = new THREE.Box3().setFromObject(white).getSize(new THREE.Vector3());
+      const whiteMax = Math.max(whiteSize.x, whiteSize.y, whiteSize.z) || 1;
+      const blades = splitBlades(white);
+      white.visible = false;
+      blades.forEach(mesh => {
+        const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+        mesh.userData.wy = c.y;
+        mesh.userData.ang = Math.atan2(c.x, c.z);
+      });
+      blades.sort((a, b) => a.userData.wy - b.userData.wy);
+      const down = blades[0];
+      const rest = blades.slice(1).sort((a, b) => a.userData.ang - b.userData.ang);
+      [['A', down], ['B', rest[0]], ['C', rest[1]]].forEach(([letter, mesh]) => {
+        if (!mesh) return;
+        tagMesh(mesh, 'blade-' + letter, 'Blade ' + letter);
+        const pos = mesh.geometry.attributes.position;
+        let best = 0;
+        let bestR = -1;
+        for (let i = 0; i < pos.count; i++) {
+          const r = pos.getX(i) * pos.getX(i) + pos.getY(i) * pos.getY(i);
+          if (r > bestR) { bestR = r; best = i; }
+        }
+        const localTip = new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best));
+        localTip.multiplyScalar(1.06);
+        const el = document.createElement('div');
+        el.className = 'blade-tip-label';
+        el.textContent = letter;
+        host.appendChild(el);
+        bladeLabels.push({ mesh, localTip, el });
+      });
+      if (red) {
+        const redSize = new THREE.Box3().setFromObject(red).getSize(new THREE.Vector3());
+        const redMax = Math.max(redSize.x, redSize.y, redSize.z);
+        if (redMax > whiteMax * 0.35) {
+          const marks = splitBlades(red);
+          red.visible = false;
+          marks.forEach(mark => {
+            const c = new THREE.Box3().setFromObject(mark).getCenter(new THREE.Vector3());
+            let best = null;
+            let gap = Infinity;
+            blades.forEach(blade => {
+              const bc = new THREE.Box3().setFromObject(blade).getCenter(new THREE.Vector3());
+              const dist = c.distanceTo(bc);
+              if (dist < gap) { gap = dist; best = blade; }
+            });
+            if (best) tagMesh(mark, best.userData.part, best.userData.label);
+          });
+        } else {
+          tagMesh(red, 'hub', 'Hub');
+        }
+      }
+    }
+    if (hub) tagMesh(hub, 'hub', 'Hub');
+    const towerBits = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
+      .map(name => named[name]).filter(Boolean);
+    towerBits.forEach(mesh => {
+      const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+      mesh.userData.wy = c.y;
+    });
+    towerBits.sort((a, b) => a.userData.wy - b.userData.wy);
+    towerBits.forEach((mesh, i) => {
+      tagMesh(mesh, i === 0 ? 'foundation' : 'tower', i === 0 ? 'Foundation' : 'Tower');
+    });
+    if (named['farm-scale-wind-turbine_4']) tagMesh(named['farm-scale-wind-turbine_4'], 'nacelle', 'Nacelle');
+    if (named['farm-scale-wind-turbine_5']) tagMesh(named['farm-scale-wind-turbine_5'], 'anemometer', 'Anemometer / Sensors');
+    const addHotspot = (mesh) => {
+      if (!mesh || !mesh.parent) return;
+      const box = new THREE.Box3().setFromObject(mesh);
+      const center = box.getCenter(new THREE.Vector3());
+      const dims = box.getSize(new THREE.Vector3());
+      const worldRadius = Math.max(dims.x, dims.y, dims.z, 0.2) * 0.9;
+      const parentScale = new THREE.Vector3();
+      mesh.parent.getWorldScale(parentScale);
+      const localRadius = worldRadius / Math.max(parentScale.x, parentScale.y, parentScale.z, 0.001);
+      mesh.parent.worldToLocal(center);
+      const spot = new THREE.Mesh(
+        new THREE.SphereGeometry(localRadius, 10, 8),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false })
+      );
+      spot.position.copy(center);
+      spot.userData.hotspot = true;
+      mesh.parent.add(spot);
+      tagMesh(spot, mesh.userData.part, mesh.userData.label);
+    };
+    if (hub) addHotspot(hub);
+    if (named['farm-scale-wind-turbine_4']) addHotspot(named['farm-scale-wind-turbine_4']);
+    if (named['farm-scale-wind-turbine_5']) addHotspot(named['farm-scale-wind-turbine_5']);
+
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const fov = camera.fov * Math.PI / 180;
+    const dist = (maxDim * 0.55) / Math.tan(fov / 2);
+    camera.position.set(dist * 0.42, dist * 0.06, dist);
+    camera.near = Math.max(0.01, dist / 80);
+    camera.far = dist * 12;
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.userData.base = camera.position.clone();
+    camera.userData.zoom = 0.9;
+  } catch (err) {
+    console.warn('Wind turbine model failed to load', err);
+    host.textContent = '3D model failed to load';
+    return;
+  }
+
+  const START_ZOOM = 0.9;
+  const panOffset = new THREE.Vector3();
+  const panRight = new THREE.Vector3();
+  const panUp = new THREE.Vector3();
+  const applyZoom = () => {
+    const z = camera.userData.zoom;
+    camera.position.copy(camera.userData.base).multiplyScalar(z).add(panOffset);
+    camera.lookAt(panOffset);
+  };
+  const nudgeZoom = (factor) => {
+    camera.userData.zoom = Math.min(1.7, Math.max(0.62, camera.userData.zoom * factor));
+    applyZoom();
+  };
+  const resetView = () => {
+    panOffset.set(0, 0, 0);
+    pivot.rotation.set(0, 0, 0);
+    camera.userData.zoom = START_ZOOM;
+    applyZoom();
+  };
+  applyZoom();
+  const zoomBar = document.createElement('div');
+  zoomBar.className = 'turbine-3d-zoom';
+  zoomBar.innerHTML = '<button type="button" data-z="in" title="Zoom in">+</button><button type="button" data-z="out" title="Zoom out">−</button><button type="button" data-z="reset" title="Reset view">↺</button>';
+  host.appendChild(zoomBar);
+  zoomBar.addEventListener('pointerdown', event => event.stopPropagation());
+  zoomBar.addEventListener('click', event => {
+    const btn = event.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.z === 'reset') resetView();
+    else nudgeZoom(btn.dataset.z === 'in' ? 0.86 : 1.16);
+  });
+
+  const fit = () => {
+    const w = Math.max(40, host.clientWidth);
+    const h = Math.max(40, host.clientHeight);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  };
+  fit();
+  const ro = new ResizeObserver(fit);
+  ro.observe(host);
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let dragging = false;
+  let dragMode = 'rotate';
+  let usedTwo = false;
+  let moved = 0;
+  let lx = 0;
+  let ly = 0;
+  let hovered = null;
+  const hoverTip = document.createElement('div');
+  hoverTip.className = 'turbine-hover-label';
+  hoverTip.hidden = true;
+  host.appendChild(hoverTip);
+  const paintHover = (mesh, clientX, clientY) => {
+    if (hovered !== mesh) {
+      if (hovered?.material?.emissive) hovered.material.emissive.setHex(0x000000);
+      hovered = mesh;
+      if (mesh?.material?.emissive) mesh.material.emissive.setHex(0x8fd3d8);
+      host.title = mesh?.userData?.label || 'Left drag turns, both buttons pan';
+    }
+    const label = mesh?.userData?.label;
+    if (!label || dragging || clientX == null) {
+      hoverTip.hidden = true;
+      return;
+    }
+    hoverTip.hidden = false;
+    hoverTip.textContent = label;
+    const rect = host.getBoundingClientRect();
+    let x = clientX - rect.left + 16;
+    let y = clientY - rect.top + 18;
+    const tipW = hoverTip.offsetWidth || 64;
+    const tipH = hoverTip.offsetHeight || 18;
+    if (x + tipW > rect.width - 6) x = clientX - rect.left - tipW - 12;
+    if (y + tipH > rect.height - 6) y = clientY - rect.top - tipH - 8;
+    if (x < 4) x = 4;
+    if (y < 4) y = 4;
+    hoverTip.style.transform = `translate(${x}px, ${y}px)`;
+  };
+  const pickObject = (clientX, clientY) => {
+    const rect = host.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    pivot.updateMatrixWorld(true);
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(pickables, false);
+    if (!hits.length) return null;
+    const slack = (camera.userData.base?.length() || 8) * 0.04;
+    const spot = hits.find(hit => hit.object.userData.hotspot);
+    const solid = hits.find(hit => !hit.object.userData.hotspot);
+    if (spot && (!solid || spot.distance <= solid.distance + slack)) return spot.object;
+    return (solid || spot).object;
+  };
+  const markDrag = () => {
+    host.classList.toggle('is-rotating', dragging && dragMode === 'rotate');
+    host.classList.toggle('is-panning', dragging && dragMode === 'pan');
+  };
+  const panBy = (dx, dy) => {
+    camera.updateMatrixWorld();
+    panRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    panUp.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const dist = Math.max(0.2, camera.position.distanceTo(panOffset));
+    const worldPerPx = (2 * Math.tan((camera.fov * Math.PI / 180) / 2) * dist) / Math.max(1, host.clientHeight);
+    panOffset.addScaledVector(panRight, -dx * worldPerPx);
+    panOffset.addScaledVector(panUp, dy * worldPerPx);
+    const limit = (camera.userData.base?.length() || 10) * 0.55;
+    if (panOffset.length() > limit) panOffset.setLength(limit);
+    applyZoom();
+  };
+  host.addEventListener('contextmenu', event => event.preventDefault());
+  host.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.turbine-3d-zoom') || event.target.closest('.blade-tip-label')) return;
+    if (event.button !== 0 && event.button !== 2) return;
+    const both = (event.buttons & 3) === 3;
+    if (event.button === 2 && !both) return;
+    if (!dragging) moved = 0;
+    dragging = true;
+    if (both) usedTwo = true;
+    dragMode = both ? 'pan' : 'rotate';
+    lx = event.clientX;
+    ly = event.clientY;
+    markDrag();
+    try { host.setPointerCapture(event.pointerId); } catch (_) {}
+  });
+  host.addEventListener('pointermove', (event) => {
+    paintHover(pickObject(event.clientX, event.clientY), event.clientX, event.clientY);
+    if (!dragging) return;
+    const both = (event.buttons & 3) === 3;
+    if (both) {
+      dragMode = 'pan';
+      usedTwo = true;
+    } else if ((event.buttons & 1) === 1) {
+      dragMode = 'rotate';
+    }
+    markDrag();
+    const dx = event.clientX - lx;
+    const dy = event.clientY - ly;
+    moved += Math.abs(dx) + Math.abs(dy);
+    lx = event.clientX;
+    ly = event.clientY;
+    if (dragMode === 'pan') panBy(dx, dy);
+    else pivot.rotation.y += dx * 0.01;
+  });
+  const choosePart = (part) => {
+    if (!part) return;
+    stopTurbine3D();
+    if (part.startsWith('blade-')) {
+      onPick(part.replace('blade-', ''));
+      return;
+    }
+    STATE.selectedPart = part;
+    const sel = document.getElementById('part-selector');
+    if (sel) sel.value = part;
+    const epochNow = bumpAssetEpoch();
+    renderPartSchematic(turbine, part, epochNow);
+    renderDefectsTable(turbine);
+  };
+  const endDrag = (event) => {
+    if (!dragging) return;
+    if (event.buttons) {
+      dragMode = (event.buttons & 3) === 3 ? 'pan' : 'rotate';
+      markDrag();
+      return;
+    }
+    dragging = false;
+    markDrag();
+    try { if (event.pointerId != null) host.releasePointerCapture(event.pointerId); } catch (_) {}
+    const pick = !usedTwo && moved <= 6;
+    usedTwo = false;
+    moved = 0;
+    if (!pick) return;
+    const hit = pickObject(event.clientX, event.clientY);
+    if (hit?.userData?.part) choosePart(hit.userData.part);
+  };
+  host.addEventListener('pointerup', endDrag);
+  host.addEventListener('pointerleave', () => paintHover(null));
+  host.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    nudgeZoom(event.deltaY > 0 ? 1.08 : 0.92);
+  }, { passive: false });
+
+  const tipWorld = new THREE.Vector3();
+  const spin = { frame: 0 };
+  const loop = () => {
+    if (TURBINE_3D !== spin || epoch !== STATE.assetEpoch) return;
+    pivot.updateMatrixWorld(true);
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    bladeLabels.forEach(({ mesh, localTip, el }) => {
+      tipWorld.copy(localTip);
+      mesh.localToWorld(tipWorld);
+      tipWorld.project(camera);
+      const onScreen = tipWorld.z < 1;
+      el.hidden = !onScreen;
+      if (!onScreen) return;
+      const x = (tipWorld.x * 0.5 + 0.5) * w;
+      const y = (-tipWorld.y * 0.5 + 0.5) * h;
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    });
+    renderer.render(scene, camera);
+    spin.frame = requestAnimationFrame(loop);
+  };
+  TURBINE_3D = spin;
+  TURBINE_3D.renderer = renderer;
+  TURBINE_3D.ro = ro;
+  TURBINE_3D.frame = requestAnimationFrame(loop);
+}
+
 function renderFullTurbineOverview(container, turbine) {
   if (!container) return;
-  const hub = { x: 180, y: 168 };
-  const bladePath = 'M180 168 C168 116 158 68 180 18 C202 68 192 116 180 168 Z';
+  stopTurbine3D();
   const blades = [
-    { id: 'A', rot: 180, lx: 180, ly: 328 },
-    { id: 'B', rot: 300, lx: 38, ly: 78 },
-    { id: 'C', rot: 60, lx: 322, ly: 78 }
+    { id: 'A' },
+    { id: 'B' },
+    { id: 'C' }
   ];
   ensureOverviewAnomaly();
   container.innerHTML = `
@@ -836,24 +1307,7 @@ function renderFullTurbineOverview(container, turbine) {
       <div class="overview-main-grid">
         <div class="overview-left-col">
           <div class="turbine-single-card">
-            <svg class="turbine-svg turbine-svg-single" viewBox="0 0 360 400" role="img" aria-label="Rotor with blade condition">
-              <line x1="180" y1="180" x2="180" y2="372" stroke="#5a7882" stroke-width="10" stroke-linecap="round"/>
-              <path d="M148 158 h64 l-10 26 h-44 z" fill="#123038" stroke="#0FA4AF" stroke-width="1.4"/>
-              ${blades.map(b => {
-                const duty = bladeDuty(b.id);
-                const dots = bladeDutyDots(b.id, b.rot);
-                return `
-                <g class="turbine-blade-hit" data-blade="${b.id}" tabindex="0" role="button" aria-label="Blade ${b.id} ${DUTY_LABEL[duty]}">
-                  <g transform="rotate(${b.rot} ${hub.x} ${hub.y})">
-                    <path class="blade-fill" d="${bladePath}" fill="#d7e8ec" stroke="${DUTY_COLOR[duty]}" stroke-width="3"/>
-                  </g>
-                  ${dots.map(dot => `<circle class="blade-duty-dot" data-id="${escHtml(dot.id)}" cx="${dot.x}" cy="${dot.y}" r="5.5" fill="${DUTY_COLOR[dot.duty]}" stroke="#fff" stroke-width="1.4"/>`).join('')}
-                  <circle cx="${b.lx}" cy="${b.ly + 6}" r="13" fill="${DUTY_COLOR[duty]}"/>
-                  <text class="turbine-blade-label" x="${b.lx}" y="${b.ly + 11}" text-anchor="middle">${b.id}</text>
-                </g>`;
-              }).join('')}
-              <circle cx="${hub.x}" cy="${hub.y}" r="14" fill="#0e2430" stroke="#d7eef2" stroke-width="3" pointer-events="none"/>
-            </svg>
+            <div class="turbine-3d-host" id="turbine-3d" role="img" aria-label="3D turbine. Left drag turns it sideways, both mouse buttons pan, scroll to zoom."></div>
           </div>
           <form class="anomaly-details" id="overview-anomaly-form">
             <h4>Anomaly details</h4>
@@ -903,19 +1357,6 @@ function renderFullTurbineOverview(container, turbine) {
       </div>
     </div>`;
   const open = (letter) => selectOverviewBlade(letter);
-  container.querySelectorAll('.turbine-blade-hit').forEach(node => {
-    node.addEventListener('click', event => {
-      const dot = event.target.closest('.blade-duty-dot');
-      if (dot) {
-        event.stopPropagation();
-        STATE.overviewAnomalyId = dot.dataset.id;
-        renderDefectsTable(turbine);
-        paintOverviewDetail(turbine);
-        return;
-      }
-      open(node.dataset.blade);
-    });
-  });
   container.querySelectorAll('.blade-status-card').forEach(card => {
     card.addEventListener('click', () => {
       const top = overviewAnomalyRows().find(row => row.blade === card.dataset.blade);
@@ -928,6 +1369,7 @@ function renderFullTurbineOverview(container, turbine) {
   bindOverviewEditors(turbine);
   paintOverviewDetail(turbine);
   parkCompareView();
+  mountTurbine3D(document.getElementById('turbine-3d'), turbine, open);
 }
 
 function overviewDraftBox() {
@@ -1549,23 +1991,6 @@ function renderReport() {
       </div>`;
   }
   syncReportPicker();
-
-  const btn = document.getElementById('dispatch-btn');
-  if (btn) {
-    if (d.status === 'Dispatched') {
-      btn.disabled = true;
-      btn.textContent = 'Dispatch approved';
-      btn.style.opacity = '0.6';
-    } else if (d.status === 'Resolved') {
-      btn.disabled = true;
-      btn.textContent = 'Resolved';
-      btn.style.opacity = '0.6';
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Approve dispatch';
-      btn.style.opacity = '1';
-    }
-  }
 }
 
 function zoomIn() {
@@ -1585,17 +2010,6 @@ function applyZoom() {
   if (!img) return;
   img.style.transform = `scale(${STATE.zoomLevel})`;
   img.style.transformOrigin = 'center center';
-}
-
-// Approve dispatch
-function approveDispatch() {
-  if (STATE.activeDefect) {
-    STATE.activeDefect.status = 'Dispatched';
-    saveDB(STATE.db);
-    showToast(`Dispatch order approved for ${STATE.activeDefect.id}`, 'success');
-    renderReport();
-    addNotification(`Dispatch approved: ${STATE.activeDefect.id}`, 'info');
-  }
 }
 
 function isG97Turbine(turbine) {
