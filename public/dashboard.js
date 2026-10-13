@@ -1335,7 +1335,7 @@ function renderFullTurbineOverview(container, turbine) {
             ${blades.map(b => {
               const duty = bladeDuty(b.id);
               const count = bladeSummaryRows(b.id).length;
-              return `<button type="button" class="blade-status-card" data-blade="${b.id}">
+              return `<button type="button" class="blade-status-card" data-blade="${b.id}" data-duty="${duty}">
                 <span class="blade-status-swatch" style="background:${DUTY_COLOR[duty]}"></span>
                 <strong>Blade ${b.id}</strong>
                 <em>${DUTY_LABEL[duty]}</em>
@@ -1347,6 +1347,7 @@ function renderFullTurbineOverview(container, turbine) {
             <div class="anomaly-photo-frame" id="overview-photo-frame">
               <img id="overview-photo" alt="" draggable="false">
               <svg id="overview-box-svg" class="overview-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+              <div id="overview-box-label" class="overview-box-label" hidden></div>
             </div>
           </div>
         </div>
@@ -1381,6 +1382,11 @@ function paintOverviewBox(box) {
   if (!svg) return;
   if (!box || box.length < 4) {
     svg.innerHTML = '';
+    const tag = document.getElementById('overview-box-label');
+    if (tag) {
+      tag.hidden = true;
+      tag.textContent = '';
+    }
     return;
   }
   const theme = SEVERITY_UI[currentOverviewSeverity()];
@@ -1394,6 +1400,35 @@ function paintOverviewBox(box) {
     <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
     <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
     <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>`;
+  placeOverviewBoxLabel(x, y, w, theme);
+}
+
+function overviewBoxLabel() {
+  const id = (document.getElementById('overview-anomaly-id')?.value || '').trim();
+  const type = (document.getElementById('overview-anomaly-type')?.value || '').trim();
+  if (id && type) return `${id} · ${type}`;
+  return id || type || '';
+}
+
+function placeOverviewBoxLabel(x, y, w, theme) {
+  const tag = document.getElementById('overview-box-label');
+  if (!tag) return;
+  const label = overviewBoxLabel();
+  if (!label) {
+    tag.hidden = true;
+    tag.textContent = '';
+    return;
+  }
+  const nearTop = y < 12;
+  tag.hidden = false;
+  tag.textContent = label;
+  tag.title = label;
+  tag.style.left = `${x + w}%`;
+  tag.style.top = `${y}%`;
+  tag.style.transform = nearTop ? 'translate(-100%, 6px)' : 'translate(-100%, calc(-100% - 4px))';
+  tag.style.color = theme.text;
+  tag.style.background = theme.bg;
+  tag.style.borderColor = theme.border;
 }
 
 function normFromPointer(event, svg) {
@@ -1441,6 +1476,16 @@ function bindOverviewEditors(turbine) {
       paintBladeComparison(turbine, ensureOverviewAnomaly());
     });
   }
+  ['overview-anomaly-id', 'overview-anomaly-type'].forEach(id => {
+    const field = document.getElementById(id);
+    if (!field || field.dataset.labelBound) return;
+    field.dataset.labelBound = '1';
+    field.addEventListener('input', () => {
+      const row = ensureOverviewAnomaly();
+      const box = overviewDraftBox() || (row ? (anomalyBoxes()[row.id]?.box || null) : null);
+      if (box) paintOverviewBox(box);
+    });
+  });
   document.getElementById('overview-save')?.addEventListener('click', () => saveOverviewAnomaly(turbine));
   document.getElementById('overview-new')?.addEventListener('click', () => createOverviewAnomaly(turbine));
   const severitySel = document.getElementById('overview-anomaly-severity');
@@ -1571,9 +1616,11 @@ function saveOverviewAnomaly(turbine) {
   const type = (document.getElementById('overview-anomaly-type')?.value || '').trim();
   const anomalyId = (document.getElementById('overview-anomaly-id')?.value || '').trim() || anomalyLabel(row);
   const box = overviewDraftBox() || prev.box || null;
+  const label = overviewBoxLabel();
   map[row.id] = {
     anomalyId,
     type,
+    label,
     blade: row.blade,
     surface: row.surface,
     index: row.index,
