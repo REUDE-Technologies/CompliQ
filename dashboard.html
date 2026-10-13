@@ -14,7 +14,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Chart.js for interactive charts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="dashboard.css?v=actTop">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+  <link rel="stylesheet" href="dashboard.css?v=wtTurn">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -418,9 +426,6 @@
           <div class="panel-body" id="report-decision-body">
             <!-- Populated by JS -->
           </div>
-          <div class="panel-footer">
-            <button class="orange-btn" id="dispatch-btn" onclick="approveDispatch()">Approve Dispatch Order</button>
-          </div>
         </div>
       </div>
     </section>
@@ -686,6 +691,6 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=repPdf1"></script>
+<script src="dashboard.js?v=wtTurn"></script>
 </body>
 </html>

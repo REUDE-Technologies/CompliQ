@@ -607,6 +607,7 @@ body {
 /* VIEWS */
 .view { display: none; padding: 24px 28px; flex-direction: column; gap: 20px; min-height: 0; }
 .view.active { display: flex; flex: 1; min-height: 0; animation: fade-in 0.35s ease; }
+.main-area > .view:not(.active) { display: none !important; }
 #view-asset.view.active {
   flex: 1;
   overflow: hidden;
@@ -1692,7 +1693,7 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   padding: 4px 10px 52px;
   gap: 4px;
 }
-#view-asset.poc-layout {
+#view-asset.view.active.poc-layout {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2497,16 +2498,93 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   width: 100%;
   max-width: none;
   margin: 0;
-  background: #07141a;
+  background: #ffffff;
   border: 1px solid rgba(15, 164, 175, 0.35);
   border-radius: 14px;
   padding: 4px 6px 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
+  min-height: 220px;
+  height: 240px;
   flex: 0 0 auto;
   box-sizing: border-box;
+  overflow: hidden;
+}
+.turbine-3d-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 210px;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M4 1.5 L4 16.2 L7.5 12.6 L11.4 18.2 L13.5 17 L9.6 11.4 L15.4 11.2 Z' fill='%23000'/%3E%3C/svg%3E") 4 2, auto;
+}
+.turbine-3d-host.is-rotating,
+.turbine-3d-host.is-rotating canvas {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M2 11 L7 7 L7 9.5 L15 9.5 L15 7 L20 11 L15 15 L15 12.5 L7 12.5 L7 15 Z' fill='%23000'/%3E%3C/svg%3E") 11 11, ew-resize;
+}
+.turbine-3d-host.is-panning,
+.turbine-3d-host.is-panning canvas {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Cpath d='M11 1 L13 5 L11 5 L11 9 L17 7 L17 9 L11 11 L11 17 L13 17 L11 21 L9 17 L11 17 L11 11 L5 13 L5 11 L11 9 L11 5 L9 5 Z' fill='%23000'/%3E%3C/svg%3E") 11 11, move;
+}
+.turbine-3d-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: inherit;
+}
+.turbine-hover-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  pointer-events: none;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.blade-tip-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+.turbine-single-card { position: relative; }
+.turbine-3d-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+.turbine-3d-zoom button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(6, 50, 53, 0.16);
+  background: #fff;
+  color: #0A7A84;
+  font-weight: 800;
+  cursor: pointer;
 }
 .turbine-svg {
   width: auto;
