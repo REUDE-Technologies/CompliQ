@@ -637,13 +637,59 @@ const DUTY_LABEL = { healthy: 'Healthy', cleaning: 'Cleaning needed', repair: 'R
 const SIDE_NAME = { SS: 'Suction side', LE: 'Leading edge', PS: 'Pressure side', TE: 'Trailing edge' };
 const ANOMALY_BOX_KEY = 'compliq_anomaly_boxes';
 /* DNV five-category severity theme for anomaly details + drawn box */
+const DEFECT_CLASSES = [
+  { name: 'Leading Edge Erosion', cats: 'CAT 1 – 4', detail: 'Pitting, coating loss or laminate exposure along the leading edge', match: /leading edge erosion|le erosion|\blep\b|coating loss/i },
+  { name: 'Coating & Gelcoat Damage', cats: 'CAT 1 – 3', detail: 'Chipping, peeling, flaking or pinholes in the surface coating', match: /gelcoat|pinhole|peel|flak|chip|grease|oil|dirt|paint|stain|coating/i },
+  { name: 'Cracks', cats: 'CAT 2 – 5', detail: 'Surface or laminate cracks, longitudinal or transverse, on any face', match: /crack|fracture|line mark/i },
+  { name: 'Trailing Edge Split / Debonding', cats: 'CAT 3 – 5', detail: 'Opening or separation along the trailing edge bond line', match: /trailing edge|te split|debond/i },
+  { name: 'Lightning Strike Damage', cats: 'CAT 2 – 5', detail: 'Burn marks, scorching, punctures or damaged receptors, usually near the tip', match: /lightning|scorch|receptor/i },
+  { name: 'Delamination', cats: 'CAT 3 – 5', detail: 'Raised, bubbled or separated laminate layers', match: /delaminat/i }
+];
+
 const SEVERITY_UI = {
-  1: { label: 'CAT 1 — Cosmetic', bg: '#DBEAFE', text: '#1D4ED8', border: '#93C5FD', stroke: '#2563EB', fill: 'rgba(37,99,235,0.18)' },
-  2: { label: 'CAT 2 — Minor', bg: '#DCFCE7', text: '#15803D', border: '#86EFAC', stroke: '#16A34A', fill: 'rgba(22,163,74,0.18)' },
-  3: { label: 'CAT 3 — Moderate', bg: '#FEF3C7', text: '#A16207', border: '#FCD34D', stroke: '#D97706', fill: 'rgba(217,119,6,0.20)' },
-  4: { label: 'CAT 4 — Serious', bg: '#FFEDD5', text: '#C2410C', border: '#FDBA74', stroke: '#EA580C', fill: 'rgba(234,88,12,0.20)' },
-  5: { label: 'CAT 5 — Critical', bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5', stroke: '#DC2626', fill: 'rgba(220,38,38,0.20)' }
+  1: { label: 'CAT 1 – Cosmetic', name: 'Cosmetic', action: 'No action; record for next inspection', condition: 'Surface marks with no effect on blade integrity or performance', bg: '#E5F3D6', text: '#3E6B32', border: '#A8D08A', stroke: '#6AA84F', fill: 'rgba(106,168,79,0.18)' },
+  2: { label: 'CAT 2 – Minor', name: 'Minor', action: 'Monitor; repair at convenience', condition: 'Minor coating damage or early erosion; no structural impact', bg: '#C8E6C9', text: '#1B5E20', border: '#81C784', stroke: '#2E7D32', fill: 'rgba(46,125,50,0.18)' },
+  3: { label: 'CAT 3 – Moderate', name: 'Moderate', action: 'Repair at next scheduled maintenance (within 6 months)', condition: 'Damage reaching the laminate surface; will progress if untreated', bg: '#FFF3C4', text: '#8A6D00', border: '#F5D76E', stroke: '#D4A017', fill: 'rgba(212,160,23,0.22)' },
+  4: { label: 'CAT 4 – Serious', name: 'Serious', action: 'Repair within 1–3 months; increased monitoring', condition: 'Structural laminate damage; progression risk to blade integrity', bg: '#FFE0C2', text: '#C2410C', border: '#F5B183', stroke: '#E07A2F', fill: 'rgba(224,122,47,0.22)' },
+  5: { label: 'CAT 5 – Critical', name: 'Critical', action: 'Stop turbine; immediate repair. Client notified within 24 hours', condition: 'Structural failure risk; major cracks, TE split or severe lightning damage', bg: '#F8D0D0', text: '#B71C1C', border: '#E8A0A0', stroke: '#D32F2F', fill: 'rgba(211,47,47,0.22)' }
 };
+
+function matchDefectClass(text) {
+  const source = `${text || ''}`;
+  return DEFECT_CLASSES.find(item => item.match.test(source)) || null;
+}
+
+function severityAction(sev) {
+  return SEVERITY_UI[Number(sev)]?.action || '';
+}
+
+function fillDefectClassSelect(select, current) {
+  if (!select) return;
+  const names = DEFECT_CLASSES.map(item => item.name);
+  const recorded = `${current || ''}`.trim();
+  const options = [];
+  if (recorded && !names.includes(recorded)) options.push(recorded);
+  options.push(...names);
+  select.innerHTML = options.map(name => {
+    const spec = DEFECT_CLASSES.find(item => item.name === name);
+    const title = spec ? `${spec.detail}. Typical ${spec.cats}` : 'Recorded finding';
+    return `<option value="${escHtml(name)}" title="${escHtml(title)}">${escHtml(name)}</option>`;
+  }).join('');
+  const chosen = options.includes(recorded) ? recorded : (matchDefectClass(recorded)?.name || names[0]);
+  select.value = chosen;
+}
+
+function bindSeverityAction(sevId, actionId) {
+  const sev = document.getElementById(sevId);
+  const action = document.getElementById(actionId);
+  if (!sev || !action || sev.dataset.actionBound) return;
+  sev.dataset.actionBound = '1';
+  const apply = () => {
+    const next = severityAction(sev.value);
+    if (next) action.value = next;
+  };
+  sev.addEventListener('change', apply);
+}
 
 function currentOverviewSeverity() {
   const n = Number(document.getElementById('overview-anomaly-severity')?.value);
@@ -678,17 +724,30 @@ function anomalyBoxes() {
   catch { return {}; }
 }
 
+function pruneEmptyAnomalyDrafts(exceptId) {
+  const map = anomalyBoxes();
+  let changed = false;
+  Object.keys(map).forEach(key => {
+    if (!String(key).startsWith('custom-') || key === exceptId) return;
+    const item = map[key] || {};
+    const unnamed = !item.anomalyId || item.anomalyId === 'New anomaly';
+    if (!item.box && unnamed && !`${item.type || ''}`.trim()) {
+      delete map[key];
+      changed = true;
+    }
+  });
+  if (changed) writeAnomalyBoxes(map);
+  return anomalyBoxes();
+}
+
 function writeAnomalyBoxes(map) {
   localStorage.setItem(ANOMALY_BOX_KEY, JSON.stringify(map));
 }
 
 function defectFamily(row) {
-  const text = `${row?.finding || ''}`.toLowerCase();
-  let kind = 'other';
-  if (/oil|grease|dirt|spill|drip|spatter|stain|soiling|smudge|residue|runoff|film/.test(text)) kind = 'contamination';
-  else if (/erosion|coating loss/.test(text)) kind = 'erosion';
-  else if (/crack|delamination|fracture|lightning/.test(text) && !/verify|\?/.test(text)) kind = 'structural';
-  else if (/crack|line mark/.test(text)) kind = 'line-mark';
+  const text = `${row?.finding || ''}`;
+  const cls = matchDefectClass(text);
+  const kind = cls ? cls.name : 'other';
   const index = Number(row?.index) || 1;
   const zone = index <= 5 ? 'root' : index >= 16 ? 'tip' : 'span';
   return `${kind}-${zone}`;
@@ -697,26 +756,18 @@ function defectFamily(row) {
 function isMinorAnomaly(row) {
   if (anomalyBoxes()[row.id]) return false;
   const cat = Number(row?.cat) || 1;
-  const text = `${row?.finding || ''}`.toLowerCase();
   const kind = defectFamily(row).split('-')[0];
   if (cat <= 1) return true;
-  if (/dark spot|blemish|scuff|pinhole|edge line|dark dot|smudge/.test(text)) return true;
-  if ((kind === 'line-mark' || kind === 'other') && cat < 3) return true;
-  if (kind === 'erosion' && cat < 3) return true;
-  if (/verify|\?/.test(text) && kind !== 'contamination' && kind !== 'erosion') return true;
+  if ((kind === 'Coating & Gelcoat Damage' || kind === 'Leading Edge Erosion' || kind === 'other') && cat < 3) return true;
   return false;
 }
 
 function findingDuty(row) {
   const cat = Number(row?.cat) || 1;
-  const kind = defectFamily(row).split('-')[0];
-  if (kind === 'structural' && cat >= 4) return 'critical';
-  if (kind === 'structural' && cat >= 3) return 'repair';
-  if (kind === 'erosion' && cat >= 3) return 'repair';
-  if (kind === 'contamination') return 'cleaning';
-  if (cat >= 4) return 'critical';
+  if (cat >= 5) return 'critical';
   if (cat >= 3) return 'repair';
-  return 'cleaning';
+  if (cat >= 2) return 'cleaning';
+  return 'healthy';
 }
 
 function bladeSummaryRows(blade) {
@@ -742,7 +793,7 @@ function anomalyLabel(row) {
 }
 
 function overviewAnomalyRows() {
-  const saved = anomalyBoxes();
+  const saved = pruneEmptyAnomalyDrafts(STATE.overviewAnomalyId);
   const byId = new Map();
   ['A', 'B', 'C'].forEach(blade => {
     findingsForBlade(blade).forEach(row => {
@@ -762,13 +813,14 @@ function overviewAnomalyRows() {
   });
   Object.entries(saved).forEach(([id, over]) => {
     if (byId.has(id)) return;
+    if (String(id).startsWith('custom-') && !over.box && id !== STATE.overviewAnomalyId) return;
     const cat = Number(over.severity) || 2;
     byId.set(id, {
       id,
       blade: over.blade || 'A',
       surface: over.surface || 'PS',
       index: Number(over.index) || 1,
-      finding: over.type || 'Anomaly',
+      finding: over.type || '',
       cat,
       color: FINDING_COLOR[cat] || '#F5B400',
       count: 1,
@@ -784,11 +836,21 @@ function overviewAnomalyRows() {
   ranked.forEach(row => {
     const kind = defectFamily(row).split('-')[0];
     const text = `${row.finding || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const key = kind === 'contamination' ? `${row.blade}|contamination` : `${row.blade}|${text}`;
+    const key = String(row.id).startsWith('custom-')
+      ? `custom|${row.id}`
+      : (kind === 'other' ? `${row.blade}|${text}` : `${row.blade}|${kind}`);
     if (seen.has(key)) return;
     seen.add(key);
     unique.push(row);
   });
+  ['A', 'B', 'C'].forEach(blade => {
+    if (unique.some(row => row.blade === blade)) return;
+    const pool = [...byId.values()].filter(row => row.blade === blade);
+    if (!pool.length) return;
+    pool.sort((a, b) => (b.cat - a.cat) || (a.index - b.index));
+    unique.push(pool[0]);
+  });
+  unique.sort((a, b) => (rank[findingDuty(b)] - rank[findingDuty(a)]) || (b.cat - a.cat) || (a.index - b.index));
   return unique;
 }
 
@@ -1312,7 +1374,9 @@ function renderFullTurbineOverview(container, turbine) {
           <form class="anomaly-details" id="overview-anomaly-form">
             <h4>Anomaly details</h4>
             <label>Anomaly ID<input id="overview-anomaly-id" class="styled-input" type="text" maxlength="80"></label>
-            <label>Anomaly type<input id="overview-anomaly-type" class="styled-input" type="text" maxlength="120"></label>
+            <label>Anomaly type
+              <select id="overview-anomaly-type" class="styled-select"></select>
+            </label>
             <label>Blade side<input id="overview-anomaly-side" class="styled-input" type="text" readonly></label>
             <label>Radius<input id="overview-anomaly-radius" class="styled-input" type="text" inputmode="decimal"></label>
             <label>Severity
@@ -1395,11 +1459,7 @@ function paintOverviewBox(box) {
   const y = Math.min(y1, y2) * 100;
   const w = Math.abs(x2 - x1) * 100;
   const h = Math.abs(y2 - y1) * 100;
-  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"></rect>
-    <circle cx="${x}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
-    <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
-    <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
-    <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>`;
+  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.25" vector-effect="non-scaling-stroke"></rect>`;
   placeOverviewBoxLabel(x, y, w, theme);
 }
 
@@ -1485,6 +1545,7 @@ function bindOverviewEditors(turbine) {
       const box = overviewDraftBox() || (row ? (anomalyBoxes()[row.id]?.box || null) : null);
       if (box) paintOverviewBox(box);
     });
+    field.addEventListener('change', () => field.dispatchEvent(new Event('input')));
   });
   document.getElementById('overview-save')?.addEventListener('click', () => saveOverviewAnomaly(turbine));
   document.getElementById('overview-new')?.addEventListener('click', () => createOverviewAnomaly(turbine));
@@ -1510,6 +1571,7 @@ function paintOverviewDetail(turbine) {
   if (!row) {
     idInput.value = '';
     typeInput.value = '';
+    fillDefectClassSelect(typeInput, '');
     sideInput.value = '';
     radiusInput.value = '';
     photo.removeAttribute('src');
@@ -1521,7 +1583,7 @@ function paintOverviewDetail(turbine) {
   const span = bladeSpanM(turbine);
   const metres = pointMetres(row.index, span);
   idInput.value = saved.anomalyId || anomalyLabel(row);
-  typeInput.value = saved.type || row.finding || '';
+  fillDefectClassSelect(typeInput, saved.type || row.finding || '');
   sideInput.value = `${SIDE_NAME[row.surface] || row.surface} · Blade ${row.blade}`;
   if (STATE.overviewCompareMetres == null) radiusInput.value = `${metres.toFixed(1)} m`;
   if (severity) severity.value = String(saved.severity || row.cat || 2);
@@ -1659,8 +1721,15 @@ function createOverviewAnomaly(turbine) {
   STATE.overviewDraftBox = null;
   renderDefectsTable(turbine);
   paintOverviewDetail(turbine);
+  const draw = document.getElementById('overview-box-svg');
+  draw?.classList.add('is-drawing');
+  document.getElementById('overview-draw')?.classList.add('is-on');
   document.getElementById('overview-new')?.classList.add('is-on');
+  const idInput = document.getElementById('overview-anomaly-id');
+  idInput?.focus();
+  idInput?.select();
   applyOverviewSeverityTheme(2);
+  showToast('Name it, draw a box on the photo, then Save anomaly', 'success');
 }
 
 function selectOverviewBlade(letter) {
@@ -2010,11 +2079,11 @@ function renderReport() {
       <h4>Override</h4>
       <label>Category
         <select id="report-review-cat" class="styled-select">
-          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${Number(d.severity) === n ? 'selected' : ''}>CAT ${n}</option>`).join('')}
+          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${Number(d.severity) === n ? 'selected' : ''}>${SEVERITY_UI[n].label}</option>`).join('')}
         </select>
       </label>
-      <label>Defect name
-        <input id="report-review-name" class="styled-input" type="text" maxlength="120" value="${escHtml(d.type)}">
+      <label>Defect class
+        <select id="report-review-name" class="styled-select"></select>
       </label>
       <div class="defect-review-actions" style="margin-top:8px">
         <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
@@ -2030,12 +2099,13 @@ function renderReport() {
         <p><strong>${escHtml(d.type)}</strong><br>
         ${escHtml(turbineLabel(turbine))} · Blade ${escHtml(d.blade)}<br>
         ${escHtml(d.location || d.radialPos || (d.dist + ' m from root'))}<br>
-        Category: <strong>${escHtml(d.intensity || ('CAT ' + d.severity))}</strong></p>
+        Category: <strong>${escHtml(SEVERITY_UI[Number(d.severity)]?.label || d.intensity || ('CAT ' + d.severity))}</strong></p>
       </div>
       <div class="assess-section">
         <h4>Action</h4>
-        <p>${escHtml(d.action || 'Review this station.')}</p>
+        <p>${escHtml(severityAction(d.severity) || d.action || 'Review this station.')}</p>
       </div>`;
+    fillDefectClassSelect(document.getElementById('report-review-name'), d.type);
   }
   syncReportPicker();
 }
@@ -3736,10 +3806,7 @@ function showDefectReviewBar() {
   const cat = document.getElementById('defect-review-cat');
   if (cat) cat.value = String(view.cat);
   const name = document.getElementById('defect-review-name');
-  if (name && document.activeElement !== name) {
-    name.value = view.finding;
-    name.placeholder = raw.finding;
-  }
+  if (name && document.activeElement !== name) fillDefectClassSelect(name, view.finding);
 }
 
 function openDefectReview(findingId) {
@@ -4752,6 +4819,8 @@ function initApp() {
 window.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   initTheme();
+  bindSeverityAction('ig-sev', 'ig-action');
+  bindSeverityAction('md-sev', 'md-action');
 });
 
 // ── CSV / EXCEL BULK UPLOAD ────────────────────
@@ -4778,7 +4847,11 @@ function handleCSVUpload(input, context) {
         const match = STATE.db?.turbines?.find(t => t.assetId.toLowerCase() === (first.turbine_id||first.turbine||'').toLowerCase());
         if (match && sel) sel.value = match.id;
       }
-      if (first.defect_type || first.type) document.getElementById('ig-defect') && (document.getElementById('ig-defect').value = first.defect_type||first.type||'');
+      if (first.defect_type || first.type) {
+        const defectSel = document.getElementById('ig-defect');
+        const rawType = first.defect_type || first.type || '';
+        if (defectSel) defectSel.value = matchDefectClass(rawType)?.name || rawType;
+      }
       if (first.severity) document.getElementById('ig-sev') && (document.getElementById('ig-sev').value = first.severity||3);
       if (first.confidence) document.getElementById('ig-conf') && (document.getElementById('ig-conf').value = parseInt(first.confidence)||85);
       if (first.dist || first.distance) document.getElementById('ig-dist') && (document.getElementById('ig-dist').value = first.dist||first.distance||34);
