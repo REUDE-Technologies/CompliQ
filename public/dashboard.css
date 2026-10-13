@@ -3194,3 +3194,76 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   }
   .main-area { overflow: auto; min-height: 0; }
 }
+
+@media (max-width: 640px) {
+  .topbar { padding: 8px 10px; gap: 6px; }
+  .topbar-left h2 { font-size: 0.98rem; line-height: 1.15; }
+  .topbar-left p { display: none; }
+  #view-asset.view.active {
+    padding: 8px 8px 12px;
+    gap: 8px;
+  }
+  .asset-turbine-bar .panel-body { padding: 6px 8px; }
+  .asset-turbine-bar-body {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "turbine more"
+      "component component"
+      "facts facts";
+    gap: 6px 8px;
+  }
+  .overview-left-col,
+  .overview-right-col { display: contents; }
+  .turbine-single-card { order: 1; height: 200px; min-height: 180px; }
+  .blade-status-col {
+    order: 2;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    height: auto;
+  }
+  .duty-legend {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    border-bottom: none;
+    padding: 0 0 4px;
+    font-size: 0.62rem;
+  }
+  .blade-status-card {
+    flex: none;
+    min-height: 0;
+    padding: 6px;
+    gap: 0 6px;
+    grid-template-columns: 8px minmax(0, 1fr);
+    grid-template-areas: "swatch name" "swatch duty" "swatch count";
+  }
+  .blade-status-card strong { font-size: 0.72rem; }
+  .blade-status-card em { font-size: 0.62rem; line-height: 1.2; }
+  .blade-status-card small {
+    justify-self: start;
+    background: none;
+    padding: 0;
+    white-space: normal;
+    font-size: 0.62rem;
+  }
+  .anomaly-photo-wrap { order: 3; width: 100%; padding: 6px; }
+  .anomaly-photo-frame {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    min-height: 0;
+  }
+  .anomaly-details { order: 4; }
+  .anomaly-actions { flex-direction: row; }
+  .anomaly-actions .review-btn,
+  .anomaly-actions .teal-btn { width: auto; flex: 1 1 0; }
+  .asset-bottom-sheet {
+    position: static;
+    width: auto;
+    margin: 8px 0 0;
+  }
+  .ai-copilot-btn { bottom: 88px; right: 12px; }
+}
