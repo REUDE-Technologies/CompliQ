@@ -272,6 +272,8 @@ const PAGE_TITLES = {
 
 function activateTab(tab) {
   const next = tab || 'fleet';
+  const blocked = document.querySelector(`.nav-item[data-tab="${next}"]`);
+  if (blocked && blocked.classList.contains('is-unavailable')) return;
   const leavingAsset = STATE.activeTab === 'asset' && next !== 'asset';
   if (leavingAsset) teardownAssetHeavyWork();
 
@@ -299,7 +301,13 @@ function activateTab(tab) {
 
 function setupNav() {
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+    btn.addEventListener('click', (event) => {
+      if (btn.disabled || btn.classList.contains('is-unavailable')) {
+        event.preventDefault();
+        return;
+      }
+      activateTab(btn.dataset.tab);
+    });
   });
 }
 
@@ -343,10 +351,20 @@ function animateNumber(id, target) {
 // ══════════════════════════════════════════════════
 // 5. FLEET GRID
 // ══════════════════════════════════════════════════
+let fleetStatusFilter = 'all';
+
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
   grid.innerHTML = '';
-  STATE.db.turbines.forEach(t => {
+  let turbines = STATE.db.turbines;
+  if (fleetStatusFilter === 'normal') turbines = turbines.filter(t => t.status === 'normal');
+  if (fleetStatusFilter === 'warning') turbines = turbines.filter(t => t.status === 'warning');
+  if (fleetStatusFilter === 'critical') turbines = turbines.filter(t => t.status === 'critical');
+  if (!turbines.length) {
+    grid.innerHTML = '<p class="fleet-empty">No turbines in this status.</p>';
+    return;
+  }
+  turbines.forEach(t => {
     const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
     const card = document.createElement('div');
     card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''}`;
@@ -409,7 +427,7 @@ function renderAssetList(filter = 'all') {
         <span>${t.location}</span>
         <span class="asset-gps">📍 ${t.gps.lat}°N, ${t.gps.lng}°E</span>
       </div>
-      <div style="font-size:0.7rem;color:var(--c-muted)">Last: ${t.lastInspection}<br>Cov: ${t.inspCoverage}%</div>
+      <div style="font-size:0.7rem;color:var(--c-muted)">Last: ${t.lastInspection}</div>
       <button class="view-btn" data-id="${t.id}">View Detail →</button>
     `;
     row.querySelector('.view-btn').addEventListener('click', () => {
@@ -424,6 +442,16 @@ function renderAssetList(filter = 'all') {
     list.appendChild(row);
   });
 }
+
+document.getElementById('fleet-status-filters')?.addEventListener('click', event => {
+  const btn = event.target.closest('.fleet-filter');
+  if (!btn) return;
+  fleetStatusFilter = fleetStatusFilter === btn.dataset.status ? 'all' : btn.dataset.status;
+  document.querySelectorAll('.fleet-filter').forEach(item => {
+    item.classList.toggle('active', item.dataset.status === fleetStatusFilter);
+  });
+  renderFleetGrid();
+});
 
 // Filter buttons
 document.querySelectorAll('.fbtn').forEach(btn => {
@@ -454,6 +482,8 @@ function renderAssetView() {
   renderTurbineInfo(t);
   renderPartSchematic(t, STATE.selectedPart, epoch);
   renderDefectsTable(t);
+  const backBtn = document.getElementById('asset-back-overview');
+  if (backBtn) backBtn.hidden = STATE.selectedPart === 'full';
 }
 
 function populateTurbineSelector() {
@@ -482,46 +512,83 @@ function bindPartSelector(turbine) {
   };
 }
 
+function selectedTurbine() {
+  return STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0] || null;
+}
+
+function bladeDisplayName(letter, turbine) {
+  const current = turbine || selectedTurbine();
+  const index = { A: 0, B: 1, C: 2 }[letter];
+  const number = index == null ? '' : (current?.blades || [])[index];
+  return number ? String(number) : `Blade ${letter}`;
+}
+
+function refreshBladeMenus(turbine) {
+  const current = turbine || selectedTurbine();
+  document.querySelectorAll('#part-selector option').forEach(opt => {
+    const letter = String(opt.value || '').replace('blade-', '');
+    if (!['A', 'B', 'C'].includes(letter)) return;
+    opt.textContent = bladeDisplayName(letter, current);
+  });
+  document.querySelectorAll('#report-blade option').forEach(opt => {
+    if (!['A', 'B', 'C'].includes(opt.value)) return;
+    opt.textContent = bladeDisplayName(opt.value, current);
+  });
+  const defectBlade = document.getElementById('md-blade');
+  if (defectBlade) {
+    const selected = defectBlade.value;
+    defectBlade.innerHTML = ['A', 'B', 'C'].map(letter =>
+      `<option value="${letter}">${escHtml(bladeDisplayName(letter, current))}</option>`
+    ).join('');
+    if (selected) defectBlade.value = selected;
+  }
+}
+
 function renderTurbineInfo(t) {
-  const panel = document.getElementById('turbine-info-panel');
   const extra = document.getElementById('turbine-details-extra');
   const toggle = document.getElementById('turbine-details-toggle');
-  const hClass = t.health >= 85 ? '#2ECC71' : t.health >= 65 ? '#F2C94C' : '#EB5757';
-  const bladeM = t.bladeLength || (t.rotorDia / 2).toFixed(1);
-  panel.innerHTML = `
-    <p class="turbine-basic-line">
-      <span class="turbine-status-dot" style="background:${hClass}"></span>
-      <strong>${escHtml(turbineLabel(t))}</strong>
-      <span>${t.rotorDia} m rotor · ${bladeM} m blade</span>
-    </p>`;
+  if (!extra || !t) return;
+  refreshBladeMenus(t);
+  extra.innerHTML = `
+    <div class="turbine-extra-grid">
+      ${stat('Location', t.location)}
+      ${stat('GPS Coordinates', `${t.gps.lat}°N, ${t.gps.lng}°E`)}
+      ${stat('State', t.state)}
+      ${stat('Blade Length', (t.bladeLength || (t.rotorDia/2)) + ' m')}
+      ${stat('Hub Height', t.hubHeight + ' m')}
+      ${stat('Commission Year', t.commYear)}
+      ${stat('Wind Speed', t.windSpeed + ' m/s')}
+      ${stat('RPM', t.rpm)}
+      ${stat('Anomalies', t.anomalies)}
+      ${stat('Last Inspection', t.lastInspection)}
+      ${stat('Campaign', t.campaign)}
+      ${stat('Blade IDs', (t.blades || []).join(', ') || '—')}
+    </div>
+  `;
 
-  if (extra) {
-    extra.innerHTML = `
-      <div class="turbine-extra-grid">
-        ${stat('Location', t.location)}
-        ${stat('GPS Coordinates', `${t.gps.lat}°N, ${t.gps.lng}°E`)}
-        ${stat('State', t.state)}
-        ${stat('Blade Length', (t.bladeLength || (t.rotorDia/2)) + ' m')}
-        ${stat('Hub Height', t.hubHeight + ' m')}
-        ${stat('Commission Year', t.commYear)}
-        ${stat('Wind Speed', t.windSpeed + ' m/s')}
-        ${stat('RPM', t.rpm)}
-        ${stat('Anomalies', t.anomalies)}
-        ${stat('Last Inspection', t.lastInspection)}
-        ${stat('Campaign', t.campaign)}
-        ${stat('Blade IDs', (t.blades || []).join(', ') || '—')}
-      </div>
-    `;
-  }
-
-  if (toggle && !toggle.dataset.bound) {
-    toggle.addEventListener('click', () => {
-      const open = extra && !extra.hidden;
-      if (extra) extra.hidden = open;
-      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-      toggle.textContent = open ? 'More details' : 'Hide details';
-    });
-    toggle.dataset.bound = '1';
+  const row = extra.closest('.asset-turbine-row');
+  const pop = toggle && toggle.closest('.turbine-details-pop');
+  if (row && pop && !row.dataset.bound) {
+    let closeTimer = 0;
+    const setOpen = (open) => {
+      row.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    const holdOpen = () => {
+      window.clearTimeout(closeTimer);
+      setOpen(true);
+    };
+    const queueClose = () => {
+      window.clearTimeout(closeTimer);
+      closeTimer = window.setTimeout(() => setOpen(false), 160);
+    };
+    pop.addEventListener('mouseenter', holdOpen);
+    pop.addEventListener('mouseleave', queueClose);
+    extra.addEventListener('mouseenter', holdOpen);
+    extra.addEventListener('mouseleave', queueClose);
+    pop.addEventListener('focusin', holdOpen);
+    pop.addEventListener('focusout', queueClose);
+    row.dataset.bound = '1';
   }
 }
 
@@ -585,13 +652,15 @@ function updateFindingsSheetMeta() {
 
 async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
   if (STATE.activeTab !== 'asset') return;
+  const backBtn = document.getElementById('asset-back-overview');
+  if (backBtn) backBtn.hidden = (part || STATE.selectedPart) === 'full';
   const title = document.getElementById('schematic-title');
   const titleDefault = document.getElementById('schematic-title-default');
   const hint = document.getElementById('schematic-hint');
   const bladeLetter = part.startsWith('blade-') ? part.replace('blade-', '') : '';
 
   if (bladeLetter === 'A' || bladeLetter === 'B' || bladeLetter === 'C') {
-    if (title) title.textContent = `Blade ${bladeLetter}`;
+    if (title) title.textContent = bladeDisplayName(bladeLetter);
     if (hint) hint.textContent = '';
     setPocEvidenceVisible(true);
     await renderBladeAPocProfile(epoch);
@@ -616,7 +685,7 @@ async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
   clearCompareHost();
   if (part.startsWith('blade-')) {
     const blade = part.replace('blade-', '');
-    if (titleDefault) titleDefault.textContent = `Blade ${blade} Schematic`;
+    if (titleDefault) titleDefault.textContent = `${bladeDisplayName(blade)} Schematic`;
     if (hint) hint.textContent = '';
     renderBlade(turbine, blade, container);
     return;
@@ -930,6 +999,7 @@ async function mountTurbine3D(host, turbine, onPick) {
   scene.add(pivot);
   const pickables = [];
   const bladeLabels = [];
+  let nacelleMesh = null;
   const tagMesh = (mesh, part, label) => {
     mesh.material = Array.isArray(mesh.material)
       ? mesh.material.map(m => m.clone())
@@ -1055,7 +1125,7 @@ async function mountTurbine3D(host, turbine, onPick) {
       const rest = blades.slice(1).sort((a, b) => a.userData.ang - b.userData.ang);
       [['A', down], ['B', rest[0]], ['C', rest[1]]].forEach(([letter, mesh]) => {
         if (!mesh) return;
-        tagMesh(mesh, 'blade-' + letter, 'Blade ' + letter);
+        tagMesh(mesh, 'blade-' + letter, bladeDisplayName(letter, turbine));
         const pos = mesh.geometry.attributes.position;
         let best = 0;
         let bestR = -1;
@@ -1067,7 +1137,7 @@ async function mountTurbine3D(host, turbine, onPick) {
         localTip.multiplyScalar(1.06);
         const el = document.createElement('div');
         el.className = 'blade-tip-label';
-        el.textContent = letter;
+        el.textContent = bladeDisplayName(letter, turbine);
         host.appendChild(el);
         bladeLabels.push({ mesh, localTip, el });
       });
@@ -1092,6 +1162,109 @@ async function mountTurbine3D(host, turbine, onPick) {
           tagMesh(red, 'hub', 'Hub');
         }
       }
+      const downBlade = blades.find(item => item.userData.part === 'blade-C');
+      if (downBlade && hub) {
+        downBlade.updateWorldMatrix(true, true);
+        hub.updateWorldMatrix(true, true);
+        const hubCenter = new THREE.Box3().setFromObject(hub).getCenter(new THREE.Vector3());
+        const posAttr = downBlade.geometry.attributes.position;
+        let tipIndex = 0;
+        let tipRadius = -1;
+        for (let i = 0; i < posAttr.count; i++) {
+          const radius = posAttr.getX(i) ** 2 + posAttr.getY(i) ** 2 + posAttr.getZ(i) ** 2;
+          if (radius > tipRadius) { tipRadius = radius; tipIndex = i; }
+        }
+        const tip = downBlade.localToWorld(new THREE.Vector3(
+          posAttr.getX(tipIndex),
+          posAttr.getY(tipIndex),
+          posAttr.getZ(tipIndex)
+        ));
+        const rel = tip.sub(hubCenter);
+        const shaft = new THREE.Vector3(0, 0, 1)
+          .applyQuaternion(downBlade.getWorldQuaternion(new THREE.Quaternion()))
+          .normalize();
+        const downDir = new THREE.Vector3(0, -1, 0);
+        downDir.sub(shaft.clone().multiplyScalar(downDir.dot(shaft)));
+        const tipDir = rel.clone().sub(shaft.clone().multiplyScalar(rel.dot(shaft)));
+        if (downDir.lengthSq() > 1e-8 && tipDir.lengthSq() > 1e-8) {
+          downDir.normalize();
+          tipDir.normalize();
+          const turn = Math.atan2(
+            new THREE.Vector3().crossVectors(tipDir, downDir).dot(shaft),
+            tipDir.dot(downDir)
+          );
+          const rotorParts = blades.slice();
+          if (!rotorParts.includes(hub)) rotorParts.push(hub);
+          downBlade.parent.traverse(obj => {
+            if (obj.isMesh && String(obj.userData.part || '').startsWith('blade-') && !rotorParts.includes(obj)) {
+              rotorParts.push(obj);
+            }
+          });
+          const spin = new THREE.Quaternion().setFromAxisAngle(shaft, turn);
+          rotorParts.forEach(obj => {
+            obj.updateMatrixWorld(true);
+            const parentInv = obj.parent.matrixWorld.clone().invert();
+            const moved = new THREE.Matrix4()
+              .makeTranslation(hubCenter.x, hubCenter.y, hubCenter.z)
+              .multiply(new THREE.Matrix4().makeRotationFromQuaternion(spin))
+              .multiply(new THREE.Matrix4().makeTranslation(-hubCenter.x, -hubCenter.y, -hubCenter.z))
+              .multiply(obj.matrixWorld);
+            obj.matrix.copy(parentInv.multiply(moved));
+            obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+          });
+          const nacelle = named['farm-scale-wind-turbine_4'];
+          if (nacelle) {
+            nacelle.updateWorldMatrix(true, true);
+            const nacelleBox = new THREE.Box3().setFromObject(nacelle);
+            const nacelleCenter = nacelleBox.getCenter(new THREE.Vector3());
+            const outward = shaft.clone();
+            const hubNow = new THREE.Box3().setFromObject(hub).getCenter(new THREE.Vector3());
+            if (hubNow.clone().sub(nacelleCenter).dot(outward) < 0) outward.negate();
+            const project = (point) => point.clone().sub(nacelleCenter).dot(outward);
+            let nacelleFront = -Infinity;
+            const corner = new THREE.Vector3();
+            const xs = [nacelleBox.min.x, nacelleBox.max.x];
+            const ys = [nacelleBox.min.y, nacelleBox.max.y];
+            const zs = [nacelleBox.min.z, nacelleBox.max.z];
+            xs.forEach(x => ys.forEach(y => zs.forEach(z => {
+              nacelleFront = Math.max(nacelleFront, project(corner.set(x, y, z)));
+            })));
+            const sample = new THREE.Vector3();
+            const fromHub = new THREE.Vector3();
+            const hubSpan = new THREE.Box3().setFromObject(hub).getSize(new THREE.Vector3()).length() * 0.55;
+            let rotorBack = Infinity;
+            rotorParts.forEach(obj => {
+              const attr = obj.geometry && obj.geometry.attributes && obj.geometry.attributes.position;
+              if (!attr) return;
+              obj.updateWorldMatrix(true, true);
+              const step = Math.max(1, Math.floor(attr.count / 280));
+              for (let i = 0; i < attr.count; i += step) {
+                sample.fromBufferAttribute(attr, i);
+                obj.localToWorld(sample);
+                fromHub.copy(sample).sub(hubNow);
+                const along = fromHub.dot(outward);
+                fromHub.addScaledVector(outward, -along);
+                if (fromHub.length() > hubSpan) continue;
+                rotorBack = Math.min(rotorBack, project(sample));
+              }
+            });
+            const clearance = nacelleBox.getSize(new THREE.Vector3()).length() * 0.015;
+            const shift = (nacelleFront + clearance) - rotorBack;
+            if (shift > 0.0001) {
+              const delta = outward.multiplyScalar(shift);
+              rotorParts.forEach(obj => {
+                obj.updateMatrixWorld(true);
+                const parentInv = obj.parent.matrixWorld.clone().invert();
+                const moved = new THREE.Matrix4()
+                  .makeTranslation(delta.x, delta.y, delta.z)
+                  .multiply(obj.matrixWorld);
+                obj.matrix.copy(parentInv.multiply(moved));
+                obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+              });
+            }
+          }
+        }
+      }
     }
     if (hub) tagMesh(hub, 'hub', 'Hub');
     const towerBits = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
@@ -1105,13 +1278,14 @@ async function mountTurbine3D(host, turbine, onPick) {
       tagMesh(mesh, i === 0 ? 'foundation' : 'tower', i === 0 ? 'Foundation' : 'Tower');
     });
     if (named['farm-scale-wind-turbine_4']) tagMesh(named['farm-scale-wind-turbine_4'], 'nacelle', 'Nacelle');
+    nacelleMesh = named['farm-scale-wind-turbine_4'] || null;
     if (named['farm-scale-wind-turbine_5']) tagMesh(named['farm-scale-wind-turbine_5'], 'anemometer', 'Anemometer / Sensors');
-    const addHotspot = (mesh) => {
+    const addHotspot = (mesh, scale = 0.9) => {
       if (!mesh || !mesh.parent) return;
       const box = new THREE.Box3().setFromObject(mesh);
       const center = box.getCenter(new THREE.Vector3());
       const dims = box.getSize(new THREE.Vector3());
-      const worldRadius = Math.max(dims.x, dims.y, dims.z, 0.2) * 0.9;
+      const worldRadius = Math.max(dims.x, dims.y, dims.z, 0.2) * scale;
       const parentScale = new THREE.Vector3();
       mesh.parent.getWorldScale(parentScale);
       const localRadius = worldRadius / Math.max(parentScale.x, parentScale.y, parentScale.z, 0.001);
@@ -1126,7 +1300,7 @@ async function mountTurbine3D(host, turbine, onPick) {
       tagMesh(spot, mesh.userData.part, mesh.userData.label);
     };
     if (hub) addHotspot(hub);
-    if (named['farm-scale-wind-turbine_4']) addHotspot(named['farm-scale-wind-turbine_4']);
+    if (nacelleMesh) addHotspot(nacelleMesh, 1.35);
     if (named['farm-scale-wind-turbine_5']) addHotspot(named['farm-scale-wind-turbine_5']);
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
@@ -1232,11 +1406,38 @@ async function mountTurbine3D(host, turbine, onPick) {
     pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     pivot.updateMatrixWorld(true);
     raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(pickables, false);
+    const nacelleMats = [];
+    if (nacelleMesh) {
+      nacelleMesh.traverse(obj => {
+        const list = !obj.material ? [] : (Array.isArray(obj.material) ? obj.material : [obj.material]);
+        list.forEach(mat => {
+          if (!nacelleMats.includes(mat)) nacelleMats.push(mat);
+        });
+      });
+    }
+    const savedSides = nacelleMats.map(mat => mat.side);
+    nacelleMats.forEach(mat => { mat.side = THREE.DoubleSide; });
+    let hits = [];
+    try {
+      hits = raycaster.intersectObjects(pickables, false);
+    } finally {
+      nacelleMats.forEach((mat, i) => { mat.side = savedSides[i]; });
+    }
     if (!hits.length) return null;
     const slack = (camera.userData.base?.length() || 8) * 0.04;
     const spot = hits.find(hit => hit.object.userData.hotspot);
     const solid = hits.find(hit => !hit.object.userData.hotspot);
+    if (nacelleMesh && solid && (solid.object.userData.part === 'tower' || solid.object.userData.part === 'foundation')) {
+      const housing = new THREE.Box3().setFromObject(nacelleMesh);
+      const size = housing.getSize(new THREE.Vector3());
+      const along = size.x >= size.z ? 'x' : 'z';
+      housing.expandByVector(new THREE.Vector3(
+        along === 'x' ? size.x * 0.7 : size.x * 0.2,
+        size.y * 0.2,
+        along === 'z' ? size.z * 0.7 : size.z * 0.2
+      ));
+      if (housing.containsPoint(solid.point)) return nacelleMesh;
+    }
     if (spot && (!solid || spot.distance <= solid.distance + slack)) return spot.object;
     return (solid || spot).object;
   };
@@ -1401,7 +1602,7 @@ function renderFullTurbineOverview(container, turbine) {
               const count = bladeSummaryRows(b.id).length;
               return `<button type="button" class="blade-status-card" data-blade="${b.id}" data-duty="${duty}">
                 <span class="blade-status-swatch" style="background:${DUTY_COLOR[duty]}"></span>
-                <strong>Blade ${b.id}</strong>
+                <strong>${escHtml(bladeDisplayName(b.id, turbine))}</strong>
                 <em>${DUTY_LABEL[duty]}</em>
                 <small>${count} anomal${count === 1 ? 'y' : 'ies'}</small>
               </button>`;
@@ -1459,7 +1660,11 @@ function paintOverviewBox(box) {
   const y = Math.min(y1, y2) * 100;
   const w = Math.abs(x2 - x1) * 100;
   const h = Math.abs(y2 - y1) * 100;
-  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.25" vector-effect="non-scaling-stroke"></rect>`;
+  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"></rect>
+    <circle cx="${x}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>`;
   placeOverviewBoxLabel(x, y, w, theme);
 }
 
@@ -1584,7 +1789,7 @@ function paintOverviewDetail(turbine) {
   const metres = pointMetres(row.index, span);
   idInput.value = saved.anomalyId || anomalyLabel(row);
   fillDefectClassSelect(typeInput, saved.type || row.finding || '');
-  sideInput.value = `${SIDE_NAME[row.surface] || row.surface} · Blade ${row.blade}`;
+  sideInput.value = `${SIDE_NAME[row.surface] || row.surface} · ${bladeDisplayName(row.blade)}`;
   if (STATE.overviewCompareMetres == null) radiusInput.value = `${metres.toFixed(1)} m`;
   if (severity) severity.value = String(saved.severity || row.cat || 2);
   const photos = g97StationCandidates(row.blade, row.surface, row.index);
@@ -1862,7 +2067,6 @@ function renderDefectsTable(turbine) {
 
   if (STATE.pocMode && ['blade-A', 'blade-B', 'blade-C'].includes(STATE.selectedPart)) {
     const blade = activeBladeLetter();
-    const findings = findingsForBlade(blade);
     if (!BLADE_FINDINGS.ready) {
       fill(tbody, `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">Loading defect categories…</td></tr>`);
       loadBladeFindings().then(() => {
@@ -1870,8 +2074,9 @@ function renderDefectsTable(turbine) {
       });
       return;
     }
+    const pt = getSelectedPocPoint(turbine);
+    const findings = findingsForStation(blade, pt.surface, pt.pointIndex);
     if (findings.length) {
-      const pt = getSelectedPocPoint(turbine);
       const span = bladeSpanM(turbine);
       const html = findings.map(d => {
         const metres = pointMetres(d.index, span);
@@ -1881,15 +2086,16 @@ function renderDefectsTable(turbine) {
         const isSel = STATE.pocSelectedDefectId ? STATE.pocSelectedDefectId === d.id : onStation;
         const point = 'P' + String(d.index).padStart(2, '0');
         const code = (d.finding.match(/^C\d+/) || [point])[0];
+        const typeName = String(d.finding || '').replace(/^C\d+\s+/, '');
         return `
         <tr class="defect-row ${d.cat >= DOT_MIN_CAT ? 'is-critical' : ''} ${isSel ? 'is-selected' : ''}"
           data-surface="${d.surface}" data-point="${d.index}" data-finding-id="${escHtml(d.id)}" tabindex="0">
           <td data-col="id"><span style="font-family:var(--font-mono);font-size:0.73rem;color:${d.color}">${escHtml(d.surface)}-${point}-${escHtml(code)}</span></td>
           <td data-col="surface">${escHtml(d.surface)}</td>
-          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m / ${span} m (${pct}%)</span></td>
-          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
           <td data-col="location" style="font-size:0.75rem">${escHtml(d.surface)} · ${point}</td>
-          <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(d.finding)}</td>
+          <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(typeName)}</td>
+          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${pct}%</span></td>
+          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
           <td data-col="intensity"><span class="sev-pill" style="background:${d.color}22;color:${d.color};border:1px solid ${d.color}">CAT ${d.cat}${d.verify ? ' · Verify' : ''}</span></td>
           <td data-col="size" style="font-size:0.72rem">${d.count} mark${d.count === 1 ? '' : 's'}</td>
           <td data-col="priority"><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
@@ -1906,7 +2112,6 @@ function renderDefectsTable(turbine) {
       updateFindingsSheetMeta();
       return;
     }
-    const pt = getSelectedPocPoint(turbine);
     const defects = defectsForPocPoint(pt);
     const selectedId = STATE.pocSelectedDefectId;
     const html = defects.map(d => {
@@ -1920,10 +2125,10 @@ function renderDefectsTable(turbine) {
         onclick="selectPocDefect('${d.id}')" onkeydown="if(event.key==='Enter')selectPocDefect('${d.id}')">
         <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${pt.point}-${d.id}</span></td>
         <td>${pt.surface}</td>
-        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.radial}</span></td>
-        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.distRoot}</span></td>
         <td style="font-size:0.75rem">${geo.location}</td>
         <td>${d.defect_class}</td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${Math.round(geo.pct)}%</span></td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.distRoot}</span></td>
         <td><span class="sev-pill sev-${d.severity}">${intensity}</span></td>
         <td style="font-size:0.72rem;max-width:160px;">${size}</td>
         <td><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
@@ -1949,10 +2154,10 @@ function renderDefectsTable(turbine) {
     <tr>
       <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${d.id}</span></td>
       <td>Blade ${d.blade}</td>
-      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.radialPos || (d.dist + ' m')}</span></td>
-      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.dist} m</span></td>
       <td style="font-size:0.75rem">${d.location || ('Blade ' + d.blade)}</td>
       <td>${d.type}</td>
+      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.radialPos || (d.dist + ' m')}</span></td>
+      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.dist} m</span></td>
       <td><span class="sev-pill sev-${d.severity}">${d.intensity || ('SEV-' + d.severity)}</span></td>
       <td style="font-size:0.72rem">${d.size || '—'}</td>
       <td><span class="prio-pill prio-${d.priority.toLowerCase()}">${d.priority}</span></td>
@@ -1971,7 +2176,7 @@ function setStandaloneColumns(full) {
   if (!head) return;
   head.innerHTML = full
     ? '<th>Anomaly ID</th><th>Anomaly Type</th><th>Blade</th><th>Blade Side</th><th>Radius</th><th>Severity</th><th></th>'
-    : '<th>Defect ID</th><th>Surface</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Location</th><th>Defect Type</th><th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>';
+    : '<th>Defect ID</th><th>Surface</th><th>Location</th><th>Defect Type</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>';
 }
 
 function renderOverviewDefectTable(turbine, tbodyAlt) {
@@ -1993,7 +2198,7 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
     return `<tr class="defect-row ${on ? 'is-selected' : ''}" data-anomaly-id="${escHtml(row.id)}">
       <td style="font-family:var(--font-mono);font-size:0.73rem;color:${row.color || DUTY_COLOR[duty]}">${escHtml(anomalyLabel(row))}</td>
       <td>${escHtml(row.finding)}</td>
-      <td>Blade ${escHtml(row.blade)}</td>
+      <td>${escHtml(bladeDisplayName(row.blade, turbine))}</td>
       <td>${escHtml(SIDE_NAME[row.surface] || row.surface)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</td>
       <td><span class="sev-pill" style="background:${DUTY_COLOR[duty]}22;color:${DUTY_COLOR[duty]};border:1px solid ${DUTY_COLOR[duty]}">${DUTY_LABEL[duty]} · ${row.cat}</span></td>
@@ -2041,7 +2246,7 @@ function renderReport() {
   if (!d) return;
   const turbine = STATE.db.turbines.find(t => t.id === d.assetId);
   const title = document.getElementById('report-viewer-title');
-  if (title) title.textContent = `${d.type} · Blade ${d.blade} · ${turbineLabel(turbine)}`;
+  if (title) title.textContent = `${d.type} · ${bladeDisplayName(d.blade, turbine)} · ${turbineLabel(turbine)}`;
 
   const rgb = document.getElementById('img-rgb');
   const empty = document.getElementById('viewer-empty');
@@ -2055,7 +2260,7 @@ function renderReport() {
         rgb.removeAttribute('src');
         if (empty) {
           empty.hidden = false;
-          empty.textContent = `No station photo for Blade ${d.blade}.`;
+          empty.textContent = `No station photo for ${bladeDisplayName(d.blade, turbine)}.`;
         }
       });
     } else {
@@ -2097,7 +2302,7 @@ function renderReport() {
       <div class="assess-section">
         <h4>Finding</h4>
         <p><strong>${escHtml(d.type)}</strong><br>
-        ${escHtml(turbineLabel(turbine))} · Blade ${escHtml(d.blade)}<br>
+        ${escHtml(turbineLabel(turbine))} · ${escHtml(bladeDisplayName(d.blade, turbine))}<br>
         ${escHtml(d.location || d.radialPos || (d.dist + ' m from root'))}<br>
         Category: <strong>${escHtml(SEVERITY_UI[Number(d.severity)]?.label || d.intensity || ('CAT ' + d.severity))}</strong></p>
       </div>
@@ -2626,9 +2831,31 @@ document.querySelectorAll('.manual-tab').forEach(tab => {
   });
 });
 
+function syncBladeNumberFields() {
+  const count = Math.min(6, Math.max(1, parseInt(document.getElementById('mt-blade-count')?.value, 10) || 3));
+  document.querySelectorAll('[data-blade-slot]').forEach(slot => {
+    const n = Number(slot.dataset.bladeSlot);
+    const show = n <= count;
+    slot.hidden = !show;
+    const input = slot.querySelector('input');
+    if (input && !show) input.value = '';
+  });
+}
+
+function bladeNumbersFromForm() {
+  const count = Math.min(6, Math.max(1, parseInt(document.getElementById('mt-blade-count')?.value, 10) || 3));
+  const blades = [];
+  for (let n = 1; n <= count; n += 1) {
+    const value = document.getElementById(`mt-blade-${n}`)?.value.trim();
+    if (value) blades.push(value);
+  }
+  return { count, blades };
+}
+
 function handleAddTurbine(e) {
   e.preventDefault();
   const gps = document.getElementById('mt-gps').value.split(',');
+  const bladeInfo = bladeNumbersFromForm();
   const newT = {
     id: STATE.db.turbines.length + 1,
     assetId: document.getElementById('mt-id').value,
@@ -2650,11 +2877,14 @@ function handleAddTurbine(e) {
     inspCoverage: 0,
     lastInspection: '—',
     campaign: '—',
-    anomalies: 0, defects: []
+    anomalies: 0, defects: [],
+    bladeCount: bladeInfo.count,
+    blades: bladeInfo.blades
   };
   STATE.db.turbines.push(newT);
   saveDB(STATE.db);
-  addManualRecord('turbine', `${newT.assetId}`, `${newT.site} | ${newT.location}`);
+  const bladeNote = bladeInfo.blades.length ? ` | Blades ${bladeInfo.blades.join(', ')}` : ` | ${bladeInfo.count} blades`;
+  addManualRecord('turbine', `${newT.assetId}`, `${newT.site} | ${newT.location}${bladeNote}`);
   renderMetrics();
   renderFleetGrid();
   renderAssetList();
@@ -2662,6 +2892,7 @@ function handleAddTurbine(e) {
   populateTurbineSelector();
   showToast(`Turbine ${newT.assetId} added to fleet!`, 'success');
   e.target.reset();
+  syncBladeNumberFields();
 }
 
 function handleAddDefect(e) {
@@ -2868,10 +3099,6 @@ function renderHealthChart() {
   const turbines = STATE.db.turbines || [];
   const labels = turbines.map(t => t.assetId);
   const data = turbines.map(t => Number(t.health) || 0);
-  const backgroundColors = turbines.map(t => {
-    const h = Number(t.health) || 0;
-    return h >= 85 ? '#2ECC71' : h >= 65 ? '#F2C94C' : '#EB5757';
-  });
 
   CHARTS.health = new Chart(canvas.getContext('2d'), {
     type: 'bar',
@@ -2880,7 +3107,7 @@ function renderHealthChart() {
       datasets: [{
         label: 'Health Index (%)',
         data,
-        backgroundColor: backgroundColors,
+        backgroundColor: '#0FA4AF',
         borderWidth: 0,
         borderRadius: 5,
         barPercentage: 0.62
@@ -2948,21 +3175,11 @@ function renderDefectPieChart() {
     types[key] = (types[key] || 0) + 1;
   });
 
-  const palette = {
-    Crack: '#EB5757',
-    Delamination: '#F2C94C',
-    Erosion: '#0FA4AF',
-    Lightning: '#BB86FC',
-    Corrosion: '#E15A5F',
-    'Oil Leakage': '#F0A03C',
-    Surface: '#B9D896',
-    'Localized Damage': '#FACD96',
-    Other: '#7EB8C0'
-  };
-  const fallback = ['#0FA4AF', '#AFDDE5', '#964734', '#2ECC71', '#F2C94C', '#EB5757', '#BB86FC', '#28666E'];
+  const tealRamp = ['#226876', '#348088', '#12A0AA', '#4EC4CC', '#7ED3DA'];
+  const shadeOrder = [0, 3, 1, 4, 2];
   const labels = Object.keys(types).sort((a, b) => types[b] - types[a]);
   const data = labels.map(t => types[t]);
-  const backgroundColors = labels.map((t, i) => palette[t] || fallback[i % fallback.length]);
+  const backgroundColors = labels.map((_, i) => tealRamp[shadeOrder[i % shadeOrder.length]]);
 
   CHARTS.defects = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -2971,8 +3188,10 @@ function renderDefectPieChart() {
       datasets: [{
         data,
         backgroundColor: backgroundColors,
-        borderWidth: 2,
-        borderColor: theme.pieBorder,
+        borderWidth: 0,
+        hoverBorderWidth: 0,
+        borderColor: 'transparent',
+        hoverBorderColor: 'transparent',
         hoverOffset: 6
       }]
     },
@@ -2995,8 +3214,8 @@ function renderDefectPieChart() {
               return chart.data.labels.map((label, i) => ({
                 text: `${label}  ${ds.data[i]} (${Math.round(ds.data[i] / total * 100)}%)`,
                 fillStyle: ds.backgroundColor[i],
-                strokeStyle: theme.pieBorder,
-                lineWidth: 1,
+                strokeStyle: ds.backgroundColor[i],
+                lineWidth: 0,
                 hidden: false,
                 index: i
               }));
@@ -3358,16 +3577,14 @@ function processAIQuery(q) {
 // ══════════════════════════════════════════════════
 // 16. NL TOPBAR SEARCH
 // ══════════════════════════════════════════════════
-document.getElementById('nl-btn')?.addEventListener('click', () => {
+document.getElementById('nl-input')?.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
   const q = document.getElementById('nl-input').value.trim();
   if (!q) return;
   document.getElementById('ai-chat-box').classList.add('open');
   document.getElementById('ai-input').value = q;
   document.getElementById('nl-input').value = '';
   setTimeout(sendAIMessage, 100);
-});
-document.getElementById('nl-input')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('nl-btn').click();
 });
 
 // ══════════════════════════════════════════════════
@@ -3699,10 +3916,10 @@ function findingsForBlade(blade) {
 const REPORT_COLUMNS = [
   ['id', 'Defect ID'],
   ['surface', 'Surface'],
-  ['radial', 'Radial Pos.'],
-  ['dist', 'Dist. from Root'],
   ['location', 'Location'],
   ['type', 'Defect Type'],
+  ['radial', 'Radial Pos.'],
+  ['dist', 'Dist. from Root'],
   ['intensity', 'Intensity'],
   ['size', 'Length / Size'],
   ['priority', 'Priority'],
@@ -3990,7 +4207,7 @@ function clearReportViewer(blade, side) {
   STATE.activeDefect = null;
   STATE.reviewFindingId = null;
   const title = document.getElementById('report-viewer-title');
-  if (title) title.textContent = `Blade ${blade} · ${side}`;
+  if (title) title.textContent = `${bladeDisplayName(blade)} · ${side}`;
   const rgb = document.getElementById('img-rgb');
   const empty = document.getElementById('viewer-empty');
   const photos = [];
@@ -4008,7 +4225,7 @@ function clearReportViewer(blade, side) {
         rgb.removeAttribute('src');
         if (empty) {
           empty.hidden = false;
-          empty.textContent = `No station photo for Blade ${blade} ${side}.`;
+          empty.textContent = `No station photo for ${bladeDisplayName(blade)} ${side}.`;
         }
       });
     } else {
@@ -4016,7 +4233,7 @@ function clearReportViewer(blade, side) {
       rgb.removeAttribute('src');
       if (empty) {
         empty.hidden = false;
-        empty.textContent = `No defects recorded for Blade ${blade} ${side}.`;
+        empty.textContent = `No defects recorded for ${bladeDisplayName(blade)} ${side}.`;
       }
     }
   }
@@ -4025,7 +4242,7 @@ function clearReportViewer(blade, side) {
     body.innerHTML = `
       <div class="assess-section">
         <h4>Finding</h4>
-        <p>No findings recorded for Blade ${escHtml(blade)} · ${escHtml(side)}.</p>
+        <p>No findings recorded for ${escHtml(bladeDisplayName(blade))} · ${escHtml(side)}.</p>
       </div>`;
   }
 }
@@ -4109,6 +4326,7 @@ function initReportPicker() {
     `<option value="${t.id}">${escHtml(turbineLabel(t))}</option>`
   ).join('');
   if (STATE.selectedTurbineId) turbineSel.value = String(STATE.selectedTurbineId);
+  refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === reportTurbineId()));
   const bladeSel = document.getElementById('report-blade');
   if (bladeSel && STATE.selectedBlade) bladeSel.value = STATE.selectedBlade;
   setReportSide(STATE.pocSurface || currentReportSide());
@@ -4116,6 +4334,7 @@ function initReportPicker() {
   const onFilter = (keepSide) => {
     if (reportPickerLock) return;
     STATE.selectedTurbineId = reportTurbineId();
+    refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId));
     const blade = bladeSel?.value || STATE.selectedBlade || 'A';
     STATE.selectedBlade = blade;
     STATE.selectedPart = 'blade-' + blade;
@@ -4329,7 +4548,7 @@ async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
 
   container.innerHTML = `
     <div class="asset-bp-wrap">
-      <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · Blade ${activeBladeLetter()} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
+      <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · ${escHtml(bladeDisplayName(activeBladeLetter()))} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
       <div class="asset-bp-profile" id="asset-bp-profile">
         <div class="asset-bp-stage">
           <img src="${BLADE_POC.profileSrc}" alt="Blade profile ${span} m after annotation">
@@ -4666,6 +4885,17 @@ function openBladeLightbox(src) {
 
 const ANNO_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
 
+function stepAssetPocPoint(delta) {
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const surface = STATE.pocSurface || 'PS';
+  const points = buildPocPoints(turbine).filter(p => p.surface === surface && (p.stationImage || p.annotated));
+  if (!points.length) return;
+  let idx = points.findIndex(p => p.pointIndex === STATE.pocPointIndex);
+  if (idx < 0) idx = delta > 0 ? 0 : points.length - 1;
+  else idx = (idx + delta + points.length) % points.length;
+  selectAssetPocPoint(points[idx].surface, points[idx].pointIndex);
+}
+
 function bindAnnotatedViewerControls() {
   const viewport = document.getElementById('asset-poc-viewport');
   const stage = document.getElementById('asset-poc-stage');
@@ -4716,6 +4946,9 @@ function bindAnnotatedViewerControls() {
     }
     requestAnimationFrame(() => fitAnnotatedImage());
   });
+
+  document.getElementById('asset-poc-prev')?.addEventListener('click', () => stepAssetPocPoint(-1));
+  document.getElementById('asset-poc-next')?.addEventListener('click', () => stepAssetPocPoint(1));
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -4793,6 +5026,7 @@ function initApp() {
   STATE.db = loadDB();
   initBgCanvas();
   setupNav();
+  document.getElementById('asset-back-overview')?.addEventListener('click', () => openAssetOverview());
   renderMetrics();
   renderFleetGrid();
   renderAssetList();
@@ -4869,6 +5103,16 @@ function handleCSVUpload(input, context) {
         document.getElementById('mt-gps') && (document.getElementById('mt-gps').value = row.gps||`${gps[0]},${gps[1]}`||'');
         document.getElementById('mt-rotor') && (document.getElementById('mt-rotor').value = row.rotor_dia||row.rotor||126);
         document.getElementById('mt-hub') && (document.getElementById('mt-hub').value = row.hub_height||row.hub||90);
+        if (document.getElementById('mt-blade-count')) {
+          document.getElementById('mt-blade-count').value = row.blade_count || row.blades_count || row.number_of_blades || 3;
+          syncBladeNumberFields();
+          const listed = String(row.blade_numbers || row.blades || '').split(/[|;]/).map(part => part.trim()).filter(Boolean);
+          ['a', 'b', 'c', 'd', 'e', 'f'].forEach((letter, index) => {
+            const input = document.getElementById(`mt-blade-${index + 1}`);
+            if (!input) return;
+            input.value = row[`blade_${letter}`] || row[`blade_${letter}_number`] || listed[index] || '';
+          });
+        }
         document.getElementById('mt-power') && (document.getElementById('mt-power').value = row.rated_power||row.power||2.5);
         document.getElementById('mt-mfr') && (document.getElementById('mt-mfr').value = row.manufacturer||row.mfr||'Vestas');
         document.getElementById('mt-model') && (document.getElementById('mt-model').value = row.model||'');
