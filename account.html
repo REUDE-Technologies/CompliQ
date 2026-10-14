@@ -200,6 +200,7 @@
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 0; border-bottom: 1px solid #E2F0F0;
     }
+    .security-item[hidden] { display: none !important; }
     .security-item:last-child { border-bottom: none; }
     .security-info h4 { font-size: 0.9rem; font-weight: 700; color: #003135; }
     .security-info p { font-size: 0.78rem; color: #28666E; margin-top: 2px; }
@@ -403,7 +404,7 @@
           <div class="btn-row"><button class="btn-save" onclick="changePassword()">Update Password</button><button class="btn-ghost" onclick="document.getElementById('change-pwd-form').style.display='none'">Cancel</button></div>
         </div>
 
-        <div class="security-item">
+        <div class="security-item" hidden style="display:none">
           <div class="security-info"><h4>Two-Factor Authentication</h4><p>Add an extra layer of security to your account.</p></div>
           <label class="toggle-switch"><input type="checkbox" id="toggle-2fa" onchange="saveSecToggle('2fa',this.checked)"><span class="toggle-slider"></span></label>
         </div>

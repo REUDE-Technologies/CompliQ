@@ -22,7 +22,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=wtBox2">
+  <link rel="stylesheet" href="dashboard.css?v=wtShip2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -63,9 +63,7 @@
     </div>
     <div class="topbar-right">
       <div class="nl-search-wrap">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="nl-input" placeholder="Ask AI: 'Show all critical cracks...'">
-        <button id="nl-btn">Ask</button>
+        <input type="text" id="nl-input" placeholder="Ask AI" aria-label="Ask AI">
       </div>
       <div class="notif-bell-wrap" id="notif-wrap">
         <button class="icon-btn" id="notif-bell">
@@ -80,13 +78,6 @@
           <div id="notif-list-items"></div>
         </div>
       </div>
-      <button class="icon-btn download-btn" id="download-report-btn" title="Download AI inspection report" onclick="generatePDFReport()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>AI Report</span>
-      </button>
-      <a href="javascript:goHome()" class="icon-btn home-btn" title="Back to Home">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      </a>
       <div class="profile-menu" id="profile-menu">
         <button type="button" class="profile-trigger" id="profile-trigger" aria-expanded="false" aria-haspopup="true" title="Account">
           <span class="user-av" id="user-av">OP</span>
@@ -98,7 +89,7 @@
           </div>
           <a href="account.html">Profile</a>
           <button type="button" id="theme-toggle-dash">Dark mode</button>
-          <button type="button" id="switch-solar-btn" onclick="switchDashboard('solar')">Switch to Solar</button>
+          <button type="button" id="switch-solar-btn" onclick="switchDashboard('solar')" hidden>Switch to Solar</button>
           <button type="button" onclick="handleLogout()">Log out</button>
         </div>
       </div>
@@ -109,12 +100,12 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <nav class="sidebar-nav">
+      <button class="nav-item" data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
       <button class="nav-item active" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet</span></button>
       <button class="nav-item" data-tab="asset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Asset</span></button>
       <button class="nav-item" data-tab="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Report</span></button>
-      <button class="nav-item" data-tab="ingest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
-      <button class="nav-item" data-tab="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual</span></button>
-      <button class="nav-item" data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
+      <button class="nav-item is-unavailable" data-tab="ingest" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
+      <button class="nav-item is-unavailable" data-tab="manual" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual</span></button>
       <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin</span></button>
     </nav>
   </aside>
@@ -165,10 +156,10 @@
       <div class="panel full-panel">
         <div class="panel-header">
           <h3>Interactive Fleet Grid</h3>
-          <div class="legend-row">
-            <span class="leg-dot good"></span>Normal
-            <span class="leg-dot warn"></span>Warning
-            <span class="leg-dot crit"></span>Critical
+          <div class="legend-row" id="fleet-status-filters">
+            <button type="button" class="fleet-filter" data-status="normal"><span class="leg-dot good"></span>Normal</button>
+            <button type="button" class="fleet-filter" data-status="warning"><span class="leg-dot warn"></span>Warning</button>
+            <button type="button" class="fleet-filter" data-status="critical"><span class="leg-dot crit"></span>Critical</button>
           </div>
         </div>
         <div class="panel-body">
@@ -196,7 +187,9 @@
          VIEW: ASSET DETAIL
     =========================================== -->
     <section class="view" id="view-asset">
+      <button type="button" class="asset-back-overview" id="asset-back-overview" hidden>Back to Turbine overview</button>
       <!-- Compact turbine strip -->
+      <div class="asset-turbine-row">
       <div class="panel asset-turbine-bar">
         <div class="panel-body asset-turbine-bar-body">
           <div class="asset-turbine-pick">
@@ -233,17 +226,16 @@
               </optgroup>
             </select>
           </div>
-          <div id="turbine-info-panel" class="turbine-info-compact"></div>
-          <button type="button" class="turbine-more-btn" id="turbine-details-toggle" aria-expanded="false">More details</button>
+          <div class="turbine-details-pop">
+            <button type="button" class="turbine-more-btn" id="turbine-details-toggle" aria-expanded="false" aria-controls="turbine-details-extra" aria-label="Turbine details">&gt;</button>
+          </div>
         </div>
-        <div id="turbine-details-extra" class="turbine-details-extra" hidden></div>
+      </div>
+      <div id="turbine-details-extra" class="turbine-details-extra"></div>
       </div>
 
       <!-- Non–Blade-A schematic (hidden in POC mode) -->
       <div class="panel full-panel is-hidden" id="asset-default-schematic-panel" hidden>
-        <div class="panel-header">
-          <h3 id="schematic-title-default">Component Schematic</h3>
-        </div>
         <div class="panel-body schematic-body">
           <div id="blade-schematic-default"></div>
           <div class="blade-legend-row" id="schematic-legend" hidden>
@@ -261,10 +253,6 @@
       <!-- Blade POC stage -->
       <div id="asset-poc-workspace" class="asset-poc-workspace">
         <div class="panel asset-poc-profile-panel">
-          <div class="panel-header">
-            <h3 id="schematic-title">Blade A — PS Profile</h3>
-            <span class="asset-poc-pane-label" id="asset-poc-span-label">48.5 m</span>
-          </div>
           <div class="panel-body asset-poc-profile-body">
             <div id="blade-schematic"></div>
           </div>
@@ -278,6 +266,10 @@
                 <svg class="asset-poc-bbox-overlay" id="asset-poc-bbox-overlay" aria-hidden="true"></svg>
               </div>
               <div class="asset-poc-defect-callout" id="asset-poc-defect-callout" hidden></div>
+              <div class="asset-poc-slide-row">
+                <button type="button" class="asset-poc-slide" id="asset-poc-prev" aria-label="Previous station image">&lt;</button>
+                <button type="button" class="asset-poc-slide" id="asset-poc-next" aria-label="Next station image">&gt;</button>
+              </div>
               <div class="asset-poc-viewer-bar" role="toolbar" aria-label="Image controls">
                 <span class="asset-poc-pane-label" id="asset-poc-station-label">Annotated Image</span>
                 <div class="asset-poc-zoom-controls">
@@ -306,7 +298,6 @@
           <div class="panel asset-poc-defects-panel" id="asset-defects-panel">
             <div class="panel-header">
               <h3>Detected Defects &amp; Decisions</h3>
-              <button class="teal-btn" id="asset-pdf-btn" onclick="exportAssetReport()">⬇ AI inspection report (PDF)</button>
             </div>
             <div id="defect-review-bar" class="defect-review-bar" hidden>
               <p class="defect-review-summary" id="defect-review-summary"></p>
@@ -336,14 +327,13 @@
                 <thead><tr>
                   <th data-col="id">Defect ID</th>
                   <th data-col="surface">Surface</th>
-                  <th data-col="radial">Radial Pos.</th>
-                  <th data-col="dist">Dist. from Root</th>
                   <th data-col="location">Location</th>
                   <th data-col="type">Defect Type</th>
+                  <th data-col="radial">Radial Pos.</th>
+                  <th data-col="dist">Dist. from Root</th>
                   <th data-col="intensity">Intensity</th>
                   <th data-col="size">Length / Size</th>
                   <th data-col="priority">Priority</th>
-                  <th data-col="status">Status</th>
                   <th data-col="review">Review</th>
                 </tr></thead>
                 <tbody id="defects-tbody"></tbody>
@@ -359,7 +349,7 @@
             <div class="panel-body table-panel">
               <table class="data-table">
                 <thead><tr>
-                  <th>Defect ID</th><th>Surface</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Location</th><th>Defect Type</th>
+                  <th>Defect ID</th><th>Surface</th><th>Location</th><th>Defect Type</th><th>Radial Pos.</th><th>Dist. from Root</th>
                   <th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>
                 </tr></thead>
                 <tbody id="defects-tbody-standalone"></tbody>
@@ -412,7 +402,6 @@
               <button type="button" class="icon-btn" onclick="zoomIn()" title="Zoom in" aria-label="Zoom in">+</button>
               <button type="button" class="icon-btn" onclick="zoomOut()" title="Zoom out" aria-label="Zoom out">−</button>
               <button type="button" class="icon-btn" onclick="resetZoom()" title="Reset zoom" aria-label="Reset zoom">↺</button>
-              <button type="button" class="icon-btn" onclick="generatePDFReport()" title="Download Gamesa G97 inspection report (PDF)" aria-label="Download Gamesa G97 inspection report PDF">⬇</button>
             </div>
           </div>
         </div>
@@ -425,6 +414,9 @@
           </div>
           <div class="panel-body" id="report-decision-body">
             <!-- Populated by JS -->
+          </div>
+          <div class="panel-footer report-download-row">
+            <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
         </div>
       </div>
@@ -525,12 +517,19 @@
                 <div class="fg"><label>Location (GPS Lat, Long) *</label><input type="text" id="mt-gps" placeholder="e.g. 13.0827, 80.2707" class="styled-input" required></div>
                 <div class="fg"><label>Rotor Diameter (m)</label><input type="number" id="mt-rotor" placeholder="126" class="styled-input" value="126"></div>
                 <div class="fg"><label>Hub Height (m)</label><input type="number" id="mt-hub" placeholder="90" class="styled-input" value="90"></div>
+                <div class="fg"><label>Number of blades</label><input type="number" id="mt-blade-count" min="1" max="6" value="3" class="styled-input" oninput="syncBladeNumberFields()"></div>
+                <div class="fg" data-blade-slot="1"><label>Blade A number</label><input type="text" id="mt-blade-1" placeholder="e.g. 5297" class="styled-input"></div>
+                <div class="fg" data-blade-slot="2"><label>Blade B number</label><input type="text" id="mt-blade-2" placeholder="e.g. 5310" class="styled-input"></div>
+                <div class="fg" data-blade-slot="3"><label>Blade C number</label><input type="text" id="mt-blade-3" placeholder="e.g. 5288" class="styled-input"></div>
+                <div class="fg" data-blade-slot="4" hidden><label>Blade D number</label><input type="text" id="mt-blade-4" placeholder="e.g. 5401" class="styled-input"></div>
+                <div class="fg" data-blade-slot="5" hidden><label>Blade E number</label><input type="text" id="mt-blade-5" placeholder="e.g. 5402" class="styled-input"></div>
+                <div class="fg" data-blade-slot="6" hidden><label>Blade F number</label><input type="text" id="mt-blade-6" placeholder="e.g. 5403" class="styled-input"></div>
                 <div class="fg"><label>Rated Power (MW)</label><input type="number" id="mt-power" step="0.1" placeholder="2.5" class="styled-input" value="2.5"></div>
                 <div class="fg"><label>Manufacturer</label><input type="text" id="mt-mfr" placeholder="Vestas / Siemens / GE" class="styled-input" value="Vestas"></div>
                 <div class="fg"><label>Model</label><input type="text" id="mt-model" placeholder="V150-4.5 MW" class="styled-input"></div>
                 <div class="fg"><label>Commission Year</label><input type="number" id="mt-year" min="2000" max="2030" value="2022" class="styled-input"></div>
-                <div class="fg"><label>Current Wind Speed (m/s)</label><input type="number" id="mt-wind" step="0.1" value="12.0" class="styled-input"></div>
-                <div class="fg"><label>Current RPM</label><input type="number" id="mt-rpm" step="0.1" value="14.5" class="styled-input"></div>
+                <div class="fg"><label>Wind Speed (m/s)</label><input type="number" id="mt-wind" step="0.1" value="12.0" class="styled-input"></div>
+                <div class="fg"><label>RPM</label><input type="number" id="mt-rpm" step="0.1" value="14.5" class="styled-input"></div>
                 <div class="fg"><label>Initial Health Index (%)</label><input type="number" id="mt-health" min="0" max="100" value="97" class="styled-input"></div>
               </div>
               <div class="fg" style="margin-top:12px"><label>Notes / Additional Details</label>
@@ -629,7 +628,7 @@
          VIEW: ANALYTICS
     =========================================== -->
     <section class="view" id="view-analytics">
-      <div class="analytics-summary" id="analytics-summary"></div>
+      <div class="analytics-summary" id="analytics-summary" hidden></div>
       <div class="analytics-grid">
         <div class="panel analytics-panel">
           <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-live-pill">Live</span></div>
@@ -717,6 +716,6 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=wtBlade"></script>
+<script src="dashboard.js?v=wtShip3"></script>
 </body>
 </html>
