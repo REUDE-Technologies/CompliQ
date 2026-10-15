@@ -22,7 +22,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=wtShip2">
+  <link rel="stylesheet" href="dashboard.css?v=reudeOrange2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -134,7 +134,7 @@
             <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
           </div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" id="metric-coverage" hidden>
           <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
           <div class="metric-body">
             <span class="metric-label">Inspection Coverage</span>
@@ -145,9 +145,9 @@
         <div class="metric-card">
           <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
           <div class="metric-body">
-            <span class="metric-label">Avg. Confidence</span>
+            <span class="metric-label">Critical Turbines</span>
             <span class="metric-val" id="m-conf">—</span>
-            <span class="metric-sub">P95 &lt; 200ms latency</span>
+            <span class="metric-sub" id="m-conf-sub">Loading...</span>
           </div>
         </div>
       </div>
@@ -168,7 +168,7 @@
       </div>
 
       <!-- Asset Registry List -->
-      <div class="panel full-panel">
+      <div class="panel full-panel" id="asset-registry" hidden>
         <div class="panel-header">
           <h3>Asset Registry &amp; Status</h3>
           <div class="filter-btns">
@@ -181,6 +181,7 @@
           <div class="asset-list" id="asset-list"></div>
         </div>
       </div>
+      <div id="fleet-turbine-pop" class="fleet-turbine-pop" hidden></div>
     </section>
 
     <!-- ==========================================
@@ -375,18 +376,33 @@
             <option value="C">Blade C</option>
           </select>
         </label>
-        <div class="side-tabs" role="tablist" aria-label="Blade side">
+        <div class="side-tabs" role="group" aria-label="Blade side">
           <span class="side-tabs-label">Side</span>
           <div class="side-tabs-row">
-            <button type="button" class="side-tab" data-side="SS" role="tab">Suction SS</button>
-            <button type="button" class="side-tab" data-side="LE" role="tab">Leading LE</button>
-            <button type="button" class="side-tab is-on" data-side="PS" role="tab">Pressure PS</button>
-            <button type="button" class="side-tab" data-side="TE" role="tab">Trailing TE</button>
+            <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
+            <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
+            <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
+            <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
           </div>
         </div>
-        <label class="report-defect-field">Defect
-          <select id="report-defect" class="styled-select"></select>
-        </label>
+        <div class="report-override-field" id="report-override-field">
+          <label>Category
+            <select id="report-review-cat" class="styled-select">
+              <option value="1">CAT 1 – Cosmetic</option>
+              <option value="2">CAT 2 – Minor</option>
+              <option value="3">CAT 3 – Moderate</option>
+              <option value="4">CAT 4 – Serious</option>
+              <option value="5">CAT 5 – Critical</option>
+            </select>
+          </label>
+          <label>Defect class
+            <select id="report-review-name" class="styled-select"></select>
+          </label>
+          <div class="report-override-actions">
+            <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
+            <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
+          </div>
+        </div>
       </div>
       <div class="report-layout">
         <div class="panel flex-3">
@@ -404,18 +420,7 @@
               <button type="button" class="icon-btn" onclick="resetZoom()" title="Reset zoom" aria-label="Reset zoom">↺</button>
             </div>
           </div>
-        </div>
-
-        <!-- Decision Card -->
-        <div class="panel flex-2">
-          <div class="panel-header">
-            <h3>Engineering Assessment</h3>
-            <span class="priority-badge" id="report-priority-badge">—</span>
-          </div>
-          <div class="panel-body" id="report-decision-body">
-            <!-- Populated by JS -->
-          </div>
-          <div class="panel-footer report-download-row">
+          <div class="panel-footer viewer-download-row">
             <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
         </div>
@@ -663,7 +668,7 @@
   <footer class="dashboard-footer">
     <div class="footer-content">
       <div class="footer-brand">
-        <span class="footer-tagline">Powered by REUDE</span>
+        <span class="footer-tagline">Powered by <span class="footer-reude">REUDE</span></span>
       </div>
       <div class="footer-contact">
         <a href="mailto:cmo_ira@reude.tech" class="footer-link">Contact support: cmo_ira@reude.tech</a>
@@ -716,6 +721,8 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=wtShip3"></script>
+<script src="dashboard.js?v=wtParts4"></script>
 </body>
 </html>
+</html>
+
