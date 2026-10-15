@@ -851,7 +851,8 @@ body {
 @keyframes fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
 /* METRIC CARDS */
-.metrics-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; }
+.metrics-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+#metric-coverage { display: none !important; }
 .metric-card {
   background: var(--c-card); border: 1px solid var(--c-border);
   border-radius: var(--r-card); padding: 18px 20px;
@@ -936,9 +937,40 @@ body {
 .t-blade-el:nth-child(3) { transform: rotate(240deg); }
 @keyframes spin-hub { to { transform: rotate(360deg); } }
 
+#asset-registry { display: none !important; }
+.fleet-turbine-pop {
+  position: fixed;
+  z-index: 90;
+  width: 340px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #06353b;
+  color: #fff;
+  border: 1px solid rgba(15,164,175,0.35);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fleet-turbine-pop[hidden] { display: none !important; }
+.fleet-pop-head { display: flex; flex-direction: column; gap: 2px; }
+.fleet-pop-head strong { font-size: 0.92rem; }
+.fleet-pop-head span, .fleet-turbine-pop p { margin: 0; font-size: 0.78rem; color: #afdde5; }
+.fleet-pop-health { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 700; }
+.fleet-turbine-pop .view-btn { align-self: flex-start; }
+[data-theme="light"] .fleet-turbine-pop {
+  background: #fff;
+  color: #063235;
+  border-color: rgba(6,50,53,0.12);
+}
+[data-theme="light"] .fleet-pop-head span,
+[data-theme="light"] .fleet-turbine-pop p { color: #28666e; }
+#asset-defects-standalone .table-panel { display: none !important; }
 .t-name { font-size: 0.82rem; font-weight: 700; color: #fff; }
 .t-health { font-size: 0.7rem; font-family: var(--font-mono); color: var(--c-muted); }
-.t-loc { font-size: 0.65rem; color: var(--c-muted); text-align: center; }
+.t-loc { font-size: 0.88rem; font-weight: 600; line-height: 1.25; color: var(--c-muted); text-align: center; }
+#view-fleet.view.active { overflow: hidden; padding-bottom: 0; }
+#view-fleet > .panel.full-panel { flex: 1 1 auto; min-height: 0; }
 
 /* LIVE LOG */
 .live-badge { font-size: 0.68rem; font-weight: 700; color: #2ECC71; letter-spacing: 0.5px; animation: pulse-dot 2s infinite; }
@@ -1110,6 +1142,11 @@ textarea.styled-input { resize: vertical; }
 
 /* REPORT VIEWER */
 .report-layout { display: flex; gap: 20px; height: 100%; }
+#view-report.view.active { overflow: hidden; }
+#view-report .report-layout { flex: 1; min-height: 0; height: auto; }
+#view-report .report-layout > .panel { min-height: 0; }
+#view-report .viewer-body { flex: 1; min-height: 0; overflow: hidden; }
+#view-report .img-frame { min-height: 0; }
 .viewer-body { display: flex; flex-direction: column; gap: 12px; }
 .img-frame {
   flex-grow: 1; position: relative; overflow: hidden;
@@ -1147,7 +1184,6 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 .priority-badge.MEDIUM { background: rgba(15,164,175,0.15); color: var(--c-teal); border: 1px solid rgba(15,164,175,0.2); }
 .priority-badge.LOW { background: rgba(255,255,255,0.06); color: var(--c-muted); }
 #report-decision-body { display: flex; flex-direction: column; gap: 14px; padding: 16px 20px; overflow-y: auto; }
-.report-download-row .teal-btn { width: 100%; justify-content: center; }
 .assess-section h4 { font-size: 0.7rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--c-muted); margin-bottom: 6px; }
 .assess-section p { font-size: 0.8rem; line-height: 1.5; color: var(--c-sky); }
 .rules-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
@@ -1670,6 +1706,10 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   letter-spacing: 0.5px;
 }
 
+.footer-tagline .footer-reude {
+  color: #FF6F00;
+}
+
 .footer-contact {
   display: flex;
   align-items: center;
@@ -2178,7 +2218,24 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   color: var(--c-muted);
 }
 .report-defect-field,
-.side-tabs { grid-column: 1 / -1; }
+.side-tabs,
+.report-override-field { grid-column: 1 / -1; }
+.report-override-field {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1.2fr) auto;
+  gap: 8px 14px;
+  align-items: end;
+}
+.report-override-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.viewer-download-row {
+  display: flex;
+  justify-content: flex-end;
+}
+.viewer-download-row .teal-btn { width: auto; }
 .report-picker .styled-select {
   min-width: 0;
   width: 100%;

@@ -319,8 +319,6 @@ function renderMetrics() {
   const avgHealth = db.turbines.reduce((s,t) => s + t.health, 0) / db.turbines.length;
   const totalAnomalies = db.turbines.reduce((s,t) => s + t.anomalies, 0);
   const avgCoverage = db.turbines.reduce((s,t) => s + t.inspCoverage, 0) / db.turbines.length;
-  const highConf = db.defects.filter(d => d.confidence >= 0.85).length;
-  const avgConf = db.defects.reduce((s,d) => s + d.confidence, 0) / Math.max(db.defects.length, 1);
 
   animateNumber('m-health', avgHealth.toFixed(1) + '%');
   document.getElementById('m-health-sub').textContent = `${db.turbines.filter(t=>t.status==='normal').length} nominal, ${db.turbines.filter(t=>t.status!=='normal').length} flagged`;
@@ -328,7 +326,11 @@ function renderMetrics() {
   document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
-  animateNumber('m-conf', (avgConf * 100).toFixed(0) + '%');
+  const critical = db.turbines.filter(t => t.status === 'critical');
+  const confEl = document.getElementById('m-conf');
+  if (confEl) confEl.textContent = String(critical.length);
+  const confSub = document.getElementById('m-conf-sub');
+  if (confSub) confSub.textContent = critical.length ? critical.map(t => t.assetId).join(', ') : 'None in critical status';
 }
 
 function animateNumber(id, target) {
@@ -388,10 +390,60 @@ function renderFleetGrid() {
       STATE.selectedTurbineId = t.id;
       document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
       card.classList.add('active');
+      hideFleetTurbinePop();
       navigateTo('asset');
     });
+    card.addEventListener('mouseenter', () => showFleetTurbinePop(card, t));
+    card.addEventListener('mouseleave', scheduleHideFleetPop);
     grid.appendChild(card);
   });
+}
+
+let fleetPopTimer = null;
+
+function scheduleHideFleetPop() {
+  clearTimeout(fleetPopTimer);
+  fleetPopTimer = setTimeout(hideFleetTurbinePop, 140);
+}
+
+function hideFleetTurbinePop() {
+  const pop = document.getElementById('fleet-turbine-pop');
+  if (pop) pop.hidden = true;
+}
+
+function showFleetTurbinePop(card, t) {
+  const pop = document.getElementById('fleet-turbine-pop');
+  if (!pop || !t) return;
+  clearTimeout(fleetPopTimer);
+  const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
+  const gps = t.gps ? `${t.gps.lat}°N, ${t.gps.lng}°E` : '';
+  pop.innerHTML = `
+    <div class="fleet-pop-head">
+      <strong>${escHtml(turbineLabel(t))}</strong>
+      <span>${escHtml([t.manufacturer, t.model].filter(Boolean).join(' '))}</span>
+    </div>
+    <div class="fleet-pop-health">
+      <span>${t.health}% Health</span>
+      <div class="hbar-bg"><div class="hbar-fill ${cls}" style="width:${Number(t.health) || 0}%"></div></div>
+    </div>
+    <p>${t.anomalies} anomalies</p>
+    <p>${escHtml(t.location || t.site || '')}</p>
+    <p>${escHtml(gps)}</p>
+    <p>Last: ${escHtml(t.lastInspection || '—')}</p>
+  `;
+  pop.hidden = false;
+  const width = 340;
+  const rect = card.getBoundingClientRect();
+  let left = rect.left + (rect.width / 2) - (width / 2);
+  left = Math.max(16, Math.min(left, window.innerWidth - width - 16));
+  pop.style.left = `${left}px`;
+  pop.style.top = '0px';
+  const height = pop.offsetHeight;
+  let top = rect.top - height - 12;
+  if (top < 72) top = rect.bottom + 12;
+  pop.style.top = `${top}px`;
+  pop.onmouseenter = () => clearTimeout(fleetPopTimer);
+  pop.onmouseleave = scheduleHideFleetPop;
 }
 
 function navigateTo(tab) {
@@ -1000,6 +1052,9 @@ async function mountTurbine3D(host, turbine, onPick) {
   const pickables = [];
   const bladeLabels = [];
   let nacelleMesh = null;
+  const nacellePieces = [];
+  const hubCenterWorld = new THREE.Vector3();
+  let bladeRootReach = 0;
   const tagMesh = (mesh, part, label) => {
     mesh.material = Array.isArray(mesh.material)
       ? mesh.material.map(m => m.clone())
@@ -1054,22 +1109,25 @@ async function mountTurbine3D(host, turbine, onPick) {
       });
     }
     while (axes.length < 3) axes.push((axes.length * Math.PI * 2) / 3);
-    const nearest = (ang) => {
-      let best = 0;
-      let gap = Infinity;
-      axes.forEach((axis, i) => {
-        let d = Math.abs(ang - axis);
-        if (d > Math.PI) d = Math.PI * 2 - d;
-        if (d < gap) { gap = d; best = i; }
-      });
-      return best;
-    };
+    const axisVec = axes.map(ang => ({ x: Math.sin(ang), y: Math.cos(ang) }));
     const pushTri = (ia, ib, ic) => {
-      const cx = (pos.getX(ia) + pos.getX(ib) + pos.getX(ic)) / 3;
-      const cy = (pos.getY(ia) + pos.getY(ib) + pos.getY(ic)) / 3;
-      let ang = Math.atan2(cx, cy);
-      if (ang < 0) ang += Math.PI * 2;
-      const bucket = nearest(ang);
+      const score = [0, 0, 0];
+      [ia, ib, ic].forEach(i => {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const weight = x * x + y * y;
+        if (weight < 1e-10) return;
+        let best = 0;
+        let bestDist = Infinity;
+        axisVec.forEach((axis, k) => {
+          const dist = Math.abs(x * axis.y - y * axis.x);
+          if (dist < bestDist) { bestDist = dist; best = k; }
+        });
+        score[best] += weight;
+      });
+      let bucket = 0;
+      if (score[1] > score[bucket]) bucket = 1;
+      if (score[2] > score[bucket]) bucket = 2;
       [ia, ib, ic].forEach(i => {
         groups[bucket].pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
         if (norm) groups[bucket].norm.push(norm.getX(i), norm.getY(i), norm.getZ(i));
@@ -1212,74 +1270,180 @@ async function mountTurbine3D(host, turbine, onPick) {
             obj.matrix.copy(parentInv.multiply(moved));
             obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
           });
-          const nacelle = named['farm-scale-wind-turbine_4'];
-          if (nacelle) {
-            nacelle.updateWorldMatrix(true, true);
-            const nacelleBox = new THREE.Box3().setFromObject(nacelle);
-            const nacelleCenter = nacelleBox.getCenter(new THREE.Vector3());
-            const outward = shaft.clone();
-            const hubNow = new THREE.Box3().setFromObject(hub).getCenter(new THREE.Vector3());
-            if (hubNow.clone().sub(nacelleCenter).dot(outward) < 0) outward.negate();
-            const project = (point) => point.clone().sub(nacelleCenter).dot(outward);
-            let nacelleFront = -Infinity;
-            const corner = new THREE.Vector3();
-            const xs = [nacelleBox.min.x, nacelleBox.max.x];
-            const ys = [nacelleBox.min.y, nacelleBox.max.y];
-            const zs = [nacelleBox.min.z, nacelleBox.max.z];
-            xs.forEach(x => ys.forEach(y => zs.forEach(z => {
-              nacelleFront = Math.max(nacelleFront, project(corner.set(x, y, z)));
-            })));
-            const sample = new THREE.Vector3();
-            const fromHub = new THREE.Vector3();
-            const hubSpan = new THREE.Box3().setFromObject(hub).getSize(new THREE.Vector3()).length() * 0.55;
-            let rotorBack = Infinity;
-            rotorParts.forEach(obj => {
-              const attr = obj.geometry && obj.geometry.attributes && obj.geometry.attributes.position;
-              if (!attr) return;
-              obj.updateWorldMatrix(true, true);
-              const step = Math.max(1, Math.floor(attr.count / 280));
-              for (let i = 0; i < attr.count; i += step) {
-                sample.fromBufferAttribute(attr, i);
-                obj.localToWorld(sample);
-                fromHub.copy(sample).sub(hubNow);
-                const along = fromHub.dot(outward);
-                fromHub.addScaledVector(outward, -along);
-                if (fromHub.length() > hubSpan) continue;
-                rotorBack = Math.min(rotorBack, project(sample));
-              }
-            });
-            const clearance = nacelleBox.getSize(new THREE.Vector3()).length() * 0.015;
-            const shift = (nacelleFront + clearance) - rotorBack;
-            if (shift > 0.0001) {
-              const delta = outward.multiplyScalar(shift);
-              rotorParts.forEach(obj => {
-                obj.updateMatrixWorld(true);
-                const parentInv = obj.parent.matrixWorld.clone().invert();
-                const moved = new THREE.Matrix4()
-                  .makeTranslation(delta.x, delta.y, delta.z)
-                  .multiply(obj.matrixWorld);
-                obj.matrix.copy(parentInv.multiply(moved));
-                obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
-              });
-            }
-          }
         }
       }
     }
     if (hub) tagMesh(hub, 'hub', 'Hub');
-    const towerBits = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
+    const towerSources = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
       .map(name => named[name]).filter(Boolean);
-    towerBits.forEach(mesh => {
-      const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
-      mesh.userData.wy = c.y;
+    const worldPoint = new THREE.Vector3();
+    let axisX = 0;
+    let axisZ = 0;
+    let axisN = 0;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const radii = [];
+    towerSources.forEach(mesh => {
+      mesh.updateWorldMatrix(true, true);
+      const attr = mesh.geometry?.attributes?.position;
+      if (!attr) return;
+      for (let i = 0; i < attr.count; i++) {
+        worldPoint.fromBufferAttribute(attr, i);
+        mesh.localToWorld(worldPoint);
+        axisX += worldPoint.x;
+        axisZ += worldPoint.z;
+        axisN += 1;
+        minY = Math.min(minY, worldPoint.y);
+        maxY = Math.max(maxY, worldPoint.y);
+        radii.push(Math.hypot(worldPoint.x, worldPoint.z));
+      }
     });
-    towerBits.sort((a, b) => a.userData.wy - b.userData.wy);
-    towerBits.forEach((mesh, i) => {
-      tagMesh(mesh, i === 0 ? 'foundation' : 'tower', i === 0 ? 'Foundation' : 'Tower');
+    if (axisN) { axisX /= axisN; axisZ /= axisN; }
+    let shaftN = 0;
+    let shaftX = 0;
+    let shaftZ = 0;
+    const shaftRadii = [];
+    towerSources.forEach(mesh => {
+      const attr = mesh.geometry?.attributes?.position;
+      if (!attr) return;
+      for (let i = 0; i < attr.count; i++) {
+        worldPoint.fromBufferAttribute(attr, i);
+        mesh.localToWorld(worldPoint);
+        const radius = Math.hypot(worldPoint.x - axisX, worldPoint.z - axisZ);
+        if (radius > 1.2) continue;
+        shaftX += worldPoint.x;
+        shaftZ += worldPoint.z;
+        shaftN += 1;
+        shaftRadii.push(radius);
+      }
     });
-    if (named['farm-scale-wind-turbine_4']) tagMesh(named['farm-scale-wind-turbine_4'], 'nacelle', 'Nacelle');
-    nacelleMesh = named['farm-scale-wind-turbine_4'] || null;
+    if (shaftN) { axisX = shaftX / shaftN; axisZ = shaftZ / shaftN; }
+    shaftRadii.sort((a, b) => a - b);
+    const shaftRadius = shaftRadii[Math.floor(shaftRadii.length * 0.6)] || 0.8;
+    const housingRadius = shaftRadius * 1.75;
+    const baseCut = minY + Math.max(0.35, (maxY - minY) * 0.06);
+    const topCut = maxY - Math.max(0.9, (maxY - minY) * 0.16);
+    const splitStructure = (mesh) => {
+      const geo = mesh.geometry;
+      const pos = geo.attributes.position;
+      const norm = geo.attributes.normal;
+      const index = geo.index;
+      const buckets = { foundation: { pos: [], norm: [] }, tower: { pos: [], norm: [] }, nacelle: { pos: [], norm: [] } };
+      const ys = [];
+      const rs = [];
+      mesh.updateWorldMatrix(true, true);
+      for (let i = 0; i < pos.count; i++) {
+        worldPoint.fromBufferAttribute(pos, i);
+        mesh.localToWorld(worldPoint);
+        ys.push(worldPoint.y);
+        rs.push(Math.hypot(worldPoint.x - axisX, worldPoint.z - axisZ));
+      }
+      const pushTri = (ia, ib, ic) => {
+        const radius = (rs[ia] + rs[ib] + rs[ic]) / 3;
+        const top = Math.max(ys[ia], ys[ib], ys[ic]);
+        const low = Math.min(ys[ia], ys[ib], ys[ic]);
+        const key = (radius > housingRadius && low > topCut) ? 'nacelle' : (top < baseCut ? 'foundation' : 'tower');
+        [ia, ib, ic].forEach(i => {
+          buckets[key].pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+          if (norm) buckets[key].norm.push(norm.getX(i), norm.getY(i), norm.getZ(i));
+        });
+      };
+      if (index) {
+        for (let i = 0; i < index.count; i += 3) pushTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+      } else {
+        for (let i = 0; i < pos.count; i += 3) pushTri(i, i + 1, i + 2);
+      }
+      const made = [];
+      Object.entries(buckets).forEach(([key, group]) => {
+        if (group.pos.length < 9) return;
+        const ggeo = new THREE.BufferGeometry();
+        ggeo.setAttribute('position', new THREE.Float32BufferAttribute(group.pos, 3));
+        if (group.norm.length) ggeo.setAttribute('normal', new THREE.Float32BufferAttribute(group.norm, 3));
+        else ggeo.computeVertexNormals();
+        const sourceMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        const piece = new THREE.Mesh(ggeo, sourceMat.clone());
+        piece.position.copy(mesh.position);
+        piece.quaternion.copy(mesh.quaternion);
+        piece.scale.copy(mesh.scale);
+        piece.name = mesh.name + '-' + key;
+        mesh.parent.add(piece);
+        const pieceSize = new THREE.Box3().setFromObject(piece).getSize(new THREE.Vector3());
+        if (pieceSize.x < 0.015 || pieceSize.y < 0.015 || pieceSize.z < 0.015) {
+          mesh.parent.remove(piece);
+          ggeo.dispose();
+          if (piece.material?.dispose) piece.material.dispose();
+          return;
+        }
+        const label = key === 'foundation' ? 'Foundation' : (key === 'nacelle' ? 'Nacelle' : 'Tower');
+        tagMesh(piece, key, label);
+        if (key === 'nacelle') nacellePieces.push(piece);
+        made.push(piece);
+      });
+      if (made.length) mesh.visible = false;
+      return made;
+    };
+    towerSources.forEach(splitStructure);
+    if (named['farm-scale-wind-turbine_4']) {
+      tagMesh(named['farm-scale-wind-turbine_4'], 'nacelle', 'Nacelle');
+      nacellePieces.push(named['farm-scale-wind-turbine_4']);
+    }
+    nacelleMesh = nacellePieces[0] || null;
     if (named['farm-scale-wind-turbine_5']) tagMesh(named['farm-scale-wind-turbine_5'], 'anemometer', 'Anemometer / Sensors');
+    const rotorSeat = pickables.filter(mesh => mesh.userData.part === 'hub' || String(mesh.userData.part || '').startsWith('blade-'));
+    if (hub && nacellePieces.length && rotorSeat.length) {
+      const housingCenter = new THREE.Vector3();
+      const housingBox = new THREE.Box3();
+      nacellePieces.forEach(mesh => housingBox.union(new THREE.Box3().setFromObject(mesh)));
+      housingBox.getCenter(housingCenter);
+      const hubBox = new THREE.Box3().setFromObject(hub);
+      const hubCenter = hubBox.getCenter(new THREE.Vector3());
+      const hubSize = hubBox.getSize(new THREE.Vector3());
+      const shaft = new THREE.Vector3(0, 0, 1).applyQuaternion(hub.getWorldQuaternion(new THREE.Quaternion())).normalize();
+      if (hubCenter.clone().sub(housingCenter).dot(shaft) < 0) shaft.negate();
+      const project = (point) => point.clone().sub(housingCenter).dot(shaft);
+      const lipReach = Math.max(hubSize.x, hubSize.y) * 1.15;
+      const sample = new THREE.Vector3();
+      const radial = new THREE.Vector3();
+      let nose = -Infinity;
+      nacellePieces.forEach(mesh => {
+        const attr = mesh.geometry?.attributes?.position;
+        if (!attr) return;
+        mesh.updateWorldMatrix(true, true);
+        for (let i = 0; i < attr.count; i++) {
+          sample.fromBufferAttribute(attr, i);
+          mesh.localToWorld(sample);
+          radial.copy(sample).sub(hubCenter);
+          const along = radial.dot(shaft);
+          radial.addScaledVector(shaft, -along);
+          if (radial.length() > lipReach) continue;
+          if (Math.abs(sample.y - hubCenter.y) > Math.max(hubSize.y, hubSize.x) * 0.9) continue;
+          nose = Math.max(nose, project(sample));
+        }
+      });
+      let hubBack = Infinity;
+      const hubAttr = hub.geometry?.attributes?.position;
+      if (hubAttr) {
+        hub.updateWorldMatrix(true, true);
+        for (let i = 0; i < hubAttr.count; i++) {
+          sample.fromBufferAttribute(hubAttr, i);
+          hub.localToWorld(sample);
+          hubBack = Math.min(hubBack, project(sample));
+        }
+      }
+      const tuck = Math.max(hubSize.z * 0.12, 0.02);
+      const shift = (nose - tuck) - hubBack;
+      const limit = Math.max(hubSize.length() * 3, 0.2);
+      if (Number.isFinite(nose) && Number.isFinite(hubBack) && Math.abs(shift) > 0.0001 && Math.abs(shift) < limit) {
+        const delta = shaft.clone().multiplyScalar(shift);
+        rotorSeat.forEach(obj => {
+          obj.updateMatrixWorld(true);
+          const parentInv = obj.parent.matrixWorld.clone().invert();
+          const moved = new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z).multiply(obj.matrixWorld);
+          obj.matrix.copy(parentInv.multiply(moved));
+          obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+        });
+      }
+    }
     const addHotspot = (mesh, scale = 0.9) => {
       if (!mesh || !mesh.parent) return;
       const box = new THREE.Box3().setFromObject(mesh);
@@ -1299,9 +1463,21 @@ async function mountTurbine3D(host, turbine, onPick) {
       mesh.parent.add(spot);
       tagMesh(spot, mesh.userData.part, mesh.userData.label);
     };
-    if (hub) addHotspot(hub);
-    if (nacelleMesh) addHotspot(nacelleMesh, 1.35);
+    if (hub) addHotspot(hub, 0.45);
+    if (named['farm-scale-wind-turbine_4']) addHotspot(named['farm-scale-wind-turbine_4'], 0.55);
     if (named['farm-scale-wind-turbine_5']) addHotspot(named['farm-scale-wind-turbine_5']);
+    if (hub) {
+      const hb = new THREE.Box3().setFromObject(hub);
+      hubCenterWorld.copy(hb.getCenter(new THREE.Vector3()));
+      const hubSpan = Math.max(hb.getSize(new THREE.Vector3()).length(), 0.2);
+      let tipReach = hubSpan;
+      pickables.forEach(mesh => {
+        if (mesh.userData.hotspot || !String(mesh.userData.part || '').startsWith('blade-')) return;
+        const box = new THREE.Box3().setFromObject(mesh);
+        tipReach = Math.max(tipReach, hubCenterWorld.distanceTo(box.getCenter(new THREE.Vector3())));
+      });
+      bladeRootReach = Math.max(hubSpan * 1.6, tipReach * 0.2);
+    }
 
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const fov = camera.fov * Math.PI / 180;
@@ -1370,16 +1546,23 @@ async function mountTurbine3D(host, turbine, onPick) {
   let moved = 0;
   let lx = 0;
   let ly = 0;
-  let hovered = null;
+  let hoveredPart = null;
   const hoverTip = document.createElement('div');
   hoverTip.className = 'turbine-hover-label';
   hoverTip.hidden = true;
   host.appendChild(hoverTip);
+  const paintMaterials = (mesh, hex) => {
+    const list = !mesh?.material ? [] : (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+    list.forEach(mat => { if (mat?.emissive) mat.emissive.setHex(hex); });
+  };
   const paintHover = (mesh, clientX, clientY) => {
-    if (hovered !== mesh) {
-      if (hovered?.material?.emissive) hovered.material.emissive.setHex(0x000000);
-      hovered = mesh;
-      if (mesh?.material?.emissive) mesh.material.emissive.setHex(0x8fd3d8);
+    const part = mesh?.userData?.part || null;
+    if (hoveredPart !== part) {
+      pickables.forEach(item => {
+        if (item.userData.hotspot) return;
+        paintMaterials(item, item.userData.part === part ? 0x8fd3d8 : 0x000000);
+      });
+      hoveredPart = part;
       host.title = mesh?.userData?.label || 'Left drag turns, both buttons pan';
     }
     const label = mesh?.userData?.label;
@@ -1407,14 +1590,12 @@ async function mountTurbine3D(host, turbine, onPick) {
     pivot.updateMatrixWorld(true);
     raycaster.setFromCamera(pointer, camera);
     const nacelleMats = [];
-    if (nacelleMesh) {
-      nacelleMesh.traverse(obj => {
-        const list = !obj.material ? [] : (Array.isArray(obj.material) ? obj.material : [obj.material]);
-        list.forEach(mat => {
-          if (!nacelleMats.includes(mat)) nacelleMats.push(mat);
-        });
+    nacellePieces.forEach(mesh => {
+      const list = !mesh.material ? [] : (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+      list.forEach(mat => {
+        if (!nacelleMats.includes(mat)) nacelleMats.push(mat);
       });
-    }
+    });
     const savedSides = nacelleMats.map(mat => mat.side);
     nacelleMats.forEach(mat => { mat.side = THREE.DoubleSide; });
     let hits = [];
@@ -1424,21 +1605,25 @@ async function mountTurbine3D(host, turbine, onPick) {
       nacelleMats.forEach((mat, i) => { mat.side = savedSides[i]; });
     }
     if (!hits.length) return null;
+    if (bladeRootReach > 0) {
+      hits = hits.filter(hit => {
+        const part = hit.object.userData.part;
+        if (hit.object.userData.hotspot || (part !== 'tower' && part !== 'foundation')) return true;
+        return hit.point.distanceTo(hubCenterWorld) > bladeRootReach;
+      });
+    }
+    if (!hits.length) return null;
     const slack = (camera.userData.base?.length() || 8) * 0.04;
     const spot = hits.find(hit => hit.object.userData.hotspot);
     const solid = hits.find(hit => !hit.object.userData.hotspot);
-    if (nacelleMesh && solid && (solid.object.userData.part === 'tower' || solid.object.userData.part === 'foundation')) {
-      const housing = new THREE.Box3().setFromObject(nacelleMesh);
-      const size = housing.getSize(new THREE.Vector3());
-      const along = size.x >= size.z ? 'x' : 'z';
-      housing.expandByVector(new THREE.Vector3(
-        along === 'x' ? size.x * 0.7 : size.x * 0.2,
-        size.y * 0.2,
-        along === 'z' ? size.z * 0.7 : size.z * 0.2
-      ));
-      if (housing.containsPoint(solid.point)) return nacelleMesh;
+    if (solid && String(solid.object.userData.part || '').startsWith('blade-')) return solid.object;
+    if (nacellePieces.length && solid && (solid.object.userData.part === 'tower' || solid.object.userData.part === 'foundation')) {
+      const housing = new THREE.Box3();
+      nacellePieces.forEach(mesh => housing.union(new THREE.Box3().setFromObject(mesh)));
+      housing.expandByScalar(housing.getSize(new THREE.Vector3()).length * 0.03);
+      if (housing.containsPoint(solid.point)) return nacellePieces[0];
     }
-    if (spot && (!solid || spot.distance <= solid.distance + slack)) return spot.object;
+    if (spot && (!solid || spot.distance + slack < solid.distance)) return spot.object;
     return (solid || spot).object;
   };
   const markDrag = () => {
@@ -2279,40 +2464,15 @@ function renderReport() {
     badge.className = `priority-badge ${d.priority || ''}`;
   }
 
-  const editor = d.findingId ? `
-    <div class="assess-section defect-report-editor">
-      <h4>Override</h4>
-      <label>Category
-        <select id="report-review-cat" class="styled-select">
-          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${Number(d.severity) === n ? 'selected' : ''}>${SEVERITY_UI[n].label}</option>`).join('')}
-        </select>
-      </label>
-      <label>Defect class
-        <select id="report-review-name" class="styled-select"></select>
-      </label>
-      <div class="defect-review-actions" style="margin-top:8px">
-        <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-        <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
-      </div>
-    </div>` : '';
-
-  const body = document.getElementById('report-decision-body');
-  if (body) {
-    body.innerHTML = editor + `
-      <div class="assess-section">
-        <h4>Finding</h4>
-        <p><strong>${escHtml(d.type)}</strong><br>
-        ${escHtml(turbineLabel(turbine))} · ${escHtml(bladeDisplayName(d.blade, turbine))}<br>
-        ${escHtml(d.location || d.radialPos || (d.dist + ' m from root'))}<br>
-        Category: <strong>${escHtml(SEVERITY_UI[Number(d.severity)]?.label || d.intensity || ('CAT ' + d.severity))}</strong></p>
-      </div>
-      <div class="assess-section">
-        <h4>Action</h4>
-        <p>${escHtml(severityAction(d.severity) || d.action || 'Review this station.')}</p>
-      </div>`;
-    fillDefectClassSelect(document.getElementById('report-review-name'), d.type);
-  }
+  syncReportOverride(d);
   syncReportPicker();
+}
+
+function syncReportOverride(d) {
+  const cat = document.getElementById('report-review-cat');
+  if (cat && d?.severity) cat.value = String(d.severity);
+  const name = document.getElementById('report-review-name');
+  if (name && document.activeElement !== name) fillDefectClassSelect(name, d?.type || '');
 }
 
 function zoomIn() {
@@ -4158,25 +4318,37 @@ function reportTurbineId() {
   return raw || STATE.selectedTurbineId;
 }
 
+function selectedReportSides() {
+  const sides = [...document.querySelectorAll('.side-tab.is-on')].map(btn => btn.dataset.side);
+  return sides.length ? sides : ['PS'];
+}
+
 function currentReportSide() {
-  return document.querySelector('.side-tab.is-on')?.dataset.side || STATE.pocSurface || 'PS';
+  return selectedReportSides()[0];
+}
+
+function ensureReportSide(side) {
+  const btn = document.querySelector(`.side-tab[data-side="${side}"]`);
+  if (!btn) return;
+  btn.classList.add('is-on');
+  btn.setAttribute('aria-pressed', 'true');
 }
 
 function setReportSide(side) {
   document.querySelectorAll('.side-tab').forEach(btn => {
     const on = btn.dataset.side === side;
     btn.classList.toggle('is-on', on);
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
 }
 
 function reportFindingOptions() {
   const blade = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
-  const side = currentReportSide();
   const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
   if (!turbine) return [];
   if (isG97Turbine(turbine)) {
-    return findingsForBlade(blade).filter(row => row.surface === side);
+    const sides = selectedReportSides();
+    return findingsForBlade(blade).filter(row => sides.includes(row.surface));
   }
   return (STATE.db.defects || [])
     .filter(d => d.assetId === turbine.id && String(d.blade) === String(blade))
@@ -4237,59 +4409,27 @@ function clearReportViewer(blade, side) {
       }
     }
   }
-  const body = document.getElementById('report-decision-body');
-  if (body) {
-    body.innerHTML = `
-      <div class="assess-section">
-        <h4>Finding</h4>
-        <p>No findings recorded for ${escHtml(bladeDisplayName(blade))} · ${escHtml(side)}.</p>
-      </div>`;
-  }
 }
 
 function applyReportDefect() {
   const bladeNow = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
-  const sideNow = currentReportSide();
-  const id = document.getElementById('report-defect')?.value;
-  if (!id) {
-    STATE.selectedBlade = bladeNow;
-    STATE.selectedPart = 'blade-' + bladeNow;
-    STATE.pocSurface = sideNow;
-    clearReportViewer(bladeNow, sideNow);
+  const sides = selectedReportSides();
+  const rows = findingsForBlade(bladeNow).filter(row => sides.includes(row.surface));
+  const currentId = STATE.reviewFindingId || STATE.activeDefect?.findingId;
+  const match = rows.find(row => row.id === currentId) || rows[0];
+  STATE.selectedTurbineId = reportTurbineId();
+  STATE.selectedBlade = bladeNow;
+  STATE.selectedPart = 'blade-' + bladeNow;
+  STATE.pocSurface = match?.surface || sides[0] || 'PS';
+  if (!match) {
+    STATE.reviewFindingId = null;
+    STATE.activeDefect = null;
+    clearReportViewer(bladeNow, sides.join(' · '));
+    syncReportOverride(null);
     return;
   }
-  const raw = rawFinding(id);
-  if (raw) {
-    if (raw.blade !== bladeNow) {
-      fillReportDefects();
-      const nextId = document.getElementById('report-defect')?.value;
-      const next = nextId ? rawFinding(nextId) : null;
-      if (!next) {
-        clearReportViewer(bladeNow, sideNow);
-        return;
-      }
-      STATE.reviewFindingId = next.id;
-    } else {
-      STATE.reviewFindingId = raw.id;
-    }
-    STATE.selectedTurbineId = reportTurbineId();
-    STATE.selectedBlade = bladeNow;
-    STATE.selectedPart = 'blade-' + bladeNow;
-    openFindingDetails();
-    return;
-  }
-  const demo = STATE.db.defects.find(d => d.id === id);
-  if (!demo || String(demo.blade) !== String(bladeNow)) {
-    clearReportViewer(bladeNow, sideNow);
-    return;
-  }
-  STATE.selectedTurbineId = demo.assetId;
-  STATE.selectedBlade = demo.blade;
-  STATE.selectedPart = 'blade-' + demo.blade;
-  STATE.reviewFindingId = null;
-  STATE.activeDefect = demo;
-  navigateTo('report');
-  renderReport();
+  STATE.reviewFindingId = match.id;
+  openFindingDetails();
 }
 
 function openReportForSelection() {
@@ -4313,7 +4453,7 @@ function syncReportPicker() {
   const raw = d?.findingId ? rawFinding(d.findingId) : null;
   const bladeSel = document.getElementById('report-blade');
   if (bladeSel) bladeSel.value = raw?.blade || d?.blade || bladeSel.value;
-  if (raw?.surface) setReportSide(raw.surface);
+  if (raw?.surface) ensureReportSide(raw.surface);
   fillReportDefects(raw?.id || d?.id);
   reportPickerLock = false;
 }
@@ -4330,6 +4470,7 @@ function initReportPicker() {
   const bladeSel = document.getElementById('report-blade');
   if (bladeSel && STATE.selectedBlade) bladeSel.value = STATE.selectedBlade;
   setReportSide(STATE.pocSurface || currentReportSide());
+  fillDefectClassSelect(document.getElementById('report-review-name'), '');
   fillReportDefects(STATE.activeDefect?.findingId || STATE.activeDefect?.id);
   const onFilter = (keepSide) => {
     if (reportPickerLock) return;
@@ -4338,18 +4479,24 @@ function initReportPicker() {
     const blade = bladeSel?.value || STATE.selectedBlade || 'A';
     STATE.selectedBlade = blade;
     STATE.selectedPart = 'blade-' + blade;
-    const side = keepSide ? currentReportSide() : sideWithFindings(blade, currentReportSide());
-    if (side !== currentReportSide()) setReportSide(side);
+    if (!keepSide) {
+      const sides = selectedReportSides();
+      const has = sides.some(side => findingsForBlade(blade).some(row => row.surface === side));
+      if (!has) setReportSide(sideWithFindings(blade, sides[0]));
+    }
     STATE.pocSurface = currentReportSide();
     fillReportDefects();
     applyReportDefect();
   };
-  turbineSel.addEventListener('change', onFilter);
-  bladeSel?.addEventListener('change', onFilter);
+  turbineSel.addEventListener('change', () => onFilter(false));
+  bladeSel?.addEventListener('change', () => onFilter(false));
   document.querySelectorAll('.side-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       if (reportPickerLock) return;
-      setReportSide(btn.dataset.side);
+      const turningOff = btn.classList.contains('is-on');
+      if (turningOff && selectedReportSides().length <= 1) return;
+      btn.classList.toggle('is-on');
+      btn.setAttribute('aria-pressed', btn.classList.contains('is-on') ? 'true' : 'false');
       onFilter(true);
     });
   });
