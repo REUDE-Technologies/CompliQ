@@ -1225,6 +1225,154 @@ async function mountTurbine3D(host, turbine, onPick) {
           tagMesh(red, 'hub', 'Hub');
         }
       }
+      if (hub) {
+        hub.updateWorldMatrix(true, true);
+        const hubAttr = hub.geometry?.attributes?.position;
+        const hubCenter = new THREE.Vector3();
+        const sample = new THREE.Vector3();
+        const hubPts = [];
+        if (hubAttr) {
+          for (let i = 0; i < hubAttr.count; i++) {
+            sample.fromBufferAttribute(hubAttr, i);
+            hub.localToWorld(sample);
+            hubPts.push(sample.clone());
+            hubCenter.add(sample);
+          }
+          hubCenter.multiplyScalar(1 / Math.max(1, hubPts.length));
+        }
+        let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        hubPts.forEach(p => {
+          const x = p.x - hubCenter.x;
+          const y = p.y - hubCenter.y;
+          const z = p.z - hubCenter.z;
+          xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+        });
+        const trace = xx + yy + zz;
+        const covMul = (v) => new THREE.Vector3(
+          xx * v.x + xy * v.y + xz * v.z,
+          xy * v.x + yy * v.y + yz * v.z,
+          xz * v.x + yz * v.y + zz * v.z
+        );
+        let shaft = new THREE.Vector3(1, 1, 1).normalize();
+        for (let k = 0; k < 18; k++) {
+          const Cv = covMul(shaft);
+          shaft.set(trace * shaft.x - Cv.x, trace * shaft.y - Cv.y, trace * shaft.z - Cv.z);
+          if (shaft.lengthSq() < 1e-12) { shaft.set(0, 0, 1); break; }
+          shaft.normalize();
+        }
+        const radial = new THREE.Vector3();
+        let hubRadius = 0;
+        hubPts.forEach(p => {
+          radial.copy(p).sub(hubCenter);
+          radial.addScaledVector(shaft, -radial.dot(shaft));
+          hubRadius = Math.max(hubRadius, radial.length());
+        });
+        const cutoff = hubRadius * 1.04;
+        const project = (v) => {
+          const out = v.clone().sub(hubCenter);
+          out.addScaledVector(shaft, -out.dot(shaft));
+          return out;
+        };
+        const hubCapPos = [];
+        const trimMesh = (mesh, sink) => {
+          const geo = mesh.geometry;
+          const pos = geo?.attributes?.position;
+          if (!pos || cutoff <= 0) return;
+          mesh.updateWorldMatrix(true, true);
+          const keptPos = [];
+          const plane = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+          const segDist = (p, a, b) => {
+            const ab = b.clone().sub(a);
+            const denom = ab.dot(ab);
+            const t = denom < 1e-12 ? 0 : Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / denom));
+            return p.distanceTo(a.clone().addScaledVector(ab, t));
+          };
+          const overlapsHub = () => {
+            const a = plane[0];
+            const b = plane[1];
+            const c = plane[2];
+            if (a.length() < cutoff || b.length() < cutoff || c.length() < cutoff) return true;
+            const ab = b.clone().sub(a);
+            const ac = c.clone().sub(a);
+            const d00 = ab.dot(ab);
+            const d01 = ab.dot(ac);
+            const d11 = ac.dot(ac);
+            const denom = d00 * d11 - d01 * d01;
+            if (Math.abs(denom) > 1e-8) {
+              const d20 = -a.dot(ab);
+              const d21 = -a.dot(ac);
+              const v = (d11 * d20 - d01 * d21) / denom;
+              const w = (d00 * d21 - d01 * d20) / denom;
+              const u = 1 - v - w;
+              if (u >= -0.02 && v >= -0.02 && w >= -0.02) return true;
+            }
+            return Math.min(segDist(new THREE.Vector3(), a, b), segDist(new THREE.Vector3(), b, c), segDist(new THREE.Vector3(), c, a)) < cutoff;
+          };
+          const pushLocal = (a, b, c) => {
+            [a, b, c].forEach(v => keptPos.push(v.x, v.y, v.z));
+          };
+          const worldOf = (local) => mesh.localToWorld(local.clone());
+          const refine = (la, lb, lc, depth) => {
+            plane[0].copy(project(worldOf(la)));
+            plane[1].copy(project(worldOf(lb)));
+            plane[2].copy(project(worldOf(lc)));
+            if (!overlapsHub()) {
+              pushLocal(la, lb, lc);
+              return;
+            }
+            const span = Math.max(plane[0].distanceTo(plane[1]), plane[1].distanceTo(plane[2]), plane[2].distanceTo(plane[0]));
+            const inside = plane[0].length() < cutoff && plane[1].length() < cutoff && plane[2].length() < cutoff;
+            if (inside || depth >= 8 || span < cutoff * 0.18) {
+              if (sink) [la, lb, lc].forEach(v => sink.push(v.x, v.y, v.z));
+              return;
+            }
+            const ab = la.clone().add(lb).multiplyScalar(0.5);
+            const bc = lb.clone().add(lc).multiplyScalar(0.5);
+            const ca = lc.clone().add(la).multiplyScalar(0.5);
+            refine(la, ab, ca, depth + 1);
+            refine(ab, lb, bc, depth + 1);
+            refine(ca, bc, lc, depth + 1);
+            refine(ab, bc, ca, depth + 1);
+          };
+          const consider = (ia, ib, ic) => {
+            refine(
+              new THREE.Vector3(pos.getX(ia), pos.getY(ia), pos.getZ(ia)),
+              new THREE.Vector3(pos.getX(ib), pos.getY(ib), pos.getZ(ib)),
+              new THREE.Vector3(pos.getX(ic), pos.getY(ic), pos.getZ(ic)),
+              0
+            );
+          };
+          const geoIndex = geo.index;
+          if (geoIndex) {
+            for (let i = 0; i < geoIndex.count; i += 3) consider(geoIndex.getX(i), geoIndex.getX(i + 1), geoIndex.getX(i + 2));
+          } else {
+            for (let i = 0; i < pos.count; i += 3) consider(i, i + 1, i + 2);
+          }
+          if (keptPos.length < 9) return;
+          const next = new THREE.BufferGeometry();
+          next.setAttribute('position', new THREE.Float32BufferAttribute(keptPos, 3));
+          next.computeVertexNormals();
+          geo.dispose();
+          mesh.geometry = next;
+        };
+        blades.forEach(mesh => trimMesh(mesh, hubCapPos));
+        blades[0]?.parent?.traverse(obj => {
+          if (obj.isMesh && String(obj.userData.part || '').startsWith('blade-') && !blades.includes(obj)) trimMesh(obj);
+        });
+        if (blades[0]?.material) hub.material = blades[0].material;
+        if (hubCapPos.length >= 9 && blades[0]) {
+          const capGeo = new THREE.BufferGeometry();
+          capGeo.setAttribute('position', new THREE.Float32BufferAttribute(hubCapPos, 3));
+          capGeo.computeVertexNormals();
+          const cap = new THREE.Mesh(capGeo, hub.material);
+          cap.position.copy(blades[0].position);
+          cap.quaternion.copy(blades[0].quaternion);
+          cap.scale.copy(blades[0].scale);
+          blades[0].parent.add(cap);
+          tagMesh(cap, 'hub', 'Hub');
+          cap.renderOrder = 3;
+        }
+      }
       const downBlade = blades.find(item => item.userData.part === 'blade-C');
       if (downBlade && hub) {
         downBlade.updateWorldMatrix(true, true);
@@ -1259,9 +1407,9 @@ async function mountTurbine3D(host, turbine, onPick) {
           const rotorParts = blades.slice();
           if (!rotorParts.includes(hub)) rotorParts.push(hub);
           downBlade.parent.traverse(obj => {
-            if (obj.isMesh && String(obj.userData.part || '').startsWith('blade-') && !rotorParts.includes(obj)) {
-              rotorParts.push(obj);
-            }
+            if (!obj.isMesh || rotorParts.includes(obj)) return;
+            const part = String(obj.userData.part || '');
+            if (part === 'hub' || part.startsWith('blade-')) rotorParts.push(obj);
           });
           const spin = new THREE.Quaternion().setFromAxisAngle(shaft, turn);
           rotorParts.forEach(obj => {
@@ -1278,7 +1426,17 @@ async function mountTurbine3D(host, turbine, onPick) {
         }
       }
     }
-    if (hub) tagMesh(hub, 'hub', 'Hub');
+    if (hub) {
+      tagMesh(hub, 'hub', 'Hub');
+      hub.renderOrder = 2;
+      const hubMats = Array.isArray(hub.material) ? hub.material : [hub.material];
+      hubMats.forEach(mat => {
+        if (!mat) return;
+        mat.polygonOffset = true;
+        mat.polygonOffsetFactor = -1;
+        mat.polygonOffsetUnits = -1;
+      });
+    }
     const towerSources = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
       .map(name => named[name]).filter(Boolean);
     const worldPoint = new THREE.Vector3();
