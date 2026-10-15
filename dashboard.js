@@ -326,11 +326,16 @@ function renderMetrics() {
   document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
-  const critical = db.turbines.filter(t => t.status === 'critical');
-  const confEl = document.getElementById('m-conf');
-  if (confEl) confEl.textContent = String(critical.length);
+  const capacityMw = db.turbines.reduce((sum, turbine) => sum + (Number(turbine.power) || 0), 0);
   const confSub = document.getElementById('m-conf-sub');
-  if (confSub) confSub.textContent = critical.length ? critical.map(t => t.assetId).join(', ') : 'None in critical status';
+  if (capacityMw >= 1000) {
+    animateNumber('m-conf', (capacityMw / 1000).toFixed(1).replace(/\.0$/, '') + ' GW');
+    if (confSub) confSub.textContent = `${db.turbines.length} turbines`;
+  } else {
+    const mwText = (Math.round(capacityMw * 10) / 10);
+    animateNumber('m-conf', (mwText % 1 === 0 ? mwText.toFixed(0) : mwText.toFixed(1)) + ' MW');
+    if (confSub) confSub.textContent = `${db.turbines.length} turbines`;
+  }
 }
 
 function animateNumber(id, target) {
@@ -572,7 +577,7 @@ function bladeDisplayName(letter, turbine) {
   const current = turbine || selectedTurbine();
   const index = { A: 0, B: 1, C: 2 }[letter];
   const number = index == null ? '' : (current?.blades || [])[index];
-  return number ? String(number) : `Blade ${letter}`;
+  return number ? `Blade ${number}` : `Blade ${letter}`;
 }
 
 function refreshBladeMenus(turbine) {
@@ -1605,26 +1610,8 @@ async function mountTurbine3D(host, turbine, onPick) {
       nacelleMats.forEach((mat, i) => { mat.side = savedSides[i]; });
     }
     if (!hits.length) return null;
-    if (bladeRootReach > 0) {
-      hits = hits.filter(hit => {
-        const part = hit.object.userData.part;
-        if (hit.object.userData.hotspot || (part !== 'tower' && part !== 'foundation')) return true;
-        return hit.point.distanceTo(hubCenterWorld) > bladeRootReach;
-      });
-    }
-    if (!hits.length) return null;
-    const slack = (camera.userData.base?.length() || 8) * 0.04;
-    const spot = hits.find(hit => hit.object.userData.hotspot);
     const solid = hits.find(hit => !hit.object.userData.hotspot);
-    if (solid && String(solid.object.userData.part || '').startsWith('blade-')) return solid.object;
-    if (nacellePieces.length && solid && (solid.object.userData.part === 'tower' || solid.object.userData.part === 'foundation')) {
-      const housing = new THREE.Box3();
-      nacellePieces.forEach(mesh => housing.union(new THREE.Box3().setFromObject(mesh)));
-      housing.expandByScalar(housing.getSize(new THREE.Vector3()).length * 0.03);
-      if (housing.containsPoint(solid.point)) return nacellePieces[0];
-    }
-    if (spot && (!solid || spot.distance + slack < solid.distance)) return spot.object;
-    return (solid || spot).object;
+    return (solid || hits[0]).object;
   };
   const markDrag = () => {
     host.classList.toggle('is-rotating', dragging && dragMode === 'rotate');
