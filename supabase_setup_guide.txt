@@ -1,0 +1,166 @@
+# CompliQ × Supabase — Connection Guide
+
+> [!IMPORTANT]
+> Your backend (`backend/server.js`) already has **full Supabase integration** built in — auth, profiles, fleet data sync. You just need to fill in your credentials and run the schema.
+
+---
+
+## What's Already Connected
+
+| Feature | Status |
+|---|---|
+| User registration / login / logout | ✅ via Supabase Auth |
+| Session cookies (httpOnly) | ✅ |
+| Profile management (name, org, phone, bio) | ✅ via `profiles` table |
+| Avatar upload | ✅ via `profile-avatars` storage bucket |
+| Password change / recovery | ✅ |
+| Admin panel (approve/reject users, change roles) | ✅ |
+| Fleet data sync (`reude_fleet_db`, anomaly boxes, defects) | ✅ via `app_data` table |
+| Shared data across all users in real-time | ✅ (fetched on login via `compliq-sync.js`) |
+
+---
+
+## Step 1 — Get Your Supabase Credentials
+
+1. Go to [https://supabase.com/dashboard](https://supabase.com/dashboard) and open your project.
+2. Click **Project Settings** (gear icon in the left sidebar) → **API**.
+3. Copy the following three values:
+
+| What you need | Where to find it |
+|---|---|
+| **Project URL** | "Project URL" field |
+| **Anon / public key** | Under "Project API Keys" → `anon public` |
+| **Service role key** | Under "Project API Keys" → `service_role` (click "Reveal") |
+
+> [!CAUTION]
+> The **service_role** key has full database access. Never commit it to Git, put it in HTML, or expose it to the browser. It only belongs in `.env`.
+
+---
+
+## Step 2 — Fill In Your `.env` File
+
+Open [`backend/.env`](file:///f:/compliq/CompliQ/backend/.env) and replace the placeholders:
+
+```env
+SUPABASE_URL=https://abcdefghijklmnop.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+APP_URL=http://localhost:3000
+PORT=3000
+```
+
+Save the file. Do **not** add quotes around the values.
+
+---
+
+## Step 3 — Run the Database Schema
+
+1. In the Supabase dashboard, go to **SQL Editor** (left sidebar).
+2. Click **New query**.
+3. Open [`backend/supabase/schema.sql`](file:///f:/compliq/CompliQ/backend/supabase/schema.sql) and paste its entire contents into the editor.
+4. Click **Run** (or press `Ctrl+Enter`).
+
+This creates:
+- `profiles` table — stores user info linked to Supabase Auth
+- `app_data` table — stores shared fleet/defect data as JSON
+- Row Level Security (RLS) policies — only service_role can access data (secure by default)
+- `profile-avatars` storage bucket — for user profile pictures
+
+> [!NOTE]
+> You can run the schema multiple times safely — all statements use `CREATE IF NOT EXISTS` and `ON CONFLICT DO UPDATE`.
+
+---
+
+## Step 4 — Create Your First Administrator Account
+
+1. In the Supabase dashboard, go to **Authentication → Users**.
+2. Click **Add user** → **Create new user**.
+3. Enter your admin email and a strong password. Click **Create User**.
+4. Copy the **User UID** shown for the new user.
+5. Go back to **SQL Editor**, paste this query (replace the email):
+
+```sql
+INSERT INTO public.profiles (id, first_name, last_name, org, email, role, sector, status)
+SELECT id, 'CompliQ', 'Admin', 'REUDE Technologies', email, 'Administrator', 'wind', 'active'
+FROM auth.users WHERE lower(email) = lower('your-admin@email.com')
+ON CONFLICT (id) DO UPDATE
+SET role = excluded.role, status = excluded.status, sector = excluded.sector;
+```
+
+6. Click **Run**. The admin account is now active.
+
+> [!TIP]
+> All future user registrations via the app's sign-up form will have `status = 'pending'` until you approve them from the admin panel.
+
+---
+
+## Step 5 — Start the Server
+
+```powershell
+cd f:\compliq\CompliQ\backend
+npm start
+```
+
+Visit [http://localhost:3000/api/health](http://localhost:3000/api/health). You should see:
+
+```json
+{ "status": "ok", "provider": "supabase" }
+```
+
+If you see `"status": "not_configured"` — check your `.env` file and make sure all three variables are set correctly.
+
+---
+
+## Step 6 — Configure Auth Redirect URLs
+
+In the Supabase dashboard, go to **Authentication → URL Configuration**:
+
+- **Site URL**: `http://localhost:3000`
+- **Redirect URLs** — add:
+  - `http://localhost:3000/auth.html`
+  - `http://localhost:3000/auth.html?mode=recovery`
+
+This is required for password reset emails to work.
+
+---
+
+## Step 7 — Test the Connection
+
+1. Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. Click **Sign In** and log in with your administrator credentials.
+3. You should reach the dashboard — fleet data will sync from `app_data` on first login.
+4. Go to the **Admin panel** to approve any pending users.
+
+---
+
+## How Data Sync Works
+
+```
+User logs in → /api/auth/session validates cookie with Supabase
+            → compliq-sync.js runs hydrate()
+            → Fetches each shared key from /api/data/:key
+            → Populates localStorage from Supabase app_data table
+            → All future localStorage writes to shared keys auto-sync back to Supabase
+```
+
+**Shared keys synced across all users:**
+- `reude_fleet_db` — turbine fleet + defect database
+- `compliq_anomaly_boxes` — annotated anomaly bounding boxes
+- `compliq_defect_overrides` — manual defect edits
+- `compliq_orgs` — organization list (wind)
+- `compliq_orgs_solar` — organization list (solar)
+
+---
+
+## For Production Deployment (Render)
+
+Add these environment variables to your Render web service:
+
+```
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+APP_URL=https://your-render-app.onrender.com
+```
+
+Then add your Render URL to Supabase **Authentication → URL Configuration → Redirect URLs**.

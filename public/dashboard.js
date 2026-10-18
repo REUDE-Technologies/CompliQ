@@ -11,20 +11,44 @@
 // ══════════════════════════════════════════════════
 const SESSION_KEY = 'compliq_session';
 
-function checkAuth() {
+async function checkAuth() {
   const session = localStorage.getItem(SESSION_KEY);
   if (!session) {
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
   } else {
+    let user;
+    try {
+      const response = await fetch('/api/auth/session');
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Your session has expired.');
+      const savedSession = JSON.parse(session);
+      user = { ...result.user, sector: savedSession.sector || result.user.sector };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      if (window.CompliQSync) await window.CompliQSync.hydrate();
+    } catch (error) {
+      localStorage.removeItem(SESSION_KEY);
+      document.getElementById('auth-gate').style.display = 'flex';
+      document.getElementById('app-wrap').style.display = 'none';
+      showToast(error.message || 'Could not connect to the shared CompliQ server.', 'error');
+      return;
+    }
+
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
-    const user = JSON.parse(session);
     const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
     const av = document.getElementById('user-av');
     const nameEl = document.getElementById('user-display-name');
     const roleEl = document.getElementById('user-display-role');
-    if (av) av.textContent = initials;
+    if (av) {
+      if (user.avatarUrl) {
+        const image = document.createElement('img');
+        image.src = user.avatarUrl;
+        image.alt = '';
+        image.onerror = () => { av.textContent = initials; };
+        av.replaceChildren(image);
+      } else av.textContent = initials;
+    }
     if (nameEl) nameEl.textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
     if (roleEl) roleEl.textContent = user.role || 'Fleet Operator';
     
@@ -49,7 +73,7 @@ function checkAuth() {
   }
 }
 
-function handleLogout() {
+async function handleLogout() {
   const SESSION_KEY = 'compliq_session';
   const ACTIVE_SESSIONS_KEY = 'compliq_active_sessions';
   
@@ -63,6 +87,13 @@ function handleLogout() {
     localStorage.setItem(ACTIVE_SESSIONS_KEY, JSON.stringify(activeSessions));
   }
   
+  try {
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    if (!response.ok) throw new Error('Could not sign out from Supabase.');
+  } catch (error) {
+    showToast(error.message, 'error');
+    return;
+  }
   localStorage.removeItem(SESSION_KEY);
   window.location.href = 'index.html';
 }
@@ -167,6 +198,19 @@ function loadDB() {
 }
 function saveDB(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
+  fetch(`/api/data/${encodeURIComponent(DB_KEY)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(db)
+  }).then(async response => {
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || 'Could not sync fleet data to Supabase.');
+    }
+  }).catch(error => {
+    console.error('Fleet data sync failed.', error);
+    showToast('Fleet data is saved on this device but could not sync to Supabase.', 'error');
+  });
 }
 
 function turbineLabel(t) {

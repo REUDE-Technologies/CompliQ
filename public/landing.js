@@ -19,15 +19,23 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── AUTH SYSTEM ──────────────────────────────
-const USERS_KEY = 'compliq_users';
 const SESSION_KEY = 'compliq_session';
 
-function getUsers() {
-  return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-}
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
+window.addEventListener('DOMContentLoaded', () => {
+  const users = JSON.parse(localStorage.getItem('compliq_users') || '[]');
+  localStorage.setItem('compliq_users', JSON.stringify(users.map(({ password, ...user }) => user)));
+  [SESSION_KEY, 'compliq_wind_session', 'compliq_solar_session'].forEach(key => {
+    const value = localStorage.getItem(key);
+    if (!value) return;
+    try {
+      const user = JSON.parse(value);
+      delete user.password;
+      localStorage.setItem(key, JSON.stringify(user));
+    } catch (error) {
+      console.error(`Could not clean cached account data in ${key}.`, error);
+    }
+  });
+});
 
 function openAuth(tab = 'login') {
   const overlay = document.getElementById('auth-overlay');
@@ -73,53 +81,12 @@ document.querySelectorAll('.auth-tab').forEach(tab => {
 
 function handleLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-
-  // Allow demo account
-  const isDemoAccount = email === 'admin@reude.com' && password === 'password123';
-  const users = getUsers();
-  const found = users.find(u => u.email === email && u.password === password);
-
-  if (!isDemoAccount && !found) {
-    showAuthError('login-form', 'Invalid email or password.');
-    return;
-  }
-
-  const userData = found || {
-    firstName: 'Admin',
-    lastName: 'Operator',
-    org: 'Reude Technologies',
-    email: 'admin@reude.com',
-    role: 'Administrator'
-  };
-
-  localStorage.setItem(SESSION_KEY, JSON.stringify(userData));
-  showAuthSuccess('login-form', `Welcome back, ${userData.firstName}! Redirecting…`);
-  setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+  window.location.href = 'auth.html';
 }
 
 function handleRegister(e) {
   e.preventDefault();
-  const firstName = document.getElementById('reg-fname').value.trim();
-  const lastName = document.getElementById('reg-lname').value.trim();
-  const org = document.getElementById('reg-org').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const role = document.getElementById('reg-role').value;
-  const password = document.getElementById('reg-password').value;
-
-  const users = getUsers();
-  if (users.find(u => u.email === email)) {
-    showAuthError('register-form', 'An account with this email already exists.');
-    return;
-  }
-
-  const newUser = { firstName, lastName, org, email, role, password };
-  users.push(newUser);
-  saveUsers(users);
-  localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
-  showAuthSuccess('register-form', `Account created! Welcome, ${firstName}. Redirecting…`);
-  setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+  window.location.href = 'auth.html?tab=register';
 }
 
 function showAuthError(formId, msg) {

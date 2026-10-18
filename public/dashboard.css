@@ -481,6 +481,10 @@ body {
   background: linear-gradient(135deg, var(--c-teal), #0D8A94);
   color: var(--c-deep); font-weight: 800; font-size: 0.8rem;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  overflow: hidden;
+}
+.user-av img {
+  width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: inherit;
 }
 .user-info { flex-grow: 1; }
 .user-info span { font-size: 0.82rem; font-weight: 700; color: var(--c-white,#fff); display: block; }

@@ -1,0 +1,4 @@
+# CompliQ is a Node.js project, not a Python project.
+# This file is a compatibility note only; do not install it with pip.
+# The runtime dependencies are defined in backend/package.json.
+# Use `npm install --prefix backend` to install them.
