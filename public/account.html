@@ -116,7 +116,7 @@
     .avatar-popup-overlay.show { display: flex; }
     .avatar-popup-img {
       width: 280px; height: 280px; border-radius: 50%;
-      object-fit: cover; border: 4px solid #0FA4AF;
+      object-fit: contain; background: #fff; border: 4px solid #0FA4AF;
       box-shadow: 0 0 40px rgba(15,164,175,0.5);
     }
     .avatar-popup-close {
@@ -331,7 +331,7 @@
             <div class="avatar-circle" id="acc-avatar">OP</div>
             <!-- Photo preview (shown when image uploaded) -->
             <img id="acc-avatar-img" src="" alt="Profile"
-              style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #0FA4AF;"
+              style="display:none;width:80px;height:80px;border-radius:50%;object-fit:contain;background:#fff;border:3px solid #0FA4AF;"
               onclick="openAvatarPopup()">
             <!-- + badge (no image) -->
             <div class="avatar-add-badge" id="avatar-add-badge" onclick="document.getElementById('avatar-file-input').click()" title="Upload photo">+</div>
@@ -498,10 +498,21 @@
       showToast(`${key === '2fa' ? 'Two-Factor Authentication' : 'Login Alerts'} ${val ? 'enabled' : 'disabled'}`, 'success');
     }
 
-    function loadProfile() {
+    async function loadProfile() {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) { window.location.href = 'auth.html'; return; }
-      const user = JSON.parse(raw);
+      let user;
+      try {
+        const response = await fetch('/api/auth/session');
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Your session has expired.');
+        user = { ...result.user, sector: JSON.parse(raw).sector || result.user.sector };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      } catch {
+        localStorage.removeItem(SESSION_KEY);
+        window.location.href = 'auth.html';
+        return;
+      }
 
       const initials = `${user.firstName?.[0]||'O'}${user.lastName?.[0]||'P'}`;
       document.getElementById('acc-avatar').textContent = initials;
@@ -553,7 +564,7 @@
     }
 
     // ── Save profile ──────────────────────────────
-    function saveProfile() {
+    async function saveProfile() {
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
       const user = JSON.parse(raw);
@@ -564,12 +575,40 @@
       user.bio       = document.getElementById('p-bio').value.trim();
       user.role      = document.getElementById('p-role').value;
 
+      try {
+        const response = await fetch('/api/auth/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: user.firstName, lastName: user.lastName, org: user.org,
+            phone: user.phone, bio: user.bio
+          })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not sync your profile.');
+        Object.assign(user, result.user);
+      } catch (error) {
+        showToast(error.message || 'Could not connect to the shared CompliQ server.', 'error');
+        return;
+      }
+
       localStorage.setItem(SESSION_KEY, JSON.stringify(user));
 
       // Update in users list too
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      const idx = users.findIndex(u => u.email === user.email);
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
+        .map(({ password, ...cachedUser }) => cachedUser);
+      const accountSector = user.sector || 'wind';
+      const idx = users.findIndex(u => u.email === user.email && (u.sector || 'wind') === accountSector);
       if (idx > -1) { users[idx] = { ...users[idx], ...user }; localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+      ['compliq_wind_session', 'compliq_solar_session'].forEach(key => {
+        const cachedRaw = localStorage.getItem(key);
+        if (!cachedRaw) return;
+        const cachedUser = JSON.parse(cachedRaw);
+        if (cachedUser.email === user.email && (cachedUser.sector || 'wind') === accountSector) {
+          delete cachedUser.password;
+          localStorage.setItem(key, JSON.stringify({ ...cachedUser, ...user }));
+        }
+      });
 
       loadProfile();
       showToast('Profile updated successfully', 'success');
@@ -588,25 +627,47 @@
       i.type = i.type === 'password' ? 'text' : 'password';
       btn.style.opacity = i.type === 'text' ? '0.9' : '0.5';
     }
-    function changePassword() {
+    async function changePassword() {
       const current = document.getElementById('pwd-current').value;
       const newPwd  = document.getElementById('pwd-new').value;
       const confirm = document.getElementById('pwd-confirm').value;
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return;
       const user = JSON.parse(raw);
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      const found = users.find(u => u.email === user.email);
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
+        .map(({ password, ...cachedUser }) => cachedUser);
+      const accountSector = user.sector || 'wind';
 
-      if (found && found.password !== current && current !== 'password123') {
-        showToast('Current password is incorrect', 'error'); return;
-      }
       if (newPwd.length < 8 || !/[A-Z]/.test(newPwd) || !/[0-9]/.test(newPwd) || !/[!@#$%^&*]/.test(newPwd)) {
         showToast('New password does not meet requirements', 'error'); return;
       }
       if (newPwd !== confirm) { showToast('Passwords do not match', 'error'); return; }
 
-      if (found) { found.password = newPwd; localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+      try {
+        const response = await fetch('/api/auth/password', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword: current, newPassword: newPwd })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not update your password.');
+      } catch (error) {
+        showToast(error.message || 'Could not connect to the shared CompliQ server.', 'error');
+        return;
+      }
+
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      delete user.password;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      ['compliq_wind_session', 'compliq_solar_session'].forEach(key => {
+        const cachedRaw = localStorage.getItem(key);
+        if (!cachedRaw) return;
+        const cachedUser = JSON.parse(cachedRaw);
+        if (cachedUser.email === user.email && (cachedUser.sector || 'wind') === accountSector) {
+          delete cachedUser.password;
+          localStorage.setItem(key, JSON.stringify(cachedUser));
+        }
+      });
       document.getElementById('change-pwd-form').style.display = 'none';
       document.getElementById('pwd-current').value = '';
       document.getElementById('pwd-new').value = '';
@@ -645,14 +706,17 @@
     }
 
     // ── Delete account ────────────────────────────
-    function confirmDelete() {
-      if (confirm('Are you sure? This will permanently delete your account and all data. This cannot be undone.')) {
-        const user = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
-        const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-        const updated = users.filter(u => u.email !== user.email);
-        localStorage.setItem(USERS_KEY, JSON.stringify(updated));
-        localStorage.removeItem(SESSION_KEY);
-        window.location.href = 'index.html';
+    async function confirmDelete() {
+      if (confirm('Are you sure? This will permanently delete your account. This cannot be undone.')) {
+        try {
+          const response = await fetch('/api/auth/account', { method: 'DELETE' });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || 'Could not delete the account.');
+          localStorage.removeItem(SESSION_KEY);
+          window.location.href = 'index.html';
+        } catch (error) {
+          showToast(error.message, 'error');
+        }
       }
     }
 
@@ -672,8 +736,15 @@
       window.location.href = 'dashboard.html';
     }
 
-    function handleSignOut() {
+    async function handleSignOut() {
       if (confirm('Sign out of CompliQ?')) {
+        try {
+          const response = await fetch('/api/auth/logout', { method: 'POST' });
+          if (!response.ok) throw new Error('Could not sign out from Supabase.');
+        } catch (error) {
+          showToast(error.message, 'error');
+          return;
+        }
         localStorage.removeItem(SESSION_KEY);
         window.location.href = 'index.html';
       }
@@ -692,17 +763,47 @@
       if (!file) return;
       if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = async function(e) {
         const dataUrl = e.target.result;
         const raw = localStorage.getItem(SESSION_KEY);
         if (!raw) return;
         const user = JSON.parse(raw);
-        user.avatarUrl = dataUrl;
+        try {
+          const response = await fetch('/api/auth/avatar', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatarUrl: dataUrl })
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || 'Could not save your photo to the shared account.');
+          user.avatarUrl = result.avatarUrl;
+        } catch (error) {
+          showToast(error.message || 'Could not connect to the shared CompliQ server.', 'error');
+          input.value = '';
+          return;
+        }
+
         localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-        const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-        const idx = users.findIndex(u => u.email === user.email);
-        if (idx > -1) { users[idx].avatarUrl = dataUrl; localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
-        setAvatarUI(dataUrl);
+        const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
+          .map(({ password, ...cachedUser }) => cachedUser);
+        const accountSector = user.sector || 'wind';
+        users.forEach(account => {
+          if (account.email === user.email && (account.sector || 'wind') === accountSector) {
+            account.avatarUrl = user.avatarUrl;
+          }
+        });
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        ['compliq_wind_session', 'compliq_solar_session'].forEach(key => {
+          const cachedRaw = localStorage.getItem(key);
+          if (!cachedRaw) return;
+          const cachedUser = JSON.parse(cachedRaw);
+          if (cachedUser.email === user.email && (cachedUser.sector || 'wind') === accountSector) {
+            delete cachedUser.password;
+            cachedUser.avatarUrl = user.avatarUrl;
+            localStorage.setItem(key, JSON.stringify(cachedUser));
+          }
+        });
+        setAvatarUI(user.avatarUrl);
         showToast('Profile photo updated', 'success');
       };
       reader.readAsDataURL(file);

@@ -475,7 +475,6 @@
               <option>Maintenance Engineer</option>
               <option>Data Analyst</option>
               <option>Site Manager</option>
-              <option>Administrator</option>
             </select>
           </div>
           <div class="form-group">
@@ -558,76 +557,80 @@
       el.innerHTML = `<div class="auth-msg ${type}">${text}</div>`;
     }
 
-    // ── Default role accounts (seeded automatically) ──────────────
-    const DEFAULT_ACCOUNTS = [
-      { firstName:'Admin',     lastName:'REUDE',    email:'admin@reude.tech',           password:'Admin@Reude2026',   org:'REUDE Technologies', role:'Administrator',        sector:'wind', status:'active' },
-      { firstName:'Fleet',     lastName:'Operator', email:'operator@reude.tech',        password:'Operator@2026',     org:'REUDE Technologies', role:'Fleet Operator',       sector:'wind', status:'active' },
-      { firstName:'Maintenance',lastName:'Engineer',email:'engineer@reude.tech',        password:'Engineer@2026',     org:'REUDE Technologies', role:'Maintenance Engineer', sector:'wind', status:'active' },
-      { firstName:'Data',      lastName:'Analyst',  email:'analyst@reude.tech',         password:'Analyst@2026',      org:'REUDE Technologies', role:'Data Analyst',         sector:'wind', status:'active' },
-      { firstName:'Site',      lastName:'Manager',  email:'sitemanager@reude.tech',     password:'SiteMan@2026',      org:'REUDE Technologies', role:'Site Manager',         sector:'wind', status:'active' },
-      { firstName:'Solar',     lastName:'Admin',    email:'solar-admin@reude.tech',     password:'Admin@Solar2026',   org:'REUDE Technologies', role:'Administrator',        sector:'solar', status:'active' },
-      { firstName:'Solar',     lastName:'Operator', email:'solar@reude.tech',           password:'Solar@Reude2026',   org:'REUDE Technologies', role:'Fleet Operator',       sector:'solar', status:'active' },
-      { firstName:'Solar',     lastName:'Engineer', email:'solar-engineer@reude.tech',  password:'Engineer@Solar2026',org:'REUDE Technologies', role:'Maintenance Engineer', sector:'solar', status:'active' },
-      { firstName:'Solar',     lastName:'Analyst',  email:'solar-analyst@reude.tech',   password:'Analyst@Solar2026', org:'REUDE Technologies', role:'Data Analyst',         sector:'solar', status:'active' },
-    ];
+    async function apiRequest(path, body, method = 'POST') {
+      let response;
+      try {
+        response = await fetch(path, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } catch {
+        const error = new Error('The shared CompliQ server is unavailable. Try again when your internet connection is restored.');
+        error.status = 0;
+        throw error;
+      }
 
-    function seedDefaultAccounts() {
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      let updated = false;
-      DEFAULT_ACCOUNTS.forEach(acc => {
-        if (!users.find(u => u.email === acc.email)) {
-          users.push({ ...acc, createdAt: new Date(2026,0,1).toISOString() });
-          updated = true;
-        }
-      });
-      if (updated) localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(result.error || 'Could not sync your account with the CompliQ server.');
+        error.status = response.status;
+        throw error;
+      }
+      return result;
     }
 
-    // Seed on page load
-    window.addEventListener('DOMContentLoaded', () => { seedDefaultAccounts(); });
+    function backendAccount(user, password) {
+      return {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        org: user.org,
+        email: user.email,
+        password,
+        role: user.role,
+        sector: user.sector
+      };
+    }
 
-    function handleLogin(e) {
+    async function handleLogin(e) {
       e.preventDefault();
       const email  = document.getElementById('login-email').value.trim();
       const pwd    = document.getElementById('login-pwd').value;
       const sector = document.getElementById('login-sector').value;
 
-      // ── Seed default role accounts on first use ────────────────
-      seedDefaultAccounts();
+      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      const previousUser = users.find(u => u.email === email && (u.sector || 'wind') === sector)
+        || users.find(u => u.email === email);
 
-      let users  = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-
-      // ── Admin super-login ──────────────────────────────────────
-      if (email === 'admin@reude.tech' && pwd === 'Admin@Reude2026') {
-        // Ensure admin exists in users array
-        if (!users.find(u => u.email === 'admin@reude.tech')) {
-          users.unshift({ firstName:'Admin', lastName:'REUDE', email:'admin@reude.tech', org:'REUDE Technologies', role:'Administrator', password:'Admin@Reude2026', sector:'wind', status:'active', createdAt: new Date().toISOString() });
-          localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      let serverUser;
+      try {
+        ({ user: serverUser } = await apiRequest('/api/auth/login', { email, password: pwd, sector }));
+      } catch (error) {
+        if (error.status === 403) {
+          const prefix = error.message.toLowerCase().includes('rejected') ? '❌' : '⏳';
+          showMsg('login-msg', 'error', `${prefix} ${error.message}`);
+        } else if (error.status === 401) {
+          showMsg('login-msg', 'error', 'Invalid email or password.');
+        } else {
+          showMsg('login-msg', 'error', error.message);
         }
-        const adminUser = { firstName:'Admin', lastName:'REUDE', org:'REUDE Technologies', email:'admin@reude.tech', role:'Administrator', sector };
-        localStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
-        showMsg('login-msg','success','Welcome back, Admin! Redirecting to Admin Dashboard…');
-        setTimeout(() => { window.location.href = 'admin.html'; }, 1200);
         return;
       }
 
-      // ── Regular users ──────────────────────────────────────────
-      let found = users.find(u => u.email === email && u.password === pwd && u.sector === sector);
-      if (!found) found = users.find(u => u.email === email && u.password === pwd);
-      if (!found) { showMsg('login-msg','error','Invalid email or password.'); return; }
-
-      // Block pending users
-      if (!found.status || found.status === 'pending') {
-        showMsg('login-msg','error','⏳ Your account is pending admin approval. Please wait.');
-        return;
+      const found = { ...serverUser, sector, avatarUrl: serverUser.avatarUrl || previousUser?.avatarUrl };
+      if (!serverUser.avatarUrl && previousUser?.avatarUrl) {
+        try {
+          const saved = await apiRequest('/api/auth/avatar', { avatarUrl: previousUser.avatarUrl }, 'PUT');
+          found.avatarUrl = saved.avatarUrl;
+        } catch (error) {
+          showMsg('login-msg', 'error', `Signed in, but the existing profile photo could not be migrated: ${error.message}`);
+          return;
+        }
       }
-      // Block rejected users
-      if (found.status === 'rejected') {
-        showMsg('login-msg','error','❌ Your account has been rejected. Please contact support: cmo_ira@reude.tech');
-        return;
-      }
-
-      found = { ...found, sector };
+      const safeUsers = users.filter(u => u.email !== found.email || (u.sector || 'wind') !== sector)
+        .map(({ password, ...user }) => user);
+      safeUsers.push(found);
+      localStorage.setItem(USERS_KEY, JSON.stringify(safeUsers));
       localStorage.setItem(SESSION_KEY, JSON.stringify(found));
       const sectorKey = sector === 'solar' ? 'compliq_solar_session' : 'compliq_wind_session';
       localStorage.setItem(sectorKey, JSON.stringify({...found, sector}));
@@ -646,22 +649,22 @@
         status: 'online'
       };
       localStorage.setItem(ACTIVE_SESSIONS_KEY, JSON.stringify(activeSessions));
+      localStorage.removeItem('compliq_resets');
       
       showMsg('login-msg','success',`Welcome back, ${found.firstName}! Redirecting…`);
+      if (found.email === 'admin@reude.tech' || found.role === 'Administrator') {
+        setTimeout(() => { window.location.href = sector === 'solar' ? 'admin-solar.html' : 'admin.html'; }, 1200);
+        return;
+      }
       const redirect = sector === 'solar' ? 'solar-dashboard.html' : 'dashboard.html';
       setTimeout(() => { window.location.href = redirect; }, 1200);
     }
 
-    function handleRegister(e) {
+    async function handleRegister(e) {
       e.preventDefault();
       const pwd = document.getElementById('reg-pwd').value;
       if (!pwdValid(pwd)) { showMsg('register-msg','error','Password does not meet all requirements.'); return; }
       const email = document.getElementById('reg-email').value.trim();
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      if (users.find(u => u.email === email && u.sector === selectedSector)) {
-        showMsg('register-msg','error','You already have a ' + (selectedSector === 'solar' ? 'Solar Farm' : 'Wind Turbine') + ' account with this email.');
-        return;
-      }
       const user = {
         firstName: document.getElementById('reg-fname').value.trim(),
         lastName:  document.getElementById('reg-lname').value.trim(),
@@ -671,8 +674,14 @@
         status: 'pending',   // Awaiting admin approval
         createdAt: new Date().toISOString()
       };
-      users.push(user);
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      try {
+        await apiRequest('/api/auth/register', backendAccount(user, pwd));
+      } catch (error) {
+        showMsg('register-msg', 'error', error.status === 409
+          ? 'An account with this email already exists. Please sign in.'
+          : error.message);
+        return;
+      }
       // Do NOT set session — user must wait for admin approval
       showMsg('register-msg','success',`✅ Account created! Your account is pending admin approval. Please wait — you will be able to sign in once approved.`);
       setTimeout(() => { showTab('login'); }, 3000);
@@ -717,42 +726,85 @@
     function closeForgotPassword() {
       document.getElementById('forgot-modal').style.display = 'none';
     }
-    function sendPasswordReset() {
+    async function sendPasswordReset() {
       const email = document.getElementById('forgot-email').value.trim();
+      const resetMode = new URLSearchParams(window.location.search).get('mode') === 'recovery';
+      const accessToken = new URLSearchParams(window.location.hash.slice(1)).get('access_token');
+      if (resetMode) {
+        const newPassword = document.getElementById('reset-password').value;
+        if (!accessToken) {
+          showForgotMsg('This recovery link is invalid or expired. Request a new link.', 'error');
+          return;
+        }
+        if (!pwdValid(newPassword)) {
+          showForgotMsg('Choose a password that meets all listed requirements.', 'error');
+          return;
+        }
+        try {
+          await apiRequest('/api/auth/password/recovery', { accessToken, newPassword }, 'PUT');
+          history.replaceState(null, '', 'auth.html');
+          showForgotMsg('Password updated. You can now sign in.', 'success');
+          setTimeout(() => closeForgotPassword(), 3000);
+        } catch (error) {
+          showForgotMsg(error.message, 'error');
+        }
+        return;
+      }
       if (!email) {
         showForgotMsg('Please enter your email address', 'error');
         return;
       }
-      const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      const user = users.find(u => u.email === email);
-      if (!user) {
-        showForgotMsg('Email not found in system', 'error');
-        return;
+      try {
+        await apiRequest('/api/auth/recovery', { email });
+        showForgotMsg('If that account exists, a password reset link has been sent.', 'success');
+      } catch (error) {
+        showForgotMsg(error.message, 'error');
       }
-      // Generate reset token (valid for 1 hour)
-      const resetToken = Math.random().toString(36).substring(2, 12);
-      const resetData = JSON.parse(localStorage.getItem('compliq_resets') || '{}');
-      resetData[email] = { token: resetToken, expires: Date.now() + 3600000 };
-      localStorage.setItem('compliq_resets', JSON.stringify(resetData));
-      showForgotMsg(`✅ Reset link sent to ${email}. Check your email (demo: token saved in localStorage)`, 'success');
-      setTimeout(() => closeForgotPassword(), 3000);
     }
     function showForgotMsg(msg, type) {
       const el = document.getElementById('forgot-msg');
       el.className = type === 'success' ? 'auth-msg success' : 'auth-msg error';
       el.textContent = msg;
     }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const cachedUsers = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      localStorage.setItem(USERS_KEY, JSON.stringify(cachedUsers.map(({ password, ...user }) => user)));
+      [SESSION_KEY, 'compliq_wind_session', 'compliq_solar_session'].forEach(key => {
+        const value = localStorage.getItem(key);
+        if (!value) return;
+        try {
+          const user = JSON.parse(value);
+          delete user.password;
+          localStorage.setItem(key, JSON.stringify(user));
+        } catch (error) {
+          console.error(`Could not clean cached account data in ${key}.`, error);
+        }
+      });
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'recovery') {
+        document.getElementById('forgot-modal').style.display = 'flex';
+        document.getElementById('forgot-email').style.display = 'none';
+        document.getElementById('reset-password-wrap').style.display = 'block';
+        document.getElementById('forgot-title').textContent = 'Choose a new password';
+        document.getElementById('forgot-submit').textContent = 'Update Password';
+      }
+    });
   </script>
 
   <!-- FORGOT PASSWORD MODAL -->
   <div class="modal-overlay" id="forgot-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
     <div style="background:#fff;border-radius:16px;padding:40px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-      <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:8px;color:#063235;">Reset Password</h3>
+      <h3 id="forgot-title" style="font-size:1.3rem;font-weight:800;margin-bottom:8px;color:#063235;">Reset Password</h3>
       <p style="font-size:0.88rem;color:#64a0a6;margin-bottom:24px;">Enter your email and we'll send a password reset link</p>
       <input type="email" id="forgot-email" placeholder="your@email.com" style="width:100%;padding:11px 14px;border:1.5px solid #E2F0F0;border-radius:8px;font-family:Outfit,sans-serif;margin-bottom:16px;outline:none;" />
+      <div id="reset-password-wrap" style="display:none;margin-bottom:16px;">
+        <input type="password" id="reset-password" placeholder="New password" oninput="checkPwd(this.value)" style="width:100%;padding:11px 14px;border:1.5px solid #E2F0F0;border-radius:8px;font-family:Outfit,sans-serif;margin-bottom:8px;outline:none;" />
+        <div class="pwd-rules"><span class="pwd-rule">At least 8 characters, uppercase, number, and special character</span></div>
+      </div>
       <div id="forgot-msg" style="margin-bottom:16px;font-size:0.85rem;"></div>
       <div style="display:flex;gap:12px;">
-        <button onclick="sendPasswordReset()" style="flex:1;background:#0FA4AF;color:#fff;border:none;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Send Reset Link</button>
+        <button id="forgot-submit" onclick="sendPasswordReset()" style="flex:1;background:#0FA4AF;color:#fff;border:none;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Send Reset Link</button>
         <button onclick="closeForgotPassword()" style="flex:1;background:#F0F9FF;color:#063235;border:1.5px solid #E2F0F0;padding:12px;border-radius:8px;font-family:Outfit,sans-serif;font-weight:600;cursor:pointer;">Cancel</button>
       </div>
     </div>

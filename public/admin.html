@@ -138,7 +138,9 @@
       background: linear-gradient(135deg, var(--teal), var(--deep));
       display: inline-flex; align-items: center; justify-content: center;
       color: #fff; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
+      overflow: hidden;
     }
+    .avatar img { width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: inherit; }
 
     /* ── BUTTONS ── */
     .btn { padding: 7px 14px; border-radius: 7px; font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
@@ -674,6 +676,7 @@
 </footer>
 
 
+<script src="compliq-sync.js"></script>
 <script>
 /* ══════════════════════════════════════════════════
    CONSTANTS & HELPERS
@@ -683,7 +686,6 @@ const SESSION_KEY = 'compliq_session';
 const UPLOADS_KEY = 'compliq_uploads';
 const REPORTS_KEY = 'compliq_reports';
 const ADMIN_EMAIL = 'admin@reude.tech';
-const ADMIN_PASS  = 'Admin@Reude2026';
 
 const CHART_COLORS = [
   '#0FA4AF','#003135','#024950','#AFDDE5','#5CBFCA',
@@ -691,10 +693,25 @@ const CHART_COLORS = [
 ];
 
 function getUsers() {
-  return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+  return JSON.parse(localStorage.getItem(USERS_KEY) || '[]')
+    .map(({ password, ...user }) => user);
 }
 function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  localStorage.setItem(USERS_KEY, JSON.stringify(users.map(({ password, ...user }) => user)));
+}
+async function syncRemoteUsers() {
+  const response = await fetch('/api/admin/users');
+  if (!response.ok) throw new Error('Could not load shared account profiles.');
+  const remoteUsers = await response.json();
+  const localUsers = getUsers();
+  remoteUsers.forEach(remoteUser => {
+    const index = localUsers.findIndex(user =>
+      user.email === remoteUser.email && (user.sector || 'wind') === (remoteUser.sector || 'wind')
+    );
+    if (index === -1) localUsers.push(remoteUser);
+    else localUsers[index] = { ...localUsers[index], ...remoteUser };
+  });
+  saveUsers(localUsers);
 }
 function getNum(key) {
   return parseInt(localStorage.getItem(key) || '0', 10);
@@ -712,6 +729,12 @@ function fmtDateTime(iso) {
 function initials(u) {
   return ((u.firstName||'?')[0]+(u.lastName||'?')[0]).toUpperCase();
 }
+function avatarMarkup(u, style = '') {
+  const photo = typeof u.avatarUrl === 'string' && u.avatarUrl.startsWith('data:image/')
+    ? `<img src="${u.avatarUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" alt="">`
+    : initials(u);
+  return `<div class="avatar" style="${style}">${photo}</div>`;
+}
 function groupBy(arr, key) {
   return arr.reduce((acc, item) => {
     const k = item[key] || 'Unknown';
@@ -727,29 +750,30 @@ function distinctOrgs(users) {
 /* ══════════════════════════════════════════════════
    AUTH GATE
 ══════════════════════════════════════════════════ */
-(function authGate() {
-  const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  if (!sess || (sess.email !== ADMIN_EMAIL && sess.role !== 'Administrator')) {
+(async function authGate() {
+  try {
+    const response = await fetch('/api/auth/session');
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.user?.role !== 'Administrator') throw new Error('Administrator sign-in is required.');
+    const user = { ...result.user, sector: JSON.parse(localStorage.getItem(SESSION_KEY) || '{}').sector || result.user.sector };
+    if (user.sector !== 'wind') throw new Error('Sign in to the wind administrator account.');
+    if (window.CompliQSync) await window.CompliQSync.hydrate();
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    document.getElementById('admin-email-display').textContent = user.email;
+  } catch {
+    localStorage.removeItem(SESSION_KEY);
     window.location.replace('auth.html');
-    return;
   }
-  // Ensure admin is in users list
-  let users = getUsers();
-  if (!users.find(u => u.email === ADMIN_EMAIL)) {
-    users.unshift({
-      firstName: 'Admin', lastName: 'REUDE',
-      email: ADMIN_EMAIL, org: 'REUDE Technologies',
-      role: 'Administrator', password: ADMIN_PASS,
-      sector: 'wind', status: 'active',
-      createdAt: new Date(2026,0,1).toISOString()
-    });
-    saveUsers(users);
-  }
-  const currentEmail = sess.email || ADMIN_EMAIL;
-  document.getElementById('admin-email-display').textContent = currentEmail;
 })();
 
-function signOut() {
+async function signOut() {
+  try {
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    if (!response.ok) throw new Error('Could not sign out from Supabase.');
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
   localStorage.removeItem(SESSION_KEY);
   window.location.replace('auth.html');
 }
@@ -1039,7 +1063,7 @@ function renderUsers() {
     const statusBadge = u.status==='active'?'badge-active':u.status==='rejected'?'badge-rejected':'badge-pending';
     const statusLabel = u.status||'pending';
     return `<tr>
-      <td><div class="avatar">${initials(u)}</div></td>
+      <td>${avatarMarkup(u)}</td>
       <td><strong>${u.firstName} ${u.lastName}</strong></td>
       <td>${u.email}</td>
       <td>${u.org||'—'}</td>
@@ -1110,7 +1134,7 @@ function renderOrgs() {
         ${members.length===0?'<p style="color:#94b3b6;font-size:0.84rem;">No members in this organization yet.</p>':
           `<table><thead><tr><th></th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>
           ${members.map(u=>`<tr>
-            <td><div class="avatar" style="width:28px;height:28px;font-size:0.7rem;">${initials(u)}</div></td>
+            <td>${avatarMarkup(u, 'width:28px;height:28px;font-size:0.7rem;')}</td>
             <td>${u.firstName} ${u.lastName}</td>
             <td>${u.email}</td>
             <td><span class="badge badge-role">${u.role||'—'}</span></td>
@@ -1142,7 +1166,7 @@ function renderApprovals() {
   list.innerHTML = pending.map(u=>`
     <div class="approval-card" id="acard-${btoa(u.email).replace(/=/g,'')}">
       <div class="approval-info">
-        <div class="avatar" style="width:44px;height:44px;font-size:1rem;">${initials(u)}</div>
+        ${avatarMarkup(u, 'width:44px;height:44px;font-size:1rem;')}
         <div class="approval-meta">
           <h4>${u.firstName} ${u.lastName}</h4>
           <p>${u.email} &nbsp;•&nbsp; ${u.org||'—'} &nbsp;•&nbsp; <span class="badge badge-role">${u.role||'—'}</span> &nbsp;•&nbsp; Registered: ${fmtDate(u.createdAt)}</p>
@@ -1155,7 +1179,23 @@ function renderApprovals() {
     </div>`).join('');
 }
 
-function approveUser(email) {
+async function setRemoteAccountStatus(email, status) {
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(email)}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Could not sync the account status.');
+}
+
+async function approveUser(email) {
+  try {
+    await setRemoteAccountStatus(email, 'active');
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
   const users = getUsers();
   const idx = users.findIndex(u=>u.email===email);
   if (idx>-1) { users[idx].status = 'active'; saveUsers(users); }
@@ -1163,7 +1203,13 @@ function approveUser(email) {
   updatePendingBadge();
 }
 
-function rejectUser(email) {
+async function rejectUser(email) {
+  try {
+    await setRemoteAccountStatus(email, 'rejected');
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
   const users = getUsers();
   const idx = users.findIndex(u=>u.email===email);
   if (idx>-1) { users[idx].status = 'rejected'; saveUsers(users); }
@@ -1198,7 +1244,13 @@ function downloadCSV(type) {
 /* ══════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await syncRemoteUsers();
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Could not load shared account profiles.');
+  }
   renderOverview();
   updatePendingBadge();
 });

@@ -542,7 +542,7 @@
 // ══════════════════════════════════════════════════
 const SESSION_KEY = 'compliq_session';
 
-function checkAuth() {
+async function checkAuth() {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) {
     document.getElementById('auth-gate').style.display = 'flex';
@@ -550,16 +550,28 @@ function checkAuth() {
     return;
   }
   try {
-    const session = JSON.parse(raw);
+    const savedSession = JSON.parse(raw);
+    const response = await fetch('/api/auth/session');
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Your session has expired.');
+    const session = { ...result.user, sector: savedSession.sector || result.user.sector };
     if (!session || session.sector !== 'solar') {
       document.getElementById('auth-gate').style.display = 'flex';
       document.getElementById('app-wrap').style.display = 'none';
       return;
     }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
     const initials = `${session.firstName?.[0] || 'S'}${session.lastName?.[0] || 'E'}`;
-    document.getElementById('user-av').textContent = initials;
+    const avatar = document.getElementById('user-av');
+    if (session.avatarUrl) {
+      const image = document.createElement('img');
+      image.src = session.avatarUrl;
+      image.alt = '';
+      image.onerror = () => { avatar.textContent = initials; };
+      avatar.replaceChildren(image);
+    } else avatar.textContent = initials;
     document.getElementById('user-display-name').textContent = `${session.firstName || 'Solar'} ${session.lastName || 'Engineer'}`.trim();
     document.getElementById('user-display-role').textContent = session.role || 'Solar Fleet Engineer';
     
@@ -582,8 +594,10 @@ function checkAuth() {
       }
     }
   } catch (e) {
+    localStorage.removeItem(SESSION_KEY);
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
+    showToast(e.message || 'Could not validate your session.', 'error');
   }
 }
 
@@ -595,7 +609,14 @@ function goHome() {
   window.location.href = 'index.html';
 }
 
-function handleLogout() {
+async function handleLogout() {
+  try {
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    if (!response.ok) throw new Error('Could not sign out from Supabase.');
+  } catch (error) {
+    showToast(error.message, 'error');
+    return;
+  }
   localStorage.removeItem(SESSION_KEY);
   window.location.href = 'index.html';
 }
