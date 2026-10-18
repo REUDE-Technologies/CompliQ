@@ -2571,6 +2571,9 @@ function openReport(defectId) {
   renderReport();
 }
 
+const REPORT_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
+const REPORT_SLIDES = { items: [], index: 0 };
+
 function renderReport() {
   const d = STATE.activeDefect;
   if (!d) return;
@@ -2578,30 +2581,14 @@ function renderReport() {
   const title = document.getElementById('report-viewer-title');
   if (title) title.textContent = `${d.type} · ${bladeDisplayName(d.blade, turbine)} · ${turbineLabel(turbine)}`;
 
-  const rgb = document.getElementById('img-rgb');
-  const empty = document.getElementById('viewer-empty');
-  if (rgb) {
-    const photos = (d.stationCandidates && d.stationCandidates.length) ? d.stationCandidates : (d.stationImage ? [d.stationImage] : []);
-    if (photos.length) {
-      rgb.hidden = false;
-      if (empty) empty.hidden = true;
-      useFirstExistingImage(rgb, photos, () => {
-        rgb.hidden = true;
-        rgb.removeAttribute('src');
-        if (empty) {
-          empty.hidden = false;
-          empty.textContent = `No station photo for ${bladeDisplayName(d.blade, turbine)}.`;
-        }
-      });
-    } else {
-      rgb.hidden = true;
-      rgb.removeAttribute('src');
-      if (empty) {
-        empty.hidden = false;
-        empty.textContent = 'No station photo for this defect.';
-      }
-    }
-  }
+  const blade = d.blade || document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const sides = selectedReportSides();
+  rebuildReportSlides(blade, sides, {
+    side: d.location?.split('·')[0]?.trim() || STATE.pocSurface,
+    index: STATE.pocPointIndex,
+    findingId: d.findingId,
+    candidates: d.stationCandidates?.length ? d.stationCandidates : (d.stationImage ? [d.stationImage] : [])
+  });
 
   const badge = document.getElementById('report-priority-badge');
   if (badge) {
@@ -2611,6 +2598,7 @@ function renderReport() {
 
   syncReportOverride(d);
   syncReportPicker();
+  bindReportViewerControls();
 }
 
 function syncReportOverride(d) {
@@ -2620,23 +2608,297 @@ function syncReportOverride(d) {
   if (name && document.activeElement !== name) fillDefectClassSelect(name, d?.type || '');
 }
 
+function applyReportZoom() {
+  const stage = document.getElementById('report-stage');
+  const img = document.getElementById('img-rgb');
+  const target = stage || img;
+  if (!target) return;
+  target.style.transform = `translate(${REPORT_VIEW.tx}px, ${REPORT_VIEW.ty}px) scale(${REPORT_VIEW.scale})`;
+  const lvl = document.getElementById('report-zoom-level');
+  if (lvl) lvl.textContent = `${Math.round(REPORT_VIEW.scale * 100)}%`;
+}
+
+function fitReportImage() {
+  const viewport = document.getElementById('report-viewport');
+  const img = document.getElementById('img-rgb');
+  if (!viewport || !img || !img.naturalWidth || img.hidden) {
+    REPORT_VIEW.scale = 1;
+    REPORT_VIEW.tx = 0;
+    REPORT_VIEW.ty = 0;
+    applyReportZoom();
+    return;
+  }
+  const pad = 2;
+  const availW = Math.max(40, viewport.clientWidth - pad);
+  const availH = Math.max(40, viewport.clientHeight - pad);
+  const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+  REPORT_VIEW.userZoom = false;
+  REPORT_VIEW.scale = fit;
+  REPORT_VIEW.tx = 0;
+  REPORT_VIEW.ty = 0;
+  applyReportZoom();
+}
+
 function zoomIn() {
-  STATE.zoomLevel = Math.min((STATE.zoomLevel || 1) + 0.25, 3);
-  applyZoom();
+  REPORT_VIEW.userZoom = true;
+  REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, REPORT_VIEW.scale * 1.25);
+  applyReportZoom();
 }
 function zoomOut() {
-  STATE.zoomLevel = Math.max((STATE.zoomLevel || 1) - 0.25, 0.5);
-  applyZoom();
+  REPORT_VIEW.userZoom = true;
+  REPORT_VIEW.scale = Math.max(REPORT_VIEW.min, REPORT_VIEW.scale / 1.25);
+  applyReportZoom();
 }
 function resetZoom() {
-  STATE.zoomLevel = 1;
-  applyZoom();
+  fitReportImage();
 }
 function applyZoom() {
+  applyReportZoom();
+}
+
+function reportStationCandidates(blade, side, index) {
+  const found = g97StationCandidates(blade, side, index);
+  if (!found.length) return [];
+  const preferred = [];
+  [0, 1, 6, 7].forEach(slot => { if (found[slot]) preferred.push(found[slot]); });
+  return preferred.length ? preferred : found;
+}
+
+function rebuildReportSlides(blade, sides, prefer) {
+  /* One continuous L→R deck across every selected side: Side A stations, then Side B, … */
+  const sideList = (sides && sides.length) ? sides : ['PS'];
+  const findings = findingsForBlade(blade).filter(row => sideList.includes(row.surface));
+  const findingByStation = new Map();
+  findings.forEach(row => {
+    const key = `${row.surface}-${row.index}`;
+    if (!findingByStation.has(key)) findingByStation.set(key, row);
+  });
+
+  const seen = new Set();
+  const items = [];
+
+  sideList.forEach(side => {
+    for (let index = 1; index <= 20; index += 1) {
+      const key = `${side}-${index}`;
+      if (seen.has(key)) continue;
+      const row = findingByStation.get(key);
+      const known = !G97_MISSING.has(`${blade}-${side}-${index}`);
+      if (!known && !row) continue;
+      const candidates = reportStationCandidates(blade, side, index);
+      if (!candidates.length && !(prefer?.candidates?.length && prefer.side === side && Number(prefer.index) === index)) continue;
+      seen.add(key);
+      items.push({
+        blade,
+        side,
+        index,
+        findingId: row?.id || null,
+        finding: row?.finding || '',
+        cat: row?.cat ?? null,
+        candidates: candidates.length
+          ? candidates
+          : (prefer?.side === side && Number(prefer.index) === index ? prefer.candidates : [])
+      });
+    }
+  });
+
+  if (prefer?.candidates?.length) {
+    const preferSide = prefer.side || sideList[0];
+    const preferIndex = Number(prefer.index) || 0;
+    const key = `${preferSide}-${preferIndex}`;
+    if (preferIndex && !seen.has(key)) {
+      items.push({
+        blade,
+        side: preferSide,
+        index: preferIndex,
+        findingId: prefer.findingId || null,
+        finding: '',
+        cat: null,
+        candidates: prefer.candidates
+      });
+      seen.add(key);
+    }
+  }
+
+  REPORT_SLIDES.items = items;
+  let idx = 0;
+  if (prefer?.findingId) {
+    const byFinding = items.findIndex(item => item.findingId === prefer.findingId);
+    if (byFinding >= 0) idx = byFinding;
+  } else if (prefer?.side && prefer?.index) {
+    const byStation = items.findIndex(item => item.side === prefer.side && item.index === Number(prefer.index));
+    if (byStation >= 0) idx = byStation;
+  } else if (sideList.length) {
+    const firstSide = items.findIndex(item => item.side === sideList[0]);
+    if (firstSide >= 0) idx = firstSide;
+  }
+  REPORT_SLIDES.index = items.length ? Math.max(0, Math.min(idx, items.length - 1)) : 0;
+  showReportSlide(REPORT_SLIDES.index, { syncFinding: false });
+}
+
+function showReportSlide(index, opts = {}) {
+  const items = REPORT_SLIDES.items;
+  const rgb = document.getElementById('img-rgb');
+  const empty = document.getElementById('viewer-empty');
+  const label = document.getElementById('report-station-label');
+  const title = document.getElementById('report-viewer-title');
+  const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
+
+  if (!items.length) {
+    if (rgb) {
+      rgb.hidden = true;
+      rgb.removeAttribute('src');
+      rgb.onload = null;
+      rgb.onerror = null;
+    }
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = opts.emptyText || 'No station photo for this selection.';
+    }
+    if (label) label.textContent = 'No image';
+    applyReportZoom();
+    return;
+  }
+
+  REPORT_SLIDES.index = (index + items.length) % items.length;
+  const slide = items[REPORT_SLIDES.index];
+  const pointLabel = 'P' + String(slide.index).padStart(2, '0');
+  if (label) label.textContent = `${slide.side} · ${pointLabel} · ${REPORT_SLIDES.index + 1}/${items.length}`;
+
+  STATE.pocSurface = slide.side;
+  STATE.pocPointIndex = slide.index;
+
+  if (title) {
+    const sideBit = `${slide.side} · ${pointLabel}`;
+    if (slide.finding) title.textContent = `${slide.finding} · ${sideBit} · ${bladeDisplayName(slide.blade, turbine)}`;
+    else title.textContent = `${bladeDisplayName(slide.blade, turbine)} · ${sideBit}`;
+  }
+
+  if (opts.syncFinding !== false && slide.findingId) {
+    STATE.reviewFindingId = slide.findingId;
+    const raw = rawFinding(slide.findingId);
+    if (raw) {
+      const view = findingView(raw);
+      syncReportOverride({ severity: view.cat, type: view.finding });
+    }
+  }
+
+  if (!rgb) return;
+  const photos = slide.candidates || [];
+  if (!photos.length) {
+    rgb.hidden = true;
+    rgb.removeAttribute('src');
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
+    }
+    return;
+  }
+
+  rgb.hidden = false;
+  if (empty) empty.hidden = true;
+  rgb.onload = () => {
+    if (!REPORT_VIEW.userZoom) fitReportImage();
+    else applyReportZoom();
+  };
+  useFirstExistingImage(rgb, photos, () => {
+    rgb.hidden = true;
+    rgb.removeAttribute('src');
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
+    }
+  });
+}
+
+function stepReportSlide(delta) {
+  if (!REPORT_SLIDES.items.length) return;
+  showReportSlide(REPORT_SLIDES.index + delta, { syncFinding: true });
+}
+
+function bindReportViewerControls() {
+  const viewport = document.getElementById('report-viewport');
   const img = document.getElementById('img-rgb');
-  if (!img) return;
-  img.style.transform = `scale(${STATE.zoomLevel})`;
-  img.style.transformOrigin = 'center center';
+  if (!viewport || !img || viewport.dataset.bound) return;
+
+  document.getElementById('report-zoom-in')?.addEventListener('click', () => zoomIn());
+  document.getElementById('report-zoom-out')?.addEventListener('click', () => zoomOut());
+  document.getElementById('report-zoom-fit')?.addEventListener('click', () => fitReportImage());
+  document.getElementById('report-zoom-100')?.addEventListener('click', () => {
+    REPORT_VIEW.userZoom = true;
+    REPORT_VIEW.scale = 1;
+    REPORT_VIEW.tx = 0;
+    REPORT_VIEW.ty = 0;
+    applyReportZoom();
+  });
+  document.getElementById('report-image-full')?.addEventListener('click', () => {
+    const panel = document.getElementById('report-viewer-panel');
+    const btn = document.getElementById('report-image-full');
+    if (!panel) return;
+    const on = panel.classList.toggle('is-full');
+    if (btn) {
+      btn.textContent = on ? 'Exit' : 'Full';
+      btn.title = on ? 'Exit full screen' : 'Full screen';
+    }
+    if (on) {
+      const req = panel.requestFullscreen?.();
+      if (req && typeof req.catch === 'function') req.catch(() => {});
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
+    requestAnimationFrame(() => fitReportImage());
+  });
+
+  document.getElementById('report-slide-prev')?.addEventListener('click', () => stepReportSlide(-1));
+  document.getElementById('report-slide-next')?.addEventListener('click', () => stepReportSlide(1));
+
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    REPORT_VIEW.userZoom = true;
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, Math.max(REPORT_VIEW.min, REPORT_VIEW.scale * factor));
+    applyReportZoom();
+  }, { passive: false });
+
+  viewport.classList.add('pan-on');
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !REPORT_VIEW.pan) return;
+    if (e.target.closest('button, a, input, select')) return;
+    REPORT_VIEW.dragging = true;
+    REPORT_VIEW.userZoom = true;
+    REPORT_VIEW.lx = e.clientX;
+    REPORT_VIEW.ly = e.clientY;
+    try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+    viewport.classList.add('panning');
+    e.preventDefault();
+  });
+  viewport.addEventListener('pointermove', (e) => {
+    if (!REPORT_VIEW.dragging) return;
+    REPORT_VIEW.tx += e.clientX - REPORT_VIEW.lx;
+    REPORT_VIEW.ty += e.clientY - REPORT_VIEW.ly;
+    REPORT_VIEW.lx = e.clientX;
+    REPORT_VIEW.ly = e.clientY;
+    applyReportZoom();
+  });
+  const endPan = (e) => {
+    REPORT_VIEW.dragging = false;
+    viewport.classList.remove('panning');
+    try { viewport.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  viewport.addEventListener('pointerup', endPan);
+  viewport.addEventListener('pointercancel', endPan);
+
+  img.addEventListener('dblclick', () => {
+    if (img.src) openBladeLightbox(img.src);
+  });
+
+  viewport.dataset.bound = '1';
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => {
+      if (!REPORT_VIEW.userZoom) fitReportImage();
+    });
+    ro.observe(viewport);
+  }
+  applyReportZoom();
 }
 
 function isG97Turbine(turbine) {
@@ -4520,40 +4782,14 @@ function sideWithFindings(blade, side) {
   return ['PS', 'SS', 'LE', 'TE'].find(name => rows.some(row => row.surface === name)) || side;
 }
 
-function clearReportViewer(blade, side) {
+function clearReportViewer(blade, sides) {
   STATE.activeDefect = null;
   STATE.reviewFindingId = null;
+  const sideList = Array.isArray(sides) ? sides : String(sides || 'PS').split('·').map(s => s.trim()).filter(Boolean);
   const title = document.getElementById('report-viewer-title');
-  if (title) title.textContent = `${bladeDisplayName(blade)} · ${side}`;
-  const rgb = document.getElementById('img-rgb');
-  const empty = document.getElementById('viewer-empty');
-  const photos = [];
-  for (let index = 1; index <= 20; index += 1) {
-    const found = g97StationCandidates(blade, side, index);
-    [0, 1, 6, 7].forEach(slot => { if (found[slot]) photos.push(found[slot]); });
-  }
-  if (rgb) {
-    rgb.onerror = null;
-    if (photos.length) {
-      rgb.hidden = false;
-      if (empty) empty.hidden = true;
-      useFirstExistingImage(rgb, photos, () => {
-        rgb.hidden = true;
-        rgb.removeAttribute('src');
-        if (empty) {
-          empty.hidden = false;
-          empty.textContent = `No station photo for ${bladeDisplayName(blade)} ${side}.`;
-        }
-      });
-    } else {
-      rgb.hidden = true;
-      rgb.removeAttribute('src');
-      if (empty) {
-        empty.hidden = false;
-        empty.textContent = `No defects recorded for ${bladeDisplayName(blade)} ${side}.`;
-      }
-    }
-  }
+  if (title) title.textContent = `${bladeDisplayName(blade)} · ${sideList.join(' · ')}`;
+  rebuildReportSlides(blade, sideList);
+  bindReportViewerControls();
 }
 
 function applyReportDefect() {
@@ -4569,7 +4805,7 @@ function applyReportDefect() {
   if (!match) {
     STATE.reviewFindingId = null;
     STATE.activeDefect = null;
-    clearReportViewer(bladeNow, sides.join(' · '));
+    clearReportViewer(bladeNow, sides);
     syncReportOverride(null);
     return;
   }
@@ -5328,6 +5564,7 @@ function initApp() {
   initProfileMenu();
   initAssetSheet();
   initDefectReview();
+  bindReportViewerControls();
 
   // Start MQTT simulation
   loadBladeFindings().then(() => initReportPicker());

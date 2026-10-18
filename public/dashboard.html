@@ -22,7 +22,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=reudeOrange2">
+  <link rel="stylesheet" href="dashboard.css?v=reportSlide2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -400,28 +400,38 @@
           </label>
           <div class="report-override-actions">
             <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-            <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
+            <button type="button" class="ghost-btn report-reset-btn" onclick="resetDefectOverride()">Reset</button>
           </div>
         </div>
       </div>
       <div class="report-layout">
-        <div class="panel flex-3">
-          <div class="panel-header">
+        <div class="panel flex-3" id="report-viewer-panel">
+          <div class="panel-header report-viewer-header">
             <h3 id="report-viewer-title">Inspection photo</h3>
+            <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
           <div class="panel-body viewer-body">
-            <div class="img-frame" id="img-frame">
-              <img id="img-rgb" alt="Station capture" hidden>
+            <div class="report-viewport" id="report-viewport">
+              <div class="report-stage" id="report-stage">
+                <img id="img-rgb" alt="Station capture" draggable="false" hidden>
+              </div>
               <p class="viewer-empty" id="viewer-empty">Select a defect to open its station photo.</p>
+              <div class="asset-poc-slide-row report-slide-row">
+                <button type="button" class="asset-poc-slide" id="report-slide-prev" aria-label="Previous station image">&lt;</button>
+                <button type="button" class="asset-poc-slide" id="report-slide-next" aria-label="Next station image">&gt;</button>
+              </div>
+              <div class="asset-poc-viewer-bar report-viewer-bar" role="toolbar" aria-label="Image controls">
+                <span class="asset-poc-pane-label" id="report-station-label">Station image</span>
+                <div class="asset-poc-zoom-controls">
+                  <button type="button" class="asset-zoom-btn" id="report-zoom-in" title="Zoom in">+</button>
+                  <button type="button" class="asset-zoom-btn" id="report-zoom-out" title="Zoom out">−</button>
+                  <button type="button" class="asset-zoom-btn" id="report-zoom-fit" title="Fit to view">Fit</button>
+                  <button type="button" class="asset-zoom-btn" id="report-zoom-100" title="Actual size">100%</button>
+                  <button type="button" class="asset-zoom-btn" id="report-image-full" title="Full screen">Full</button>
+                </div>
+                <span class="asset-zoom-level" id="report-zoom-level">100%</span>
+              </div>
             </div>
-            <div class="viewer-actions">
-              <button type="button" class="icon-btn" onclick="zoomIn()" title="Zoom in" aria-label="Zoom in">+</button>
-              <button type="button" class="icon-btn" onclick="zoomOut()" title="Zoom out" aria-label="Zoom out">−</button>
-              <button type="button" class="icon-btn" onclick="resetZoom()" title="Reset zoom" aria-label="Reset zoom">↺</button>
-            </div>
-          </div>
-          <div class="panel-footer viewer-download-row">
-            <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
         </div>
       </div>
@@ -721,7 +731,7 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=bladeHub5"></script>
+<script src="dashboard.js?v=reportSlide1"></script>
 </body>
 </html>
 
