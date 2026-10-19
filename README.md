@@ -13,15 +13,13 @@ CompliQ/
 ├── backend/                Express API, npm manifest, and Supabase schema/setup
 │   └── supabase/
 ├── assets/source-media/    Local source videos (ignored by Git)
-├── docs/                   Archived and project reference notes
-├── legacy/root-mirror/     Preserved former root frontend copies
 ├── .kiro/                  Kiro project notes
 ├── .vscode/                Workspace settings
 ├── render.yaml             Render backend deployment
 └── vercel.json             Vercel static frontend deployment
 ```
 
-`public/` is the canonical frontend served by the Express backend and deployed by Vercel. Former root-level frontend copies and assets are preserved under `legacy/root-mirror/`; Live Server is configured to open `public/`. Make live frontend changes in `public/`. Local source videos are grouped under `assets/source-media/` and remain ignored by Git. `CompliQ_Mod/` is a separate nested Git repository and is kept independent.
+`public/` is the canonical frontend served by the Express backend and deployed by Vercel; Live Server is configured to open it. Make frontend changes in `public/`. Local source videos are grouped under `assets/source-media/` and remain ignored by Git. `CompliQ_Mod/` is a separate nested Git repository and is kept independent.
 
 ## Run locally
 

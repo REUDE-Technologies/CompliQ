@@ -764,8 +764,15 @@ function initials(u) {
   return ((u.firstName||'?')[0]+(u.lastName||'?')[0]).toUpperCase();
 }
 function avatarMarkup(u, style = '') {
-  const photo = typeof u.avatarUrl === 'string' && u.avatarUrl.startsWith('data:image/')
-    ? `<img src="${u.avatarUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" alt="">`
+  // Profiles may come from Supabase (snake_case) or older local browser data (camelCase).
+  const rawUrl = typeof u?.avatarUrl === 'string' && u.avatarUrl.trim()
+    ? u.avatarUrl.trim()
+    : (typeof u?.avatar_url === 'string' ? u.avatar_url.trim() : '');
+  const safeUrl = rawUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const isAllowedImage = /^https?:\/\//i.test(rawUrl) || /^data:image\//i.test(rawUrl);
+  const photo = isAllowedImage && safeUrl
+    ? `<img src="${safeUrl}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.textContent='${initials(u)}';">`
     : initials(u);
   return `<div class="avatar" style="${style}">${photo}</div>`;
 }
