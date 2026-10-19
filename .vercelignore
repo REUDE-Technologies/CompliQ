@@ -21,7 +21,6 @@ INPUT
 # Allow public/reports/*.pdf for the Gamesa inspection download
 _zeit_preview
 *.py
-requirements.txt
 CompliQ.spec
 CompliqAI.lnk
 turbine video.MP4
