@@ -63,7 +63,7 @@
     </div>
     <div class="topbar-right">
       <div class="nl-search-wrap">
-        <input type="text" id="nl-input" placeholder="Ask AI" aria-label="Ask AI">
+        <input type="text" id="nl-input" placeholder="CompliQ Search" aria-label="CompliQ Search">
       </div>
       <div class="notif-bell-wrap" id="notif-wrap">
         <button class="icon-btn" id="notif-bell">
@@ -78,6 +78,7 @@
           <div id="notif-list-items"></div>
         </div>
       </div>
+      <button type="button" class="theme-toggle" id="theme-toggle-visible" aria-label="Switch color theme" title="Switch color theme"><span aria-hidden="true">☾</span></button>
       <div class="profile-menu" id="profile-menu">
         <button type="button" class="profile-trigger" id="profile-trigger" aria-expanded="false" aria-haspopup="true" title="Account">
           <span class="user-av" id="user-av">OP</span>
@@ -104,8 +105,8 @@
       <button class="nav-item active" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet</span></button>
       <button class="nav-item" data-tab="asset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Asset</span></button>
       <button class="nav-item" data-tab="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Report</span></button>
-      <button class="nav-item is-unavailable" data-tab="ingest" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
-      <button class="nav-item is-unavailable" data-tab="manual" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual</span></button>
+      <button class="nav-item is-unavailable" data-tab="ingest" type="button" aria-disabled="true" aria-label="Ingest data — coming soon" title="Coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
+      <button class="nav-item is-unavailable" data-tab="manual" type="button" aria-disabled="true" aria-label="Manual entry — coming soon" title="Coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual</span></button>
       <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin</span></button>
     </nav>
   </aside>
@@ -116,42 +117,6 @@
          VIEW: FLEET OVERVIEW
     =========================================== -->
     <section class="view active" id="view-fleet">
-      <!-- Metric Cards -->
-      <div class="metrics-row">
-        <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Fleet Health Index</span>
-            <span class="metric-val" id="m-health">—</span>
-            <span class="metric-sub" id="m-health-sub">Loading...</span>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Active Anomalies</span>
-            <span class="metric-val" id="m-anomalies">—</span>
-            <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
-          </div>
-        </div>
-        <div class="metric-card" id="metric-coverage" hidden>
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Inspection Coverage</span>
-            <span class="metric-val" id="m-coverage">—</span>
-            <span class="metric-sub" id="m-cov-sub">Loading...</span>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Fleet Capacity</span>
-            <span class="metric-val" id="m-conf">—</span>
-            <span class="metric-sub" id="m-conf-sub">Loading...</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Fleet Grid -->
       <div class="panel full-panel">
         <div class="panel-header">
@@ -294,6 +259,10 @@
           <span class="asset-sheet-count" id="asset-sheet-count"></span>
           <span class="asset-sheet-hint" id="asset-sheet-hint">Show comparison &amp; table</span>
         </button>
+        <div class="asset-sheet-size-control" id="asset-sheet-size-control">
+          <label for="asset-sheet-height">Panel height <output id="asset-sheet-height-value" for="asset-sheet-height">58%</output></label>
+          <input id="asset-sheet-height" type="range" min="32" max="78" step="1" value="58" aria-label="Findings panel height">
+        </div>
         <div class="asset-sheet-body" id="asset-sheet-body">
           <div id="asset-compare-host" class="asset-compare-host"></div>
           <div class="panel asset-poc-defects-panel" id="asset-defects-panel">
@@ -345,8 +314,18 @@
           <div class="panel full-panel is-hidden" id="asset-defects-standalone" hidden>
             <div class="panel-header">
               <h3>Detected Defects &amp; Decisions</h3>
-              <button class="teal-btn" onclick="exportAssetReport()">⬇ Export Asset Report (PDF)</button>
+              <div class="asset-report-actions">
+                <button type="button" class="review-btn" onclick="reviewAssetReport()">Review PDF</button>
+                <button type="button" class="teal-btn" onclick="exportAssetReport()">⬇ Export Asset Report (PDF)</button>
+              </div>
             </div>
+            <section id="asset-report-review" class="asset-report-review" aria-label="PDF report review" hidden>
+              <div class="asset-report-review-head">
+                <p id="asset-report-review-status" role="status">PDF review</p>
+                <button type="button" class="review-btn" onclick="closeAssetReportReview()" aria-label="Close PDF review">Close</button>
+              </div>
+              <iframe id="asset-report-review-frame" title="Inspection report PDF preview" hidden></iframe>
+            </section>
             <div class="panel-body table-panel">
               <table class="data-table">
                 <thead><tr>
@@ -365,47 +344,8 @@
          VIEW: REPORT VIEWER
     =========================================== -->
     <section class="view" id="view-report">
-      <div class="report-picker" id="report-picker">
-        <label>Turbine
-          <select id="report-turbine" class="styled-select"></select>
-        </label>
-        <label>Blade
-          <select id="report-blade" class="styled-select">
-            <option value="A">Blade A</option>
-            <option value="B">Blade B</option>
-            <option value="C">Blade C</option>
-          </select>
-        </label>
-        <div class="side-tabs" role="group" aria-label="Blade side">
-          <span class="side-tabs-label">Side</span>
-          <div class="side-tabs-row">
-            <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
-            <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
-            <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
-            <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
-          </div>
-        </div>
-        <div class="report-override-field" id="report-override-field">
-          <label>Category
-            <select id="report-review-cat" class="styled-select">
-              <option value="1">CAT 1 – Cosmetic</option>
-              <option value="2">CAT 2 – Minor</option>
-              <option value="3">CAT 3 – Moderate</option>
-              <option value="4">CAT 4 – Serious</option>
-              <option value="5">CAT 5 – Critical</option>
-            </select>
-          </label>
-          <label>Defect class
-            <select id="report-review-name" class="styled-select"></select>
-          </label>
-          <div class="report-override-actions">
-            <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-            <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
-          </div>
-        </div>
-      </div>
       <div class="report-layout">
-        <div class="panel flex-3">
+        <div class="panel report-image-panel">
           <div class="panel-header">
             <h3 id="report-viewer-title">Inspection photo</h3>
           </div>
@@ -422,6 +362,50 @@
           </div>
           <div class="panel-footer viewer-download-row">
             <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
+          </div>
+        </div>
+        <div class="panel report-info-panel">
+          <div class="panel-header"><h3>Inspection settings</h3></div>
+          <div class="panel-body report-info-body">
+            <div class="report-picker" id="report-picker">
+              <label>Turbine
+                <select id="report-turbine" class="styled-select"></select>
+              </label>
+              <label>Blade
+                <select id="report-blade" class="styled-select">
+                  <option value="A">Blade A</option>
+                  <option value="B">Blade B</option>
+                  <option value="C">Blade C</option>
+                </select>
+              </label>
+              <div class="side-tabs" role="group" aria-label="Blade side">
+                <span class="side-tabs-label">Side</span>
+                <div class="side-tabs-row">
+                  <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
+                  <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
+                  <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
+                  <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
+                </div>
+              </div>
+              <div class="report-override-field" id="report-override-field">
+                <label>Category
+                  <select id="report-review-cat" class="styled-select">
+                    <option value="1">CAT 1 – Cosmetic</option>
+                    <option value="2">CAT 2 – Minor</option>
+                    <option value="3">CAT 3 – Moderate</option>
+                    <option value="4">CAT 4 – Serious</option>
+                    <option value="5">CAT 5 – Critical</option>
+                  </select>
+                </label>
+                <label>Defect class
+                  <select id="report-review-name" class="styled-select"></select>
+                </label>
+                <div class="report-override-actions">
+                  <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
+                  <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -633,28 +617,39 @@
          VIEW: ANALYTICS
     =========================================== -->
     <section class="view" id="view-analytics">
-      <div class="analytics-summary" id="analytics-summary" hidden></div>
+      <div class="metrics-row analytics-metrics-row">
+        <div class="metric-card metric-health">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <div class="metric-body"><span class="metric-label">Fleet Health Index</span><span class="metric-val" id="m-health">—</span><span class="metric-sub" id="m-health-sub">Loading...</span></div>
+        </div>
+        <div class="metric-card metric-anomalies">
+          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+          <div class="metric-body"><span class="metric-label">Active Anomalies</span><span class="metric-val" id="m-anomalies">—</span><span class="metric-sub" id="m-anomalies-sub">Loading...</span></div>
+        </div>
+        <div class="metric-card" id="metric-coverage" hidden>
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
+          <div class="metric-body"><span class="metric-label">Inspection Coverage</span><span class="metric-val" id="m-coverage">—</span><span class="metric-sub" id="m-cov-sub">Loading...</span></div>
+        </div>
+        <div class="metric-card metric-capacity">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <div class="metric-body"><span class="metric-label">Fleet Capacity</span><span class="metric-val" id="m-conf">—</span><span class="metric-sub" id="m-conf-sub">Loading...</span></div>
+        </div>
+      </div>
       <div class="analytics-grid">
-        <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-live-pill">Live</span></div>
+        <div class="panel analytics-panel analytics-panel-wide">
+          <div class="panel-header"><h3>Fleet Health &amp; Findings by Turbine</h3></div>
           <div class="panel-body chart-body">
-            <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
+            <canvas id="chart-health" aria-label="Fleet health and high severity findings by turbine"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Defect Distribution by Type</h3><span class="analytics-live-pill">Live</span></div>
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-defects" aria-label="Defect type distribution"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Severity Distribution</h3><span class="analytics-live-pill">Live</span></div>
-          <div class="panel-body chart-body">
-            <canvas id="chart-severity" aria-label="Severity distribution"></canvas>
-          </div>
-        </div>
-        <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Inspections Timeline</h3><span class="analytics-live-pill">Live · 6 mo</span></div>
+          <div class="panel-header"><h3>Inspections Timeline</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-timeline" aria-label="Inspections timeline"></canvas>
           </div>

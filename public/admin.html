@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script>document.documentElement.dataset.theme = localStorage.getItem('site_theme') === 'light' ? 'light' : 'dark';</script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -243,6 +244,38 @@
       .header-left h1 { display: none; }
       .admin-email { display: none; }
     }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --deep: #071321; --teal: #27b8b5; --bg: #081522; --text: #e2ecf7;
+      --border: #20374f; --mid: #12273b; --light-teal: #b4c8df;
+    }
+    :root[data-theme="dark"] body { background: var(--bg); color: var(--text); }
+    :root[data-theme="dark"] .tab-nav { background: #0d1d30; border-color: var(--border); }
+    :root[data-theme="dark"] .tab-btn { color: #a0b5ca; }
+    :root[data-theme="dark"] .tab-btn.active { color: #80d9d5; background: rgba(39,184,181,.1); }
+    :root[data-theme="dark"] .metric-card,
+    :root[data-theme="dark"] .chart-card,
+    :root[data-theme="dark"] .table-card,
+    :root[data-theme="dark"] .approval-card,
+    :root[data-theme="dark"] .org-accordion,
+    :root[data-theme="dark"] .create-org-form { background: #102137; border-color: var(--border); box-shadow: 0 8px 22px rgba(0,0,0,.14); }
+    :root[data-theme="dark"] .org-acc-header:hover,
+    :root[data-theme="dark"] tr:hover td { background: #172b42; }
+    :root[data-theme="dark"] .org-acc-body { border-color: var(--border); }
+    :root[data-theme="dark"] th { background: #142a42; color: #a7bdd2; }
+    :root[data-theme="dark"] .metric-label,
+    :root[data-theme="dark"] .filter-label,
+    :root[data-theme="dark"] .approval-meta p,
+    :root[data-theme="dark"] .org-acc-header span { color: #9bb2c9; }
+    :root[data-theme="dark"] .metric-sub,
+    :root[data-theme="dark"] .empty-state { color: #879eb6; }
+    :root[data-theme="dark"] .filter-row input,
+    :root[data-theme="dark"] .filter-row select,
+    :root[data-theme="dark"] .role-select,
+    :root[data-theme="dark"] .create-org-form input { color: #e2ecf7; background: #0b1a2b; border-color: #2a4058; }
+    :root[data-theme="dark"] select option { color: #e2ecf7; background: #102137; }
+    .btn-theme { width: 36px; height: 36px; border: 1px solid rgba(175,221,229,.3); border-radius: 9px; background: rgba(255,255,255,.08); color: #e8f4ff; font-size: 1.05rem; cursor: pointer; }
+    .btn-theme:hover { background: rgba(15,164,175,.18); border-color: var(--teal); }
   </style>
 </head>
 <body>
@@ -260,6 +293,7 @@
     <span class="admin-email" id="admin-email-display">admin@reude.tech</span>
     <a href="dashboard.html" class="btn-back">← Back to Dashboard</a>
     <button class="btn-signout" onclick="signOut()">Sign Out</button>
+    <button type="button" class="btn-theme" id="admin-theme-toggle" aria-label="Switch color theme" title="Switch color theme">☀️</button>
   </div>
 </header>
 
@@ -1086,11 +1120,44 @@ function updateRole(email, newRole) {
   if (idx>-1) { users[idx].role = newRole; saveUsers(users); }
 }
 
-function removeUser(email) {
-  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
-  saveUsers(getUsers().filter(u=>u.email!==email));
-  renderUsers();
-  updatePendingBadge();
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function downloadUserRemovalReport(user) {
+  const removedAt = new Date().toISOString();
+  const rows = [
+    ['Removed At', 'Name', 'Email', 'Organization', 'Role', 'Status', 'Account Created'],
+    [removedAt, `${user.firstName || ''} ${user.lastName || ''}`.trim(), user.email,
+      user.org || '', user.role || '', user.status || '', user.createdAt || '']
+  ];
+  const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `compliq_user_removal_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function removeUser(email) {
+  const user = getUsers().find(u => u.email === email);
+  if (!user) { alert('Could not find this user in the current account list. Refresh and try again.'); return; }
+  if (!user.id) { alert('This account is not linked to a database user ID. Refresh the user list and try again.'); return; }
+  if (!confirm(`Permanently remove ${email} from the database? A removal report will download after deletion.`)) return;
+  try {
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not remove the account from the database.');
+    saveUsers(getUsers().filter(u => u.id !== user.id && u.email !== email));
+    downloadUserRemovalReport(user);
+    renderUsers();
+    updatePendingBadge();
+  } catch (error) {
+    alert(error.message || 'Could not remove the account from the database.');
+  }
 }
 
 /* ══════════════════════════════════════════════════
@@ -1262,6 +1329,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   in, they should see the message: "Your account is pending admin approval.
   Please wait." — Implement this check in auth.html's handleLogin() function.
 */
+</script>
+<script>
+(() => {
+  const button = document.getElementById('admin-theme-toggle');
+  const apply = theme => {
+    const value = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = value;
+    document.documentElement.style.colorScheme = value;
+    if (button) {
+      button.textContent = value === 'light' ? '🌙' : '☀️';
+      button.title = value === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+      button.setAttribute('aria-label', button.title);
+    }
+  };
+  apply(localStorage.getItem('site_theme'));
+  button?.addEventListener('click', () => {
+    const next = localStorage.getItem('site_theme') === 'light' ? 'dark' : 'light';
+    localStorage.setItem('site_theme', next);
+    apply(next);
+  });
+  window.addEventListener('storage', event => {
+    if (event.key === 'site_theme') apply(event.newValue);
+  });
+})();
 </script>
 </body>
 </html>
