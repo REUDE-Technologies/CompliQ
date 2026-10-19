@@ -730,8 +730,16 @@ function initials(u) {
   return ((u.firstName||'?')[0]+(u.lastName||'?')[0]).toUpperCase();
 }
 function avatarMarkup(u, style = '') {
-  const photo = typeof u.avatarUrl === 'string' && u.avatarUrl.startsWith('data:image/')
-    ? `<img src="${u.avatarUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" alt="">`
+  // The backend/Supabase profile may use snake_case (avatar_url),
+  // while older local browser data uses camelCase (avatarUrl).
+  const rawUrl = typeof u?.avatarUrl === 'string' && u.avatarUrl.trim()
+    ? u.avatarUrl.trim()
+    : (typeof u?.avatar_url === 'string' ? u.avatar_url.trim() : '');
+  const safeUrl = rawUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const isAllowedImage = /^https?:\/\//i.test(rawUrl) || /^data:image\//i.test(rawUrl);
+  const photo = isAllowedImage && safeUrl
+    ? `<img src="${safeUrl}" alt="" loading="lazy" onerror="this.remove(); this.parentElement.textContent='${initials(u)}';">`
     : initials(u);
   return `<div class="avatar" style="${style}">${photo}</div>`;
 }
@@ -1086,11 +1094,44 @@ function updateRole(email, newRole) {
   if (idx>-1) { users[idx].role = newRole; saveUsers(users); }
 }
 
-function removeUser(email) {
-  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
-  saveUsers(getUsers().filter(u=>u.email!==email));
-  renderUsers();
-  updatePendingBadge();
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function downloadUserRemovalReport(user) {
+  const removedAt = new Date().toISOString();
+  const rows = [
+    ['Removed At', 'Name', 'Email', 'Organization', 'Role', 'Status', 'Account Created'],
+    [removedAt, `${user.firstName || ''} ${user.lastName || ''}`.trim(), user.email,
+      user.org || '', user.role || '', user.status || '', user.createdAt || '']
+  ];
+  const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `compliq_user_removal_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function removeUser(email) {
+  const user = getUsers().find(u => u.email === email);
+  if (!user) { alert('Could not find this user in the current account list. Refresh and try again.'); return; }
+  if (!user.id) { alert('This account is not linked to a database user ID. Refresh the user list and try again.'); return; }
+  if (!confirm(`Permanently remove ${email} from the database? A removal report will download after deletion.`)) return;
+  try {
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not remove the account from the database.');
+    saveUsers(getUsers().filter(u => u.id !== user.id && u.email !== email));
+    downloadUserRemovalReport(user);
+    renderUsers();
+    updatePendingBadge();
+  } catch (error) {
+    alert(error.message || 'Could not remove the account from the database.');
+  }
 }
 
 /* ══════════════════════════════════════════════════

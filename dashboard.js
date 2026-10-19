@@ -1081,7 +1081,7 @@ async function mountTurbine3D(host, turbine, onPick) {
   if (!host.isConnected || epoch !== STATE.assetEpoch || STATE.activeTab !== 'asset') return;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xffffff);
+  scene.background = new THREE.Color(isLightTheme() ? 0xf2f6fb : 0x0b1d32);
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -1925,6 +1925,8 @@ async function mountTurbine3D(host, turbine, onPick) {
     spin.frame = requestAnimationFrame(loop);
   };
   TURBINE_3D = spin;
+  TURBINE_3D.scene = scene;
+  TURBINE_3D.THREE = THREE;
   TURBINE_3D.renderer = renderer;
   TURBINE_3D.ro = ro;
   TURBINE_3D.frame = requestAnimationFrame(loop);
@@ -2605,6 +2607,46 @@ function exportAssetReport() {
   generatePDFReport();
 }
 
+let assetReviewPdfUrl = null;
+
+async function reviewAssetReport() {
+  const box = document.getElementById('asset-report-review');
+  const status = document.getElementById('asset-report-review-status');
+  const frame = document.getElementById('asset-report-review-frame');
+  if (!box || !status || !frame) return;
+  box.hidden = false;
+  frame.hidden = true;
+  status.textContent = 'Loading PDF preview…';
+  try {
+    const response = await fetch(encodeURI(STATIC_INSPECTION_REPORT_URL));
+    if (!response.ok) throw new Error(`Report HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (assetReviewPdfUrl) URL.revokeObjectURL(assetReviewPdfUrl);
+    assetReviewPdfUrl = URL.createObjectURL(blob);
+    frame.src = assetReviewPdfUrl;
+    frame.hidden = false;
+    status.textContent = 'Inspection report preview';
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (error) {
+    console.error(error);
+    status.textContent = 'Could not load the inspection report preview.';
+  }
+}
+
+function closeAssetReportReview() {
+  const box = document.getElementById('asset-report-review');
+  const frame = document.getElementById('asset-report-review-frame');
+  if (frame) {
+    frame.removeAttribute('src');
+    frame.hidden = true;
+  }
+  if (assetReviewPdfUrl) {
+    URL.revokeObjectURL(assetReviewPdfUrl);
+    assetReviewPdfUrl = null;
+  }
+  if (box) box.hidden = true;
+}
+
 // ══════════════════════════════════════════════════
 // 8. REPORT VIEWER
 // ══════════════════════════════════════════════════
@@ -2624,12 +2666,16 @@ function renderReport() {
 
   const rgb = document.getElementById('img-rgb');
   const empty = document.getElementById('viewer-empty');
+  const frame = document.getElementById('img-frame');
   if (rgb) {
     const photos = (d.stationCandidates && d.stationCandidates.length) ? d.stationCandidates : (d.stationImage ? [d.stationImage] : []);
     if (photos.length) {
+      frame?.classList.remove('has-image');
+      rgb.addEventListener('load', () => frame?.classList.add('has-image'), { once: true });
       rgb.hidden = false;
       if (empty) empty.hidden = true;
       useFirstExistingImage(rgb, photos, () => {
+        frame?.classList.remove('has-image');
         rgb.hidden = true;
         rgb.removeAttribute('src');
         if (empty) {
@@ -2638,6 +2684,7 @@ function renderReport() {
         }
       });
     } else {
+      frame?.classList.remove('has-image');
       rgb.hidden = true;
       rgb.removeAttribute('src');
       if (empty) {
@@ -3330,7 +3377,6 @@ function clearManualRecords() {
 let CHARTS = {
   health: null,
   defects: null,
-  severity: null,
   timeline: null
 };
 
@@ -3350,16 +3396,16 @@ function getChartTheme() {
   const scale = chartUiScale();
   return {
     light,
-    tick: light ? '#28666E' : 'rgba(175, 221, 229, 0.75)',
-    legend: light ? '#063235' : 'rgba(232, 244, 245, 0.9)',
-    grid: light ? 'rgba(6, 50, 53, 0.1)' : 'rgba(15, 164, 175, 0.14)',
-    tipBg: light ? '#ffffff' : '#024950',
-    tipTitle: light ? '#063235' : '#AFDDE5',
-    tipBody: light ? '#28666E' : '#AFDDE5',
-    tipBorder: '#0FA4AF',
-    pieBorder: light ? '#ffffff' : '#003135',
-    line: '#0FA4AF',
-    fill: light ? 'rgba(15, 164, 175, 0.12)' : 'rgba(15, 164, 175, 0.18)',
+    tick: light ? '#48627e' : 'rgba(175, 195, 222, 0.82)',
+    legend: light ? '#183450' : 'rgba(232, 242, 255, 0.92)',
+    grid: light ? 'rgba(49, 92, 139, 0.14)' : 'rgba(85, 153, 214, 0.16)',
+    tipBg: light ? '#ffffff' : '#0b1d32',
+    tipTitle: light ? '#183450' : '#d9eaff',
+    tipBody: light ? '#48627e' : '#afc3de',
+    tipBorder: light ? '#087f88' : '#20d3ce',
+    pieBorder: light ? '#f5f8fc' : '#07172a',
+    line: light ? '#087f88' : '#20d3ce',
+    fill: light ? 'rgba(8, 127, 136, 0.12)' : 'rgba(32, 211, 206, 0.18)',
     font: scale
   };
 }
@@ -3413,30 +3459,9 @@ function chartTooltipOpts(theme) {
 async function renderCharts() {
   if (!STATE.db) return;
   try { await loadBladePocAnnotations(); } catch (e) { /* optional POC layer */ }
-  renderAnalyticsSummary();
   renderHealthChart();
   renderDefectPieChart();
-  renderSeverityChart();
   renderTimelineChart();
-}
-
-function renderAnalyticsSummary() {
-  const el = document.getElementById('analytics-summary');
-  if (!el) return;
-  const turbines = STATE.db.turbines || [];
-  const defects = getAnalyticsDefects();
-  const avgHealth = turbines.length
-    ? Math.round(turbines.reduce((s, t) => s + (Number(t.health) || 0), 0) / turbines.length)
-    : 0;
-  const crit = defects.filter(d => Number(d.severity) >= 4).length;
-  const warn = turbines.filter(t => t.status === 'warning' || t.status === 'critical').length;
-  el.innerHTML = `
-    <div class="analytics-kpi"><small>Turbines</small><strong>${turbines.length}</strong></div>
-    <div class="analytics-kpi"><small>Avg Health</small><strong>${avgHealth}%</strong></div>
-    <div class="analytics-kpi"><small>Findings</small><strong>${defects.length}</strong></div>
-    <div class="analytics-kpi"><small>Critical / High</small><strong class="${crit ? 'kpi-crit' : ''}">${crit}</strong></div>
-    <div class="analytics-kpi"><small>Assets Attention</small><strong class="${warn ? 'kpi-warn' : ''}">${warn}</strong></div>
-  `;
 }
 
 function renderHealthChart() {
@@ -3446,32 +3471,55 @@ function renderHealthChart() {
 
   const theme = getChartTheme();
   const turbines = STATE.db.turbines || [];
+  const defects = getAnalyticsDefects();
   const labels = turbines.map(t => t.assetId);
-  const data = turbines.map(t => Number(t.health) || 0);
+  const health = turbines.map(t => Number(t.health) || 0);
+  const highFindings = turbines.map(t => defects.filter(d =>
+    (String(d.assetId) === String(t.id) || String(d.assetId) === String(t.assetId)) && Number(d.severity) >= 4
+  ).length);
 
   CHARTS.health = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Health Index (%)',
-        data,
-        backgroundColor: '#0FA4AF',
-        borderWidth: 0,
-        borderRadius: 5,
-        barPercentage: 0.62
-      }]
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Health Index (%)',
+          data: health,
+          backgroundColor: 'rgba(15,164,175,0.82)',
+          borderWidth: 0,
+          borderRadius: 5,
+          barPercentage: 0.62,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'Critical / major findings',
+          data: highFindings,
+          borderColor: '#F08A55',
+          backgroundColor: '#F08A55',
+          borderWidth: 2.5,
+          tension: 0.25,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          yAxisID: 'yFindings'
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          labels: { color: theme.legend, font: { family: 'Outfit', size: theme.font.legend }, boxWidth: 12 }
+        },
         tooltip: {
           ...chartTooltipOpts(theme),
           callbacks: {
-            afterLabel: (ctx) => {
-              const t = turbines[ctx.dataIndex];
+            afterBody: (items) => {
+              const t = turbines[items[0]?.dataIndex];
               return t ? `${t.site || ''} · ${t.status || ''}`.trim() : '';
             }
           }
@@ -3479,6 +3527,8 @@ function renderHealthChart() {
       },
       scales: {
         y: {
+          type: 'linear',
+          position: 'left',
           min: 0,
           max: 100,
           grid: { color: theme.grid },
@@ -3486,6 +3536,18 @@ function renderHealthChart() {
             color: theme.tick,
             font: { family: 'JetBrains Mono', size: theme.font.tick },
             callback: (v) => v + '%'
+          }
+        },
+        yFindings: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: theme.tick,
+            stepSize: 1,
+            precision: 0,
+            font: { family: 'JetBrains Mono', size: theme.font.tick }
           }
         },
         x: {
@@ -3564,6 +3626,7 @@ function renderDefectPieChart() {
                 text: `${label}  ${ds.data[i]} (${Math.round(ds.data[i] / total * 100)}%)`,
                 fillStyle: ds.backgroundColor[i],
                 strokeStyle: ds.backgroundColor[i],
+                fontColor: theme.legend,
                 lineWidth: 0,
                 hidden: false,
                 index: i
@@ -3579,63 +3642,6 @@ function renderDefectPieChart() {
               const n = ctx.raw || 0;
               return ` ${ctx.label}: ${n}  (${Math.round(n / total * 100)}%)`;
             }
-          }
-        }
-      }
-    }
-  });
-}
-
-function renderSeverityChart() {
-  const canvas = document.getElementById('chart-severity');
-  if (!canvas) return;
-  if (CHARTS.severity) CHARTS.severity.destroy();
-
-  const theme = getChartTheme();
-  const sevCounts = [0, 0, 0, 0, 0];
-  getAnalyticsDefects().forEach(d => {
-    const s = Number(d.severity);
-    if (s >= 1 && s <= 5) sevCounts[s - 1]++;
-  });
-  const sevColors = ['#B9D896', '#FACD96', '#F0A03C', '#E15A5F', '#AF373C'];
-
-  CHARTS.severity = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: ['S1 Low', 'S2 Minor', 'S3 Moderate', 'S4 Major', 'S5 Critical'],
-      datasets: [{
-        label: 'Defects',
-        data: sevCounts,
-        backgroundColor: sevColors,
-        borderWidth: 0,
-        borderRadius: 5,
-        barPercentage: 0.65
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: chartTooltipOpts(theme)
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            stepSize: 1,
-            color: theme.tick,
-            font: { family: 'JetBrains Mono', size: theme.font.tick },
-            precision: 0
-          },
-          grid: { color: theme.grid }
-        },
-        x: {
-          grid: { display: false },
-          ticks: {
-            color: theme.tick,
-            font: { family: 'Outfit', size: theme.font.tick, weight: '600' },
-            maxRotation: window.innerWidth < 720 ? 35 : 0
           }
         }
       }
@@ -4736,9 +4742,30 @@ function initAssetSheet() {
   const sheet = document.getElementById('asset-bottom-sheet');
   const btn = document.getElementById('asset-sheet-toggle');
   if (!sheet || !btn) return;
+  const heightInput = document.getElementById('asset-sheet-height');
+  const heightOutput = document.getElementById('asset-sheet-height-value');
+  const applyHeight = value => {
+    const height = Math.max(32, Math.min(78, Math.round(Number(value) || 58)));
+    sheet.style.setProperty('--asset-findings-height', `${height}vh`);
+    if (heightInput) heightInput.value = String(height);
+    if (heightOutput) heightOutput.value = `${height}%`;
+  };
+  let savedHeight = 58;
+  try { savedHeight = localStorage.getItem('compliq_findings_height') || savedHeight; } catch (_) { /* storage can be disabled */ }
+  applyHeight(savedHeight);
+  heightInput?.addEventListener('input', () => {
+    applyHeight(heightInput.value);
+    try { localStorage.setItem('compliq_findings_height', heightInput.value); } catch (_) { /* keep the current session usable */ }
+  });
   btn.addEventListener('click', () => {
     const open = sheet.classList.toggle('is-open');
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    updateFindingsSheetMeta();
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!sheet.classList.contains('is-open') || sheet.contains(event.target)) return;
+    sheet.classList.remove('is-open');
+    btn.setAttribute('aria-expanded', 'false');
     updateFindingsSheetMeta();
   });
   updateFindingsSheetMeta();
@@ -5471,24 +5498,36 @@ function handleCSVUpload(input, context) {
 
 // ── THEME TOGGLE ──────────────────────────────
 function initTheme() {
-  const saved = localStorage.getItem('site_theme') || 'light';
+  const saved = localStorage.getItem('site_theme') || 'dark';
   applyDashTheme(saved);
 
-  const btn = document.getElementById('theme-toggle-dash');
-  if (btn) {
-    btn.textContent = saved === 'light' ? 'Dark mode' : 'Light mode';
-    btn.setAttribute('aria-label', saved === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
-    btn.title = saved === 'light' ? 'Dark mode' : 'Light mode';
-    btn.addEventListener('click', () => {
-      const current = localStorage.getItem('site_theme') || 'light';
-      const next = current === 'light' ? 'dark' : 'light';
-      localStorage.setItem('site_theme', next);
-      applyDashTheme(next);
-      btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
-      btn.setAttribute('aria-label', next === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
-      btn.title = next === 'light' ? 'Dark mode' : 'Light mode';
-    });
-  }
+  const updateToggleLabels = (theme) => {
+    const light = theme === 'light';
+    const menuButton = document.getElementById('theme-toggle-dash');
+    const visibleButton = document.getElementById('theme-toggle-visible');
+    if (menuButton) {
+      menuButton.textContent = light ? 'Dark mode' : 'Light mode';
+      menuButton.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+      menuButton.title = light ? 'Dark mode' : 'Light mode';
+    }
+    if (visibleButton) {
+      visibleButton.innerHTML = `<span aria-hidden="true">${light ? '☾' : '☼'}</span>`;
+      visibleButton.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+      visibleButton.title = light ? 'Switch to dark mode' : 'Switch to light mode';
+    }
+  };
+  updateToggleLabels(saved);
+
+  const toggleTheme = () => {
+    const current = localStorage.getItem('site_theme') || 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    localStorage.setItem('site_theme', next);
+    applyDashTheme(next);
+    updateToggleLabels(next);
+  };
+  [document.getElementById('theme-toggle-dash'), document.getElementById('theme-toggle-visible')]
+    .filter(Boolean)
+    .forEach(btn => btn.addEventListener('click', toggleTheme));
 
   let resizeTimer;
   window.addEventListener('resize', () => {
@@ -5504,6 +5543,9 @@ function applyDashTheme(theme) {
   if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
   document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+  if (TURBINE_3D?.scene && TURBINE_3D.THREE) {
+    TURBINE_3D.scene.background.set(theme === 'light' ? 0xf2f6fb : 0x0b1d32);
+  }
   // Refresh charts so tick/legend colours match the active theme
   const analytics = document.getElementById('view-analytics');
   if (analytics?.classList.contains('active') || (CHARTS.health || CHARTS.defects)) {

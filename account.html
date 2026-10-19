@@ -548,7 +548,7 @@
       // Preferences
       const sect = document.getElementById('pref-sector');
       for (let o of sect.options) if (o.value === (user.sector||'wind')) { o.selected = true; break; }
-      const theme = localStorage.getItem('site_theme') || 'light';
+      const theme = localStorage.getItem('site_theme') || 'dark';
       document.getElementById('pref-theme').value = theme;
 
       // Session info
