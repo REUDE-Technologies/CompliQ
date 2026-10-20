@@ -440,6 +440,11 @@ function renderFleetGrid() {
       <div class="t-loc">${t.site}</div>
     `;
     card.addEventListener('click', () => {
+      if (t.assetId !== 'WTG-001') {
+        hideFleetTurbinePop();
+        showToast('Detailed view for this wind turbine will be available soon.', 'info');
+        return;
+      }
       STATE.selectedTurbineId = t.id;
       document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
       card.classList.add('active');
