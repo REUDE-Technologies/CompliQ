@@ -27,8 +27,13 @@
 <body>
 <canvas id="bg-canvas"></canvas>
 
+<div class="auth-loading" id="auth-loading" role="status" aria-live="polite">
+  <span class="auth-loading-spinner" aria-hidden="true"></span>
+  <span>Opening your dashboard…</span>
+</div>
+
 <!-- AUTH GATE — shown if not logged in -->
-<div class="auth-gate" id="auth-gate">
+<div class="auth-gate" id="auth-gate" style="display:none">
   <div class="gate-inner">
     <div class="gate-logo">
       <svg viewBox="0 0 60 60" fill="none" width="56" height="56">

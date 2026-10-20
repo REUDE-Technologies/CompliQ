@@ -12,8 +12,10 @@
 const SESSION_KEY = 'compliq_session';
 
 async function checkAuth() {
+  const loading = document.getElementById('auth-loading');
   const session = localStorage.getItem(SESSION_KEY);
   if (!session) {
+    if (loading) loading.style.display = 'none';
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
   } else {
@@ -28,12 +30,14 @@ async function checkAuth() {
       if (window.CompliQSync) await window.CompliQSync.hydrate();
     } catch (error) {
       localStorage.removeItem(SESSION_KEY);
+      if (loading) loading.style.display = 'none';
       document.getElementById('auth-gate').style.display = 'flex';
       document.getElementById('app-wrap').style.display = 'none';
       showToast(error.message || 'Could not connect to the shared CompliQ server.', 'error');
       return;
     }
 
+    if (loading) loading.style.display = 'none';
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
     const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
