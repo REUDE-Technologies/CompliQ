@@ -38,8 +38,13 @@
 <body>
 <canvas id="bg-canvas"></canvas>
 
+<div class="auth-loading" id="auth-loading" role="status" aria-live="polite">
+  <span class="auth-loading-spinner" aria-hidden="true"></span>
+  <span>Opening your dashboard…</span>
+</div>
+
 <!-- AUTH GATE -->
-<div class="auth-gate" id="auth-gate">
+<div class="auth-gate" id="auth-gate" style="display:none">
   <div class="gate-inner">
     <div class="gate-logo">
       <svg viewBox="0 0 60 60" fill="none" width="56" height="56">
@@ -543,8 +548,10 @@
 const SESSION_KEY = 'compliq_session';
 
 async function checkAuth() {
+  const loading = document.getElementById('auth-loading');
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) {
+    if (loading) loading.style.display = 'none';
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
     return;
@@ -556,11 +563,13 @@ async function checkAuth() {
     if (!response.ok) throw new Error(result.error || 'Your session has expired.');
     const session = { ...result.user, sector: savedSession.sector || result.user.sector };
     if (!session || session.sector !== 'solar') {
+      if (loading) loading.style.display = 'none';
       document.getElementById('auth-gate').style.display = 'flex';
       document.getElementById('app-wrap').style.display = 'none';
       return;
     }
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    if (loading) loading.style.display = 'none';
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
     const initials = `${session.firstName?.[0] || 'S'}${session.lastName?.[0] || 'E'}`;
@@ -595,6 +604,7 @@ async function checkAuth() {
     }
   } catch (e) {
     localStorage.removeItem(SESSION_KEY);
+    if (loading) loading.style.display = 'none';
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
     showToast(e.message || 'Could not validate your session.', 'error');
