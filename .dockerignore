@@ -1,0 +1,13 @@
+.git
+.kiro
+.vscode
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+*.log
+Dockerfile*
+README.md
