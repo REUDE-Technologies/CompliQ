@@ -646,7 +646,7 @@
        TAB 3: USERS
   ───────────────────────────── -->
   <section class="tab-panel" id="tab-users">
-    <div class="section-heading">👥 All Users</div>
+    <div class="section-heading">👥 All Users <button class="btn btn-teal" id="refresh-users-btn" type="button" onclick="refreshUsers()">Refresh from Supabase</button></div>
     <div class="filter-row">
       <input type="text" id="users-search" placeholder="🔍 Search by name or email…" oninput="renderUsers()">
       <select id="users-org-filter" onchange="renderUsers()">
@@ -737,15 +737,8 @@ async function syncRemoteUsers() {
   const response = await fetch('/api/admin/users');
   if (!response.ok) throw new Error('Could not load shared account profiles.');
   const remoteUsers = await response.json();
-  const localUsers = getUsers();
-  remoteUsers.forEach(remoteUser => {
-    const index = localUsers.findIndex(user =>
-      user.email === remoteUser.email && (user.sector || 'wind') === (remoteUser.sector || 'wind')
-    );
-    if (index === -1) localUsers.push(remoteUser);
-    else localUsers[index] = { ...localUsers[index], ...remoteUser };
-  });
-  saveUsers(localUsers);
+  saveUsers(remoteUsers);
+  return remoteUsers;
 }
 function getNum(key) {
   return parseInt(localStorage.getItem(key) || '0', 10);
@@ -840,7 +833,7 @@ function switchTab(tab) {
   if (tab === 'overview')   renderOverview();
   if (tab === 'access')     renderAccess();
   if (tab === 'analytics')  renderAnalytics();
-  if (tab === 'users')      renderUsers();
+  if (tab === 'users')      refreshUsers({ silent: true });
   if (tab === 'orgs')       renderOrgs();
   if (tab === 'approvals')  renderApprovals();
 }
@@ -1121,6 +1114,36 @@ function renderUsers() {
   }).join('');
 }
 
+let usersRefreshInFlight = false;
+async function refreshUsers({ silent = false } = {}) {
+  if (usersRefreshInFlight) return;
+  usersRefreshInFlight = true;
+  const button = document.getElementById('refresh-users-btn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Refreshing…';
+  }
+  try {
+    await syncRemoteUsers();
+    renderUsers();
+    updatePendingBadge();
+  } catch (error) {
+    console.error(error);
+    if (!silent) alert(error.message || 'Could not refresh users from Supabase.');
+  } finally {
+    usersRefreshInFlight = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Refresh from Supabase';
+    }
+  }
+}
+
+// Keep the open Users tab aligned with Supabase Auth without requiring a reload.
+setInterval(() => {
+  if (activeTab === 'users' && !document.hidden) refreshUsers({ silent: true });
+}, 30000);
+
 function updateRole(email, newRole) {
   const users = getUsers();
   const idx = users.findIndex(u=>u.email===email);
@@ -1157,7 +1180,16 @@ async function removeUser(email) {
   try {
     const response = await fetch(`/api/admin/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || 'Could not remove the account from the database.');
+    if (!response.ok) {
+      if (/user not found|not found/i.test(result.error || '')) {
+        await syncRemoteUsers();
+        renderUsers();
+        updatePendingBadge();
+        alert('This account was already deleted from Supabase. The user list has been refreshed.');
+        return;
+      }
+      throw new Error(result.error || 'Could not remove the account from the database.');
+    }
     saveUsers(getUsers().filter(u => u.id !== user.id && u.email !== email));
     downloadUserRemovalReport(user);
     renderUsers();
