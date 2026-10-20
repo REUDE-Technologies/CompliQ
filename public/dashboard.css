@@ -1414,6 +1414,14 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
 .toast.success { border-color: rgba(15,164,175,0.4); color: var(--c-teal); }
 .toast.error { border-color: rgba(15,164,175,0.4); color: var(--c-teal); }
+[data-theme="light"] .toast {
+  background: #ffffff;
+  border-color: rgba(49,92,139,0.22);
+  color: #173653;
+  box-shadow: 0 8px 24px rgba(33,65,101,0.18);
+}
+[data-theme="light"] .toast.success { color: #087f59; border-color: rgba(8,127,89,0.28); }
+[data-theme="light"] .toast.error { color: #a83232; border-color: rgba(168,50,50,0.28); }
 
 /* ================================================
    DASHBOARD RESPONSIVE — MOBILE & TABLET

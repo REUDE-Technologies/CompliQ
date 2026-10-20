@@ -407,6 +407,15 @@ function animateNumber(id, target) {
 // 5. FLEET GRID
 // ══════════════════════════════════════════════════
 let fleetStatusFilter = 'all';
+const AVAILABLE_DETAILED_ASSET = 'WTG-001';
+
+function isDetailedAssetAvailable(turbine) {
+  return turbine?.assetId === AVAILABLE_DETAILED_ASSET;
+}
+
+function showAssetComingSoon(turbine) {
+  showToast(`${turbine?.assetId || 'This turbine'} detailed view will be updated soon.`, 'info');
+}
 
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
@@ -440,9 +449,9 @@ function renderFleetGrid() {
       <div class="t-loc">${t.site}</div>
     `;
     card.addEventListener('click', () => {
-      if (t.assetId !== 'WTG-001') {
+      if (!isDetailedAssetAvailable(t)) {
         hideFleetTurbinePop();
-        showToast('Detailed view for this wind turbine will be available soon.', 'info');
+        showAssetComingSoon(t);
         return;
       }
       STATE.selectedTurbineId = t.id;
@@ -538,14 +547,22 @@ function renderAssetList(filter = 'all') {
         <span class="asset-gps">📍 ${t.gps.lat}°N, ${t.gps.lng}°E</span>
       </div>
       <div style="font-size:0.7rem;color:var(--c-muted)">Last: ${t.lastInspection}</div>
-      <button class="view-btn" data-id="${t.id}">View Detail →</button>
+      <button class="view-btn" data-id="${t.id}" ${isDetailedAssetAvailable(t) ? '' : 'disabled'}>${isDetailedAssetAvailable(t) ? 'View Detail →' : 'Will be updated soon'}</button>
     `;
     row.querySelector('.view-btn').addEventListener('click', () => {
+      if (!isDetailedAssetAvailable(t)) {
+        showAssetComingSoon(t);
+        return;
+      }
       STATE.selectedTurbineId = t.id;
       navigateTo('asset');
     });
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('view-btn')) return;
+      if (!isDetailedAssetAvailable(t)) {
+        showAssetComingSoon(t);
+        return;
+      }
       STATE.selectedTurbineId = t.id;
       navigateTo('asset');
     });
@@ -585,6 +602,11 @@ function openAssetOverview() {
 
 function renderAssetView() {
   if (STATE.activeTab !== 'asset') return;
+  const selected = STATE.db.turbines.find(x => x.id === STATE.selectedTurbineId);
+  if (selected && !isDetailedAssetAvailable(selected)) {
+    showAssetComingSoon(selected);
+    STATE.selectedTurbineId = STATE.db.turbines.find(isDetailedAssetAvailable)?.id ?? STATE.db.turbines[0]?.id;
+  }
   const epoch = bumpAssetEpoch();
   populateTurbineSelector();
   const t = STATE.db.turbines.find(x => x.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
@@ -599,10 +621,16 @@ function renderAssetView() {
 function populateTurbineSelector() {
   const sel = document.getElementById('turbine-selector');
   sel.innerHTML = STATE.db.turbines.map(t =>
-    `<option value="${t.id}" ${t.id === STATE.selectedTurbineId ? 'selected' : ''}>${turbineLabel(t)}</option>`
+    `<option value="${t.id}" ${t.id === STATE.selectedTurbineId ? 'selected' : ''} ${isDetailedAssetAvailable(t) ? '' : 'disabled'}>${escHtml(turbineLabel(t))}${isDetailedAssetAvailable(t) ? '' : ' — Will be updated soon'}</option>`
   ).join('');
   sel.onchange = () => {
-    STATE.selectedTurbineId = parseInt(sel.value);
+    const selected = STATE.db.turbines.find(t => t.id === Number(sel.value));
+    if (!isDetailedAssetAvailable(selected)) {
+      showAssetComingSoon(selected);
+      sel.value = String(STATE.selectedTurbineId);
+      return;
+    }
+    STATE.selectedTurbineId = selected.id;
     renderAssetView();
   };
 }
@@ -4667,7 +4695,7 @@ function initReportPicker() {
   if (!turbineSel || turbineSel.dataset.bound) return;
   turbineSel.dataset.bound = '1';
   turbineSel.innerHTML = (STATE.db?.turbines || []).map(t =>
-    `<option value="${t.id}">${escHtml(turbineLabel(t))}</option>`
+    `<option value="${t.id}" ${isDetailedAssetAvailable(t) ? '' : 'disabled'}>${escHtml(turbineLabel(t))}${isDetailedAssetAvailable(t) ? '' : ' — Will be updated soon'}</option>`
   ).join('');
   if (STATE.selectedTurbineId) turbineSel.value = String(STATE.selectedTurbineId);
   refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === reportTurbineId()));
@@ -4692,7 +4720,15 @@ function initReportPicker() {
     fillReportDefects();
     applyReportDefect();
   };
-  turbineSel.addEventListener('change', () => onFilter(false));
+  turbineSel.addEventListener('change', () => {
+    const selected = STATE.db?.turbines?.find(item => item.id === Number(turbineSel.value));
+    if (!isDetailedAssetAvailable(selected)) {
+      showAssetComingSoon(selected);
+      turbineSel.value = String(STATE.db?.turbines?.find(isDetailedAssetAvailable)?.id ?? STATE.selectedTurbineId);
+      return;
+    }
+    onFilter(false);
+  });
   bladeSel?.addEventListener('change', () => onFilter(false));
   document.querySelectorAll('.side-tab').forEach(btn => {
     btn.addEventListener('click', () => {
