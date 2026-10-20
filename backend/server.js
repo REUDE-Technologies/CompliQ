@@ -410,11 +410,33 @@ app.post('/api/data/:key', requireSupabase, authenticate, async (req, res) => {
 
 app.get('/api/admin/users', requireSupabase, authenticate, requireAdmin, async (req, res) => {
     try {
+        const authUsers = [];
+        const perPage = 1000;
+        for (let page = 1; ; page += 1) {
+            const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+            if (error) throw error;
+            authUsers.push(...data.users);
+            if (data.users.length < perPage) break;
+        }
+
         const { data, error } = await adminClient.from('profiles')
             .select('id, first_name, last_name, org, email, role, sector, status, avatar_url, phone, bio, created_at')
             .order('created_at', { ascending: false });
         if (error) throw error;
-        res.json(data.map(profileToUser));
+
+        // Auth is the source of truth. Ignore orphaned profile rows left behind
+        // by manual Auth deletions and prefer the current Auth email address.
+        const authById = new Map(authUsers.map(user => [user.id, user]));
+        res.json(data
+            .filter(profile => authById.has(profile.id))
+            .map(profile => {
+                const authUser = authById.get(profile.id);
+                return {
+                    ...profileToUser(profile),
+                    email: authUser.email || profile.email,
+                    createdAt: authUser.created_at || profile.created_at
+                };
+            }));
     } catch (error) {
         sendError(res, error);
     }
