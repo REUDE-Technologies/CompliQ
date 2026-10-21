@@ -10,6 +10,46 @@
 // 1. SESSION & AUTH GATE
 // ══════════════════════════════════════════════════
 const SESSION_KEY = 'compliq_session';
+const USERS_KEY = 'compliq_users';
+
+function avatarStoreKey(email) {
+  return 'compliq_avatar:' + String(email || '').trim().toLowerCase();
+}
+
+function getStoredAvatar(email) {
+  const keyEmail = String(email || '').trim().toLowerCase();
+  if (!keyEmail) return '';
+  try {
+    const dedicated = localStorage.getItem(avatarStoreKey(keyEmail));
+    if (dedicated) return dedicated;
+  } catch (e) { /* ignore */ }
+  try {
+    const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+    if (String(sess.email || '').trim().toLowerCase() === keyEmail && sess.avatarUrl) return sess.avatarUrl;
+  } catch (e) { /* ignore */ }
+  try {
+    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    const u = users.find(x => String(x.email || '').trim().toLowerCase() === keyEmail);
+    if (u && u.avatarUrl) return u.avatarUrl;
+  } catch (e) { /* ignore */ }
+  return '';
+}
+
+function applyUserAvatar(el, user) {
+  if (!el || !user) return;
+  const url = getStoredAvatar(user.email) || user.avatarUrl || '';
+  const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
+  if (url) {
+    el.textContent = '';
+    el.classList.add('has-photo');
+    el.style.backgroundImage = `url("${url}")`;
+    el.setAttribute('aria-label', 'Profile photo');
+  } else {
+    el.classList.remove('has-photo');
+    el.style.backgroundImage = '';
+    el.textContent = initials;
+  }
+}
 
 function checkAuth() {
   const session = localStorage.getItem(SESSION_KEY);
@@ -20,11 +60,10 @@ function checkAuth() {
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
     const user = JSON.parse(session);
-    const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
     const av = document.getElementById('user-av');
     const nameEl = document.getElementById('user-display-name');
     const roleEl = document.getElementById('user-display-role');
-    if (av) av.textContent = initials;
+    applyUserAvatar(av, user);
     if (nameEl) nameEl.textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
     if (roleEl) roleEl.textContent = user.role || 'Fleet Operator';
     
@@ -292,6 +331,7 @@ function activateTab(tab) {
   requestAnimationFrame(() => {
     if (STATE.activeTab !== next) return;
     if (next === 'analytics') renderCharts();
+    if (next === 'fleet') invalidateFleetMap();
     if (next === 'asset') openAssetOverview();
     if (next === 'report') openReportForSelection();
     if (next === 'manual') populateManualSelects();
@@ -358,24 +398,250 @@ function animateNumber(id, target) {
 // ══════════════════════════════════════════════════
 // 5. FLEET GRID
 // ══════════════════════════════════════════════════
-let fleetStatusFilter = 'all';
+const FLEET_CAT_OPTIONS = [
+  { value: 1, label: 'C1 – Cosmetic' },
+  { value: 2, label: 'C2 – Minor' },
+  { value: 3, label: 'C3 – Moderate' },
+  { value: 4, label: 'C4 – Serious' },
+  { value: 5, label: 'C5 – Critical' }
+];
+
+const FLEET_CAPACITY_BANDS = [
+  { id: '225kw-500kw', minKw: 225, maxKw: 500, label: '225 – 500 kW' },
+  { id: '500kw-1mw', minKw: 500, maxKw: 1000, label: '500 kW – 1 MW' },
+  { id: '1-2mw', minKw: 1000, maxKw: 2000, label: '1 – 2 MW' },
+  { id: '2-3mw', minKw: 2000, maxKw: 3000, label: '2 – 3 MW' },
+  { id: '3-5mw', minKw: 3000, maxKw: 5000, label: '3 – 5 MW' },
+  { id: '5-8mw', minKw: 5000, maxKw: 8000, label: '5 – 8 MW' },
+  { id: '8-12mw', minKw: 8000, maxKw: 12000, label: '8 – 12 MW' },
+  { id: '12-16mw', minKw: 12000, maxKw: 16000, label: '12 – 16 MW' },
+  { id: '16-20mw', minKw: 16000, maxKw: 20000, label: '16 – 20 MW' }
+];
+
+const fleetFilters = {
+  query: '',
+  capacity: [],
+  region: [],
+  severity: []
+};
+
+function turbineCapacityBand(mw) {
+  const kw = Number(mw) * 1000;
+  if (!Number.isFinite(kw) || kw < 225) return '';
+  const last = FLEET_CAPACITY_BANDS[FLEET_CAPACITY_BANDS.length - 1];
+  if (kw >= last.minKw) return last.id;
+  const band = FLEET_CAPACITY_BANDS.find(item => kw >= item.minKw && kw < item.maxKw);
+  return band?.id || '';
+}
+
+function turbineSearchBlob(t) {
+  return [t.assetId, t.name, t.site, t.state, t.location, t.manufacturer, t.model, t.campaign]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function turbineSeveritySet(t) {
+  return new Set(
+    (STATE.db.defects || [])
+      .filter(d => Number(d.assetId) === Number(t.id))
+      .map(d => Number(d.severity))
+      .filter(n => n >= 1 && n <= 5)
+  );
+}
+
+function filteredFleetTurbines() {
+  const query = fleetFilters.query.trim().toLowerCase();
+  return (STATE.db?.turbines || []).filter(t => {
+    if (query && !turbineSearchBlob(t).includes(query)) return false;
+    if (fleetFilters.capacity.length && !fleetFilters.capacity.includes(turbineCapacityBand(t.power))) return false;
+    if (fleetFilters.region.length && !fleetFilters.region.includes(t.state || '')) return false;
+    if (fleetFilters.severity.length) {
+      const cats = turbineSeveritySet(t);
+      if (!fleetFilters.severity.some(sev => cats.has(sev))) return false;
+    }
+    return true;
+  });
+}
+
+function fleetFilterCount() {
+  return fleetFilters.capacity.length + fleetFilters.region.length + fleetFilters.severity.length + (fleetFilters.query.trim() ? 1 : 0);
+}
+
+function syncFleetFilterButtons() {
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    const key = dd.dataset.filter;
+    const count = fleetFilters[key]?.length || 0;
+    const btn = dd.querySelector('.fleet-dd-btn');
+    if (!btn) return;
+    const base = key === 'capacity' ? 'Capacity' : key === 'region' ? 'Region' : 'Severity';
+    btn.textContent = count ? `${base} · ${count}` : base;
+    btn.classList.toggle('is-on', count > 0);
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear) clear.disabled = fleetFilterCount() === 0;
+}
+
+function closeFleetDropdowns(except) {
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    if (dd === except) return;
+    const menu = dd.querySelector('.fleet-dd-menu');
+    const btn = dd.querySelector('.fleet-dd-btn');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function populateFleetFilterMenus() {
+  if (!STATE.db?.turbines) return;
+  const capMenu = document.querySelector('.fleet-dd[data-filter="capacity"] .fleet-dd-menu');
+  const regionMenu = document.querySelector('.fleet-dd[data-filter="region"] .fleet-dd-menu');
+  const sevMenu = document.querySelector('.fleet-dd[data-filter="severity"] .fleet-dd-menu');
+  const regions = [...new Set(STATE.db.turbines.map(t => t.state).filter(Boolean))].sort();
+  if (capMenu) {
+    capMenu.innerHTML = FLEET_CAPACITY_BANDS.map(band => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${band.id}" ${fleetFilters.capacity.includes(band.id) ? 'checked' : ''}>
+        <span>${escHtml(band.label)}</span>
+      </label>
+    `).join('');
+  }
+  if (regionMenu) {
+    regionMenu.innerHTML = regions.map(region => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${escHtml(region)}" ${fleetFilters.region.includes(region) ? 'checked' : ''}>
+        <span>${escHtml(region)}</span>
+      </label>
+    `).join('') || '<p class="fleet-empty">No regions</p>';
+  }
+  if (sevMenu) {
+    sevMenu.innerHTML = FLEET_CAT_OPTIONS.map(opt => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${opt.value}" ${fleetFilters.severity.includes(opt.value) ? 'checked' : ''}>
+        <span>${escHtml(opt.label)}</span>
+      </label>
+    `).join('');
+  }
+  document.querySelectorAll('.fleet-dd-menu input[type="checkbox"]').forEach(input => {
+    const dd = input.closest('.fleet-dd');
+    const key = dd?.dataset.filter;
+    if (!key) return;
+    const value = (key === 'region' || key === 'capacity') ? input.value : Number(input.value);
+    input.checked = fleetFilters[key].includes(value);
+  });
+  syncFleetFilterButtons();
+}
+
+function initFleetToolbar() {
+  const search = document.getElementById('fleet-search');
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = '1';
+    search.addEventListener('input', () => {
+      fleetFilters.query = search.value;
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  }
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    const btn = dd.querySelector('.fleet-dd-btn');
+    const menu = dd.querySelector('.fleet-dd-menu');
+    if (!btn || !menu || btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const open = menu.hidden;
+      closeFleetDropdowns(dd);
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    menu.addEventListener('change', event => {
+      const input = event.target.closest('input[type="checkbox"]');
+      if (!input) return;
+      const key = dd.dataset.filter;
+      const raw = input.value;
+      const value = (key === 'region' || key === 'capacity') ? raw : Number(raw);
+      if (input.checked) {
+        if (!fleetFilters[key].includes(value)) fleetFilters[key].push(value);
+      } else {
+        fleetFilters[key] = fleetFilters[key].filter(item => item !== value);
+      }
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear && !clear.dataset.bound) {
+    clear.dataset.bound = '1';
+    clear.addEventListener('click', () => {
+      fleetFilters.query = '';
+      fleetFilters.capacity = [];
+      fleetFilters.region = [];
+      fleetFilters.severity = [];
+      if (search) search.value = '';
+      document.querySelectorAll('.fleet-dd-menu input[type="checkbox"]').forEach(box => { box.checked = false; });
+      closeFleetDropdowns();
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  }
+  if (!document.body.dataset.fleetDdBound) {
+    document.body.dataset.fleetDdBound = '1';
+    document.addEventListener('click', event => {
+      if (event.target.closest('.fleet-dd')) return;
+      closeFleetDropdowns();
+    });
+  }
+  populateFleetFilterMenus();
+}
+
+function turbineHasAssetView(t) {
+  return Number(t?.id) === 1 || t?.assetId === 'WTG-001';
+}
+
+function syncFleetSelection() {
+  const id = Number(STATE.selectedTurbineId);
+  document.querySelectorAll('.turbine-node').forEach(n => {
+    n.classList.toggle('active', Number(n.dataset.id) === id);
+  });
+  fleetMapMarkers.forEach((marker, key) => {
+    const t = STATE.db.turbines.find(item => String(item.id) === String(key));
+    if (!t) return;
+    marker.setIcon(fleetPinIcon(t, Number(key) === id));
+    marker.setZIndexOffset(Number(key) === id ? 1000 : 0);
+  });
+}
+
+function selectFleetTurbine(t, { openAsset = false } = {}) {
+  if (!t) return;
+  STATE.selectedTurbineId = t.id;
+  syncFleetSelection();
+  if (openAsset && turbineHasAssetView(t)) {
+    hideFleetTurbinePop();
+    navigateTo('asset');
+    return;
+  }
+  if (fleetLeafletMap && t.gps && Number.isFinite(t.gps.lat) && Number.isFinite(t.gps.lng)) {
+    const zoom = Math.max(fleetLeafletMap.getZoom(), 6.5);
+    fleetLeafletMap.flyTo([t.gps.lat, t.gps.lng], zoom, { duration: 0.55 });
+  }
+  showFleetTurbinePop(null, t);
+}
 
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
+  if (!grid) return;
   grid.innerHTML = '';
-  let turbines = STATE.db.turbines;
-  if (fleetStatusFilter === 'normal') turbines = turbines.filter(t => t.status === 'normal');
-  if (fleetStatusFilter === 'warning') turbines = turbines.filter(t => t.status === 'warning');
-  if (fleetStatusFilter === 'critical') turbines = turbines.filter(t => t.status === 'critical');
+  const turbines = filteredFleetTurbines();
   if (!turbines.length) {
-    grid.innerHTML = '<p class="fleet-empty">No turbines in this status.</p>';
+    grid.innerHTML = '<p class="fleet-empty">No turbines match these filters.</p>';
+    renderFleetMap();
     return;
   }
   turbines.forEach(t => {
     const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
     const card = document.createElement('div');
-    card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''}`;
+    const canOpen = turbineHasAssetView(t);
+    card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''} ${canOpen ? 'has-asset' : 'no-asset'}`.trim();
     card.dataset.id = t.id;
+    card.title = 'Show turbine on map';
     const spinSpeed = t.status === 'critical' ? '3s' : t.status === 'warning' ? '6s' : '10s';
     card.innerHTML = `
       <div class="t-status-dot ${cls}"></div>
@@ -390,17 +656,147 @@ function renderFleetGrid() {
       <div class="t-name">${t.assetId}</div>
       <div class="t-health">${t.health}% Health</div>
       <div class="t-loc">${t.site}</div>
+      ${canOpen ? '<button type="button" class="fleet-open-asset">Open asset</button>' : ''}
     `;
-    card.addEventListener('click', () => {
-      STATE.selectedTurbineId = t.id;
-      document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
-      card.classList.add('active');
-      hideFleetTurbinePop();
-      navigateTo('asset');
-    });
-    card.addEventListener('mouseenter', () => showFleetTurbinePop(card, t));
-    card.addEventListener('mouseleave', scheduleHideFleetPop);
+    card.addEventListener('click', () => selectFleetTurbine(t));
+    const openBtn = card.querySelector('.fleet-open-asset');
+    if (openBtn) {
+      openBtn.addEventListener('click', event => {
+        event.stopPropagation();
+        selectFleetTurbine(t, { openAsset: true });
+      });
+    }
     grid.appendChild(card);
+  });
+  renderFleetMap();
+}
+
+const INDIA_BOUNDS = [[6.5, 68.0], [37.1, 97.4]];
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const ESRI_SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+let fleetLeafletMap = null;
+let fleetMarkerLayer = null;
+let fleetOsmLayer = null;
+let fleetSatLayer = null;
+const fleetMapMarkers = new Map();
+
+function fleetStatusColor(t) {
+  return t.status === 'critical' ? '#EB5757' : t.status === 'warning' ? '#F2C94C' : '#2ECC71';
+}
+
+function fleetPinIcon(t, selected) {
+  return L.divIcon({
+    className: `fleet-map-pin${selected ? ' is-on' : ''}`,
+    html: `<span class="fleet-map-dot" style="background:${fleetStatusColor(t)}"></span><span class="fleet-map-label">${escHtml(t.assetId)}</span>`,
+    iconSize: [76, 34],
+    iconAnchor: [8, 8]
+  });
+}
+
+function syncFleetMapTheme() {
+  if (!fleetLeafletMap) return;
+  const usingOsm = fleetOsmLayer && fleetLeafletMap.hasLayer(fleetOsmLayer);
+  fleetLeafletMap.getContainer().classList.toggle('fleet-map-dark-tiles', !isLightTheme() && !!usingOsm);
+}
+
+function invalidateFleetMap() {
+  if (!fleetLeafletMap) return;
+  requestAnimationFrame(() => {
+    fleetLeafletMap.invalidateSize();
+    syncFleetMapTheme();
+  });
+}
+
+function ensureFleetLeafletMap(host) {
+  if (fleetLeafletMap) {
+    invalidateFleetMap();
+    return fleetLeafletMap;
+  }
+  fleetLeafletMap = L.map(host, {
+    center: [22.35, 78.96],
+    zoom: 4.7,
+    minZoom: 4,
+    maxZoom: 16,
+    maxBounds: [[5.4, 66.4], [38.2, 99.2]],
+    maxBoundsViscosity: 0.85,
+    zoomSnap: 0.25,
+    zoomControl: true,
+    attributionControl: false
+  });
+  fleetOsmLayer = L.tileLayer(OSM_TILE_URL, {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  });
+  fleetSatLayer = L.tileLayer(ESRI_SAT_URL, {
+    maxZoom: 17,
+    attribution: 'Tiles &copy; Esri'
+  });
+  fleetOsmLayer.addTo(fleetLeafletMap);
+  L.control.layers(
+    { 'India streets': fleetOsmLayer, 'Satellite': fleetSatLayer },
+    {},
+    { position: 'topright', collapsed: true }
+  ).addTo(fleetLeafletMap);
+  fleetLeafletMap.on('baselayerchange', syncFleetMapTheme);
+  fleetLeafletMap.on('click', hideFleetTurbinePop);
+  fleetLeafletMap.fitBounds(INDIA_BOUNDS, { padding: [18, 18], maxZoom: 5.3 });
+  fleetMarkerLayer = L.layerGroup().addTo(fleetLeafletMap);
+  addFleetMapRestoreControl();
+  syncFleetMapTheme();
+  invalidateFleetMap();
+  return fleetLeafletMap;
+}
+
+function resetFleetMapView() {
+  if (!fleetLeafletMap) return;
+  fleetLeafletMap.stop();
+  fleetLeafletMap.fitBounds(INDIA_BOUNDS, { padding: [18, 18], maxZoom: 5.3, animate: true });
+}
+
+function addFleetMapRestoreControl() {
+  const bar = document.querySelector('#fleet-map .leaflet-control-zoom');
+  if (!bar || bar.querySelector('.leaflet-control-zoom-restore') || typeof L === 'undefined') return;
+  const btn = L.DomUtil.create('a', 'leaflet-control-zoom-restore', bar);
+  btn.href = '#';
+  btn.title = 'Restore map view';
+  btn.setAttribute('role', 'button');
+  btn.setAttribute('aria-label', 'Restore map view');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+  L.DomEvent.disableClickPropagation(btn);
+  L.DomEvent.on(btn, 'click', event => {
+    L.DomEvent.preventDefault(event);
+    resetFleetMapView();
+  });
+}
+
+function renderFleetMap() {
+  const host = document.getElementById('fleet-map');
+  if (!host) return;
+  if (typeof L === 'undefined') {
+    host.innerHTML = '<p class="fleet-empty">India map API did not load. Refresh to retry.</p>';
+    return;
+  }
+  const map = ensureFleetLeafletMap(host);
+  if (!map || !fleetMarkerLayer) return;
+  fleetMarkerLayer.clearLayers();
+  fleetMapMarkers.clear();
+  const turbines = filteredFleetTurbines().filter(t => t.gps && Number.isFinite(t.gps.lat) && Number.isFinite(t.gps.lng));
+  turbines.forEach(t => {
+    const selected = Number(t.id) === Number(STATE.selectedTurbineId);
+    const marker = L.marker([t.gps.lat, t.gps.lng], {
+      icon: fleetPinIcon(t, selected),
+      keyboard: true,
+      title: t.assetId,
+      riseOnHover: true,
+      zIndexOffset: selected ? 1000 : 0
+    });
+    marker.on('click', event => {
+      L.DomEvent.stopPropagation(event);
+      selectFleetTurbine(t);
+    });
+    marker.addTo(fleetMarkerLayer);
+    fleetMapMarkers.set(String(t.id), marker);
   });
 }
 
@@ -418,10 +814,13 @@ function hideFleetTurbinePop() {
 
 function showFleetTurbinePop(card, t) {
   const pop = document.getElementById('fleet-turbine-pop');
+  const host = document.querySelector('.fleet-map-wrap') || document.getElementById('fleet-map');
   if (!pop || !t) return;
+  if (host && pop.parentElement !== host) host.appendChild(pop);
   clearTimeout(fleetPopTimer);
   const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
   const gps = t.gps ? `${t.gps.lat}°N, ${t.gps.lng}°E` : '';
+  const canOpen = turbineHasAssetView(t);
   pop.innerHTML = `
     <div class="fleet-pop-head">
       <strong>${escHtml(turbineLabel(t))}</strong>
@@ -434,21 +833,20 @@ function showFleetTurbinePop(card, t) {
     <p>${t.anomalies} anomalies</p>
     <p>${escHtml(t.location || t.site || '')}</p>
     <p>${escHtml(gps)}</p>
-    <p>Last: ${escHtml(t.lastInspection || '—')}</p>
+    <p>Last inspection date: ${escHtml(t.lastInspection || '—')}</p>
+    ${canOpen ? '<button type="button" class="view-btn" id="fleet-pop-open-asset">Open asset →</button>' : ''}
   `;
   pop.hidden = false;
-  const width = 340;
-  const rect = card.getBoundingClientRect();
-  let left = rect.left + (rect.width / 2) - (width / 2);
-  left = Math.max(16, Math.min(left, window.innerWidth - width - 16));
-  pop.style.left = `${left}px`;
-  pop.style.top = '0px';
-  const height = pop.offsetHeight;
-  let top = rect.top - height - 12;
-  if (top < 72) top = rect.bottom + 12;
-  pop.style.top = `${top}px`;
-  pop.onmouseenter = () => clearTimeout(fleetPopTimer);
-  pop.onmouseleave = scheduleHideFleetPop;
+  pop.classList.add('on-map');
+  pop.style.left = '';
+  pop.style.top = '';
+  pop.onmouseenter = null;
+  pop.onmouseleave = null;
+  pop.onclick = event => event.stopPropagation();
+  pop.querySelector('#fleet-pop-open-asset')?.addEventListener('click', event => {
+    event.stopPropagation();
+    selectFleetTurbine(t, { openAsset: true });
+  });
 }
 
 function navigateTo(tab) {
@@ -484,31 +882,20 @@ function renderAssetList(filter = 'all') {
         <span>${t.location}</span>
         <span class="asset-gps">📍 ${t.gps.lat}°N, ${t.gps.lng}°E</span>
       </div>
-      <div style="font-size:0.7rem;color:var(--c-muted)">Last: ${t.lastInspection}</div>
+      <div style="font-size:0.7rem;color:var(--c-muted)">Last inspection date: ${t.lastInspection}</div>
       <button class="view-btn" data-id="${t.id}">View Detail →</button>
     `;
     row.querySelector('.view-btn').addEventListener('click', () => {
-      STATE.selectedTurbineId = t.id;
-      navigateTo('asset');
+      selectFleetTurbine(t, { openAsset: turbineHasAssetView(t) });
     });
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('view-btn')) return;
-      STATE.selectedTurbineId = t.id;
-      navigateTo('asset');
+      selectFleetTurbine(t, { openAsset: turbineHasAssetView(t) });
     });
     list.appendChild(row);
   });
 }
 
-document.getElementById('fleet-status-filters')?.addEventListener('click', event => {
-  const btn = event.target.closest('.fleet-filter');
-  if (!btn) return;
-  fleetStatusFilter = fleetStatusFilter === btn.dataset.status ? 'all' : btn.dataset.status;
-  document.querySelectorAll('.fleet-filter').forEach(item => {
-    item.classList.toggle('active', item.dataset.status === fleetStatusFilter);
-  });
-  renderFleetGrid();
-});
 
 // Filter buttons
 document.querySelectorAll('.fbtn').forEach(btn => {
@@ -2761,6 +3148,7 @@ function showReportSlide(index, opts = {}) {
 
   REPORT_SLIDES.index = (index + items.length) % items.length;
   const slide = items[REPORT_SLIDES.index];
+  clearMeasure('report');
   const pointLabel = 'P' + String(slide.index).padStart(2, '0');
   if (label) label.textContent = `${slide.side} · ${pointLabel} · ${REPORT_SLIDES.index + 1}/${items.length}`;
 
@@ -2799,6 +3187,7 @@ function showReportSlide(index, opts = {}) {
   rgb.onload = () => {
     if (!REPORT_VIEW.userZoom) fitReportImage();
     else applyReportZoom();
+    syncMeasureLayer('report');
   };
   useFirstExistingImage(rgb, photos, () => {
     rgb.hidden = true;
@@ -2862,6 +3251,7 @@ function bindReportViewerControls() {
   viewport.classList.add('pan-on');
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !REPORT_VIEW.pan) return;
+    if (viewport.classList.contains('is-measuring')) return;
     if (e.target.closest('button, a, input, select')) return;
     REPORT_VIEW.dragging = true;
     REPORT_VIEW.userZoom = true;
@@ -2888,6 +3278,7 @@ function bindReportViewerControls() {
   viewport.addEventListener('pointercancel', endPan);
 
   img.addEventListener('dblclick', () => {
+    if (viewport.classList.contains('is-measuring')) return;
     if (img.src) openBladeLightbox(img.src);
   });
 
@@ -2899,6 +3290,243 @@ function bindReportViewerControls() {
     ro.observe(viewport);
   }
   applyReportZoom();
+}
+
+const MEASURE = {
+  report: { mode: null, draft: [], shapes: [] },
+  asset: { mode: null, draft: [], shapes: [] }
+};
+const MEASURE_NS = 'http://www.w3.org/2000/svg';
+
+function measureIds(which) {
+  return which === 'asset'
+    ? { viewport: 'asset-poc-viewport', svg: 'asset-measure-svg', img: 'asset-poc-annotated', readout: 'asset-zoom-level' }
+    : { viewport: 'report-viewport', svg: 'report-measure-svg', img: 'img-rgb', readout: 'report-measure-readout' };
+}
+
+function measureSvgPoint(svg, event) {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+
+function syncMeasureLayer(which) {
+  const ids = measureIds(which);
+  const img = document.getElementById(ids.img);
+  const svg = document.getElementById(ids.svg);
+  if (!img || !svg || !img.naturalWidth) return;
+  svg.setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+  svg.setAttribute('width', String(img.naturalWidth));
+  svg.setAttribute('height', String(img.naturalHeight));
+  svg.style.width = `${img.naturalWidth}px`;
+  svg.style.height = `${img.naturalHeight}px`;
+  redrawMeasure(which);
+}
+
+function setMeasureMode(which, mode) {
+  const st = MEASURE[which];
+  st.mode = st.mode === mode ? null : mode;
+  st.draft = [];
+  const ids = measureIds(which);
+  document.getElementById(ids.viewport)?.classList.toggle('is-measuring', !!st.mode);
+  const distBtn = document.getElementById(which === 'asset' ? 'asset-measure-dist' : 'report-measure-dist');
+  const areaBtn = document.getElementById(which === 'asset' ? 'asset-measure-area' : 'report-measure-area');
+  distBtn?.classList.toggle('is-on', st.mode === 'dist');
+  areaBtn?.classList.toggle('is-on', st.mode === 'area');
+  const readout = document.getElementById(ids.readout);
+  if (which === 'report' && readout && st.mode) {
+    readout.textContent = st.mode === 'dist' ? 'Click two points' : 'Click polygon, double-click to close';
+  }
+  redrawMeasure(which);
+}
+
+function clearMeasure(which) {
+  MEASURE[which].draft = [];
+  MEASURE[which].shapes = [];
+  redrawMeasure(which);
+  const readout = document.getElementById(measureIds(which).readout);
+  if (which === 'report' && readout) readout.textContent = 'px';
+}
+
+function redrawMeasure(which) {
+  const svg = document.getElementById(measureIds(which).svg);
+  if (!svg) return;
+  svg.replaceChildren();
+  const st = MEASURE[which];
+  const drawShape = (shape, isDraft) => {
+    if (shape.kind === 'dist' && shape.points.length >= 2) {
+      const [a, b] = shape.points;
+      const line = document.createElementNS(MEASURE_NS, 'line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('stroke', '#0FA4AF');
+      line.setAttribute('stroke-width', '3');
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(line);
+      const label = document.createElementNS(MEASURE_NS, 'text');
+      label.setAttribute('x', (a.x + b.x) / 2);
+      label.setAttribute('y', (a.y + b.y) / 2 - 8);
+      label.setAttribute('fill', '#E8F4F6');
+      label.setAttribute('font-size', '22');
+      label.setAttribute('font-weight', '700');
+      label.textContent = `${Math.round(Math.hypot(b.x - a.x, b.y - a.y))} px`;
+      svg.appendChild(label);
+    }
+    if (shape.kind === 'area' && shape.points.length >= 2) {
+      const poly = document.createElementNS(MEASURE_NS, 'polygon');
+      poly.setAttribute('points', shape.points.map(p => `${p.x},${p.y}`).join(' '));
+      poly.setAttribute('fill', 'rgba(15,164,175,0.22)');
+      poly.setAttribute('stroke', '#0FA4AF');
+      poly.setAttribute('stroke-width', '3');
+      poly.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(poly);
+      if (!isDraft && shape.points.length >= 3) {
+        let area = 0;
+        const pts = shape.points;
+        for (let i = 0; i < pts.length; i += 1) {
+          const j = (i + 1) % pts.length;
+          area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+        }
+        area = Math.abs(area) / 2;
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const label = document.createElementNS(MEASURE_NS, 'text');
+        label.setAttribute('x', cx);
+        label.setAttribute('y', cy);
+        label.setAttribute('fill', '#E8F4F6');
+        label.setAttribute('font-size', '22');
+        label.setAttribute('font-weight', '700');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = `${Math.round(area)} px²`;
+        svg.appendChild(label);
+      }
+    }
+    shape.points.forEach(p => {
+      const dot = document.createElementNS(MEASURE_NS, 'circle');
+      dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', '#AFDDE5');
+      svg.appendChild(dot);
+    });
+  };
+  st.shapes.forEach(shape => drawShape(shape, false));
+  if (st.draft.length) drawShape({ kind: st.mode, points: st.draft }, true);
+}
+
+function onMeasureClick(which, event) {
+  const st = MEASURE[which];
+  if (!st.mode) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const svg = document.getElementById(measureIds(which).svg);
+  const p = svg && measureSvgPoint(svg, event);
+  if (!p) return;
+  st.draft.push({ x: p.x, y: p.y });
+  if (st.mode === 'dist' && st.draft.length >= 2) {
+    st.shapes.push({ kind: 'dist', points: st.draft.slice(0, 2) });
+    st.draft = [];
+    const last = st.shapes[st.shapes.length - 1];
+    const len = Math.hypot(last.points[1].x - last.points[0].x, last.points[1].y - last.points[0].y);
+    const readout = document.getElementById(measureIds(which).readout);
+    if (which === 'report' && readout) readout.textContent = `${Math.round(len)} px · uncalibrated`;
+  }
+  redrawMeasure(which);
+}
+
+function onMeasureDblClick(which, event) {
+  const st = MEASURE[which];
+  if (st.mode !== 'area') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (st.draft.length >= 3) {
+    st.shapes.push({ kind: 'area', points: st.draft.slice() });
+    st.draft = [];
+    const readout = document.getElementById(measureIds(which).readout);
+    if (which === 'report' && readout) readout.textContent = 'Area · uncalibrated px²';
+  }
+  redrawMeasure(which);
+}
+
+function reportShareHash() {
+  const slide = REPORT_SLIDES.items[REPORT_SLIDES.index] || {};
+  const t = reportTurbineId();
+  const b = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const s = slide.side || currentReportSide();
+  const p = String(slide.index || STATE.pocPointIndex || 1).padStart(2, '0');
+  return `#report?t=${encodeURIComponent(t)}&b=${encodeURIComponent(b)}&s=${encodeURIComponent(s)}&p=${p}`;
+}
+
+async function copyReportShareLink() {
+  const hash = reportShareHash();
+  const url = `${location.origin}${location.pathname}${hash}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Image link copied for the internal team', 'success');
+  } catch (_) {
+    window.prompt('Copy this image link', url);
+  }
+  history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+}
+
+function applyShareHash() {
+  const raw = (location.hash || '').replace(/^#/, '');
+  if (!raw.startsWith('report')) return false;
+  const qs = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  const q = new URLSearchParams(qs);
+  const t = q.get('t');
+  const b = q.get('b');
+  const s = q.get('s');
+  const p = Number(q.get('p'));
+  if (t) {
+    const sel = document.getElementById('report-turbine');
+    if (sel) sel.value = String(t);
+    STATE.selectedTurbineId = reportTurbineId();
+  }
+  if (b) {
+    const bladeSel = document.getElementById('report-blade');
+    if (bladeSel) bladeSel.value = b;
+    STATE.selectedBlade = b;
+    STATE.selectedPart = 'blade-' + b;
+  }
+  if (s) {
+    setReportSide(s);
+    STATE.pocSurface = s;
+  }
+  if (p) STATE.pocPointIndex = p;
+  navigateTo('report');
+  applyReportDefect();
+  const idx = REPORT_SLIDES.items.findIndex(item => (!s || item.side === s) && (!p || item.index === p));
+  if (idx >= 0) showReportSlide(idx, { syncFinding: true });
+  return true;
+}
+
+function bindMeasureAndShare() {
+  const reportVp = document.getElementById('report-viewport');
+  if (reportVp && !reportVp.dataset.measureBound) {
+    reportVp.dataset.measureBound = '1';
+    document.getElementById('report-measure-dist')?.addEventListener('click', () => setMeasureMode('report', 'dist'));
+    document.getElementById('report-measure-area')?.addEventListener('click', () => setMeasureMode('report', 'area'));
+    document.getElementById('report-measure-clear')?.addEventListener('click', () => clearMeasure('report'));
+    document.getElementById('report-share-link')?.addEventListener('click', () => copyReportShareLink());
+    const svg = document.getElementById('report-measure-svg');
+    svg?.addEventListener('click', e => onMeasureClick('report', e));
+    svg?.addEventListener('dblclick', e => onMeasureDblClick('report', e));
+  }
+  const assetVp = document.getElementById('asset-poc-viewport');
+  if (assetVp && !assetVp.dataset.measureBound) {
+    assetVp.dataset.measureBound = '1';
+    document.getElementById('asset-measure-dist')?.addEventListener('click', () => setMeasureMode('asset', 'dist'));
+    document.getElementById('asset-measure-area')?.addEventListener('click', () => setMeasureMode('asset', 'area'));
+    document.getElementById('asset-measure-clear')?.addEventListener('click', () => clearMeasure('asset'));
+    document.getElementById('asset-share-link')?.addEventListener('click', () => copyReportShareLink());
+    const svg = document.getElementById('asset-measure-svg');
+    svg?.addEventListener('click', e => onMeasureClick('asset', e));
+    svg?.addEventListener('dblclick', e => onMeasureDblClick('asset', e));
+  }
+  window.addEventListener('hashchange', () => applyShareHash());
 }
 
 function isG97Turbine(turbine) {
@@ -5203,6 +5831,8 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
       annotated.onload = () => {
         fitAnnotatedImage();
         renderPocBboxOverlay(pt, turbine);
+        clearMeasure('asset');
+        syncMeasureLayer('asset');
       };
       const candidates = (pt.stationCandidates && pt.stationCandidates.length)
         ? pt.stationCandidates.slice()
@@ -5489,6 +6119,7 @@ function bindAnnotatedViewerControls() {
   viewport.classList.add('pan-on');
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !ANNO_VIEW.pan) return;
+    if (viewport.classList.contains('is-measuring')) return;
     if (e.target.closest('button, a, input, select, .asset-poc-defect-callout')) return;
     ANNO_VIEW.dragging = true;
     ANNO_VIEW.userZoom = true;
@@ -5514,7 +6145,10 @@ function bindAnnotatedViewerControls() {
   viewport.addEventListener('pointerup', endPan);
   viewport.addEventListener('pointercancel', endPan);
 
-  img.addEventListener('dblclick', () => openBladeLightbox(img.src));
+  img.addEventListener('dblclick', () => {
+    if (viewport.classList.contains('is-measuring')) return;
+    openBladeLightbox(img.src);
+  });
 
   viewport.dataset.bound = '1';
   if (typeof ResizeObserver !== 'undefined') {
@@ -5552,6 +6186,7 @@ function fitAnnotatedImage() {
 // ══════════════════════════════════════════════════
 function initApp() {
   STATE.db = loadDB();
+  initFleetToolbar();
   initBgCanvas();
   setupNav();
   document.getElementById('asset-back-overview')?.addEventListener('click', () => openAssetOverview());
@@ -5565,9 +6200,13 @@ function initApp() {
   initAssetSheet();
   initDefectReview();
   bindReportViewerControls();
+  bindMeasureAndShare();
 
   // Start MQTT simulation
-  loadBladeFindings().then(() => initReportPicker());
+  loadBladeFindings().then(() => {
+    initReportPicker();
+    applyShareHash();
+  });
   setInterval(() => {
     // Randomly fluctuate wind speeds
     STATE.db.turbines.forEach(t => {
@@ -5689,6 +6328,7 @@ function initTheme() {
     resizeTimer = setTimeout(() => {
       const analytics = document.getElementById('view-analytics');
       if (analytics?.classList.contains('active')) renderCharts();
+      invalidateFleetMap();
     }, 180);
   });
 }
@@ -5702,6 +6342,7 @@ function applyDashTheme(theme) {
   if (analytics?.classList.contains('active') || (CHARTS.health || CHARTS.defects)) {
     renderCharts();
   }
+  syncFleetMapTheme();
 }
 
 function goHome() {
