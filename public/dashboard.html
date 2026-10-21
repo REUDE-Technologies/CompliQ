@@ -25,7 +25,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=reudeLightToast1">
+  <link rel="stylesheet" href="dashboard.css?v=inspectionFolders1">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -246,6 +246,10 @@
               </div>
               <div class="asset-poc-viewer-bar" role="toolbar" aria-label="Image controls">
                 <span class="asset-poc-pane-label" id="asset-poc-station-label">Annotated Image</span>
+                <div class="asset-poc-image-modes" role="group" aria-label="Image version">
+                  <button type="button" class="is-active" data-poc-image-mode="annotated" aria-pressed="true">Annotated</button>
+                  <button type="button" data-poc-image-mode="original" aria-pressed="false">Original</button>
+                </div>
                 <div class="asset-poc-zoom-controls">
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-in" title="Zoom in">+</button>
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-out" title="Zoom out">−</button>
@@ -725,6 +729,6 @@
 </div>
 
 <script src="compliq-sync.js"></script>
-<script src="dashboard.js?v=bladeHub5"></script>
+<script src="dashboard.js?v=inspectionFolders1"></script>
 </body>
 </html>

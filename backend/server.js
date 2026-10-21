@@ -167,10 +167,12 @@ app.post('/api/auth/register', requireSupabase, async (req, res) => {
     }
 
     try {
+        const appUrl = (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
         const { data, error } = await createAuthClient().auth.signUp({
             email: email.trim().toLowerCase(),
             password,
             options: {
+                emailRedirectTo: `${appUrl}/auth.html?mode=verify`,
                 data: {
                     first_name: firstName.trim(),
                     last_name: lastName.trim(),
@@ -187,6 +189,12 @@ app.post('/api/auth/register', requireSupabase, async (req, res) => {
         if (!data.user) return res.status(400).json({ error: 'Supabase did not create an account.' });
         if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
             return res.status(409).json({ error: 'Email already exists.' });
+        }
+        if (data.session || data.user.email_confirmed_at) {
+            await adminClient.auth.admin.deleteUser(data.user.id);
+            return res.status(503).json({
+                error: 'Email verification is not enabled in Supabase. Enable Confirm Email in the Email provider settings, then try again.'
+            });
         }
 
         const { error: profileError } = await adminClient.from('profiles').upsert({
@@ -229,7 +237,15 @@ app.post('/api/auth/login', requireSupabase, async (req, res) => {
             email: email.trim().toLowerCase(),
             password
         });
-        if (error || !data.session) return res.status(401).json({ error: 'Invalid email or password.' });
+        if (error) {
+            const unverified = error.code === 'email_not_confirmed' || /email not confirmed/i.test(error.message || '');
+            return res.status(unverified ? 403 : 401).json({
+                error: unverified
+                    ? 'Please verify your email using the confirmation link we sent before signing in.'
+                    : 'Invalid email or password.'
+            });
+        }
+        if (!data.session) return res.status(401).json({ error: 'Invalid email or password.' });
         const profile = await getProfile(data.user.id);
         if (!profile) return res.status(403).json({ error: 'Account profile is not configured. Contact an administrator.' });
         if (profile.status !== 'active') {

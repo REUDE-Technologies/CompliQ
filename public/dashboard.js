@@ -263,6 +263,7 @@ let STATE = {
   pocMode: false,
   pocSurface: 'PS',
   pocPointIndex: 5,
+  pocImageMode: 'annotated',
   pocSelectedDefectId: null,
   assetEpoch: 0,
   activeTab: 'fleet'
@@ -832,11 +833,43 @@ async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
   if (titleDefault) titleDefault.textContent = 'Component Schematic';
   if (hint) hint.textContent = '';
   if (container) {
+    if (part === 'nacelle' || part === 'tower') {
+      renderComponentMediaGallery(container, turbine, part);
+      return;
+    }
     container.innerHTML = `
       <div class="asset-part-placeholder">
         <strong>${part.replace(/-/g, ' ').toUpperCase()}</strong>
       </div>`;
   }
+}
+
+function renderComponentMediaGallery(container, turbine, component) {
+  const assetId = String(turbine?.assetId || 'WTG-001').replace(/[^a-zA-Z0-9_-]/g, '') || 'WTG-001';
+  const base = `images/inspection/${assetId}`;
+  const title = component === 'tower' ? 'Tower / Pole' : 'Nacelle';
+  const entries = [
+    { label: 'Original capture', folder: `${base}/original/${component}`, filename: 'capture-01.jpg' },
+    { label: 'Annotated capture', folder: `${base}/annotated/${component}`, filename: 'capture-01_annotated.jpg' }
+  ];
+  container.innerHTML = `
+    <section class="asset-component-media">
+      <header><div><strong>${title} inspection images</strong><p>Original and annotated evidence are kept in matching folders.</p></div><span>${assetId}</span></header>
+      <div class="asset-component-media-grid">${entries.map(entry => `
+        <article class="asset-component-media-card">
+          <h4>${entry.label}</h4>
+          <img src="${entry.folder}/${entry.filename}" alt="${title} ${entry.label.toLowerCase()}" loading="lazy">
+          <div class="asset-component-media-empty" hidden>
+            <strong>No image added yet</strong>
+            <code>${entry.folder}/${entry.filename}</code>
+          </div>
+        </article>`).join('')}
+      </div>
+    </section>`;
+  container.querySelectorAll('.asset-component-media-card img').forEach(img => {
+    const empty = img.closest('.asset-component-media-card')?.querySelector('.asset-component-media-empty');
+    img.addEventListener('error', () => { img.hidden = true; if (empty) empty.hidden = false; }, { once: true });
+  });
 }
 
 const DUTY_COLOR = { healthy: '#2ECC71', cleaning: '#F5B400', repair: '#F97316', critical: '#EF4444' };
@@ -4035,6 +4068,12 @@ const G97_FOLDERS = {
   B: { SS: 'Blade_B/SS', PS: 'Blade_B/PS', LE: 'Blade_B/LE', TE: 'Blade_B/TE' },
   C: { SS: 'Blade_C/SS', PS: 'Blade_C/PS', LE: 'Blade_C/LE', TE: 'Blade_C/TE' }
 };
+const INSPECTION_SIDE_FOLDERS = {
+  SS: 'SS',
+  LE: 'LE',
+  PS: 'PS',
+  TE: 'TE'
+};
 const G97_BLADE_NUM = { A: '1', B: '2', C: '3' };
 /** Captures not present in INPUT (Blade A PS 11–14, Blade B LE 16). */
 const G97_MISSING = new Set(['A-PS-11', 'A-PS-12', 'A-PS-13', 'A-PS-14', 'B-LE-16']);
@@ -4153,10 +4192,24 @@ function g97NamedStation(base, bladeNum, surface, n) {
   return `${base}/GAMESA_G97_2MW_BLADE${bladeNum}_${surface}-${n}`;
 }
 
-function g97StationCandidates(blade, surface, index) {
+function g97StationCandidates(blade, surface, index, imageMode = STATE.pocImageMode || 'annotated') {
   const folder = G97_FOLDERS[blade]?.[surface];
   if (!folder) return [];
   const n = String(index).padStart(2, '0');
+  const assetId = String(STATE.db?.turbines?.find(t => t.id === STATE.selectedTurbineId)?.assetId || 'WTG-001')
+    .replace(/[^a-zA-Z0-9_-]/g, '') || 'WTG-001';
+  const structuredRoot = `images/inspection/${assetId}`;
+  const structuredBlade = `blades/Blade_${blade}/${INSPECTION_SIDE_FOLDERS[surface]}`;
+  const structuredOriginal = [
+    `${structuredRoot}/original/${structuredBlade}/P${n}.jpg`,
+    `${structuredRoot}/original/${structuredBlade}/P${n}.png`
+  ];
+  const structuredAnnotated = [
+    `${structuredRoot}/annotated/${structuredBlade}/P${n}_annotated.jpg`,
+    `${structuredRoot}/annotated/${structuredBlade}/P${n}_annotated.png`,
+    `${structuredRoot}/annotated/${structuredBlade}/P${n}.jpg`,
+    `${structuredRoot}/annotated/${structuredBlade}/P${n}.png`
+  ];
   const base = `${G97_ROOT}/${folder}`;
   const paths = [];
   const numbers = g97FileNumbers(blade, surface);
@@ -4177,10 +4230,13 @@ function g97StationCandidates(blade, surface, index) {
     });
   }
   const prefix = `${G97_ROOT}/`;
-  return paths.flatMap(path => {
+  const legacyPaths = paths.flatMap(path => {
     const rel = path.startsWith(prefix) ? path.slice(prefix.length) : path;
     return [`${G97_REMOTE}/${rel}`, path];
   });
+  const primary = imageMode === 'original' ? structuredOriginal : structuredAnnotated;
+  const fallback = imageMode === 'original' ? structuredAnnotated : structuredOriginal;
+  return [...primary, ...fallback, ...legacyPaths];
 }
 
 function stationDefect(blade, surface, index) {
@@ -5082,7 +5138,8 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
       annotated.dataset.fallback = '0';
       annotated.onload = () => {
         fitAnnotatedImage();
-        renderPocBboxOverlay(pt, turbine);
+        if (STATE.pocImageMode === 'annotated') renderPocBboxOverlay(pt, turbine);
+        else clearPocBboxOverlay();
       };
       const candidates = (pt.stationCandidates && pt.stationCandidates.length)
         ? pt.stationCandidates.slice()
@@ -5108,10 +5165,11 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
       annotated.alt = pt.surface + ' ' + pt.point + ' ' + pt.station;
       if (annotated.complete && annotated.naturalWidth) {
         fitAnnotatedImage();
-        renderPocBboxOverlay(pt, turbine);
+        if (STATE.pocImageMode === 'annotated') renderPocBboxOverlay(pt, turbine);
+        else clearPocBboxOverlay();
       }
     }
-    if (label) label.textContent = pt.blade + ' · ' + pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine);
+    if (label) label.textContent = `${pt.blade} · ${SIDE_NAME[pt.surface] || pt.surface} ${pt.point} · ${STATE.pocImageMode === 'original' ? 'Original' : 'Annotated'} · ${formatRadial(pt, turbine)}`;
   } else {
     if (annotated) {
       annotated.removeAttribute('src');
@@ -5357,6 +5415,20 @@ function bindAnnotatedViewerControls() {
 
   document.getElementById('asset-poc-prev')?.addEventListener('click', () => stepAssetPocPoint(-1));
   document.getElementById('asset-poc-next')?.addEventListener('click', () => stepAssetPocPoint(1));
+
+  document.querySelectorAll('[data-poc-image-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      const nextMode = button.dataset.pocImageMode;
+      if (!['original', 'annotated'].includes(nextMode) || nextMode === STATE.pocImageMode) return;
+      STATE.pocImageMode = nextMode;
+      document.querySelectorAll('[data-poc-image-mode]').forEach(modeButton => {
+        const active = modeButton.dataset.pocImageMode === nextMode;
+        modeButton.classList.toggle('is-active', active);
+        modeButton.setAttribute('aria-pressed', String(active));
+      });
+      selectAssetPocPoint(STATE.pocSurface, STATE.pocPointIndex, STATE.pocSelectedDefectId);
+    });
+  });
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
