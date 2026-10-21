@@ -4253,6 +4253,7 @@ html:not([data-theme="light"]) #view-report .report-override-actions .review-btn
 .fleet-grid-wrap { overflow-y: auto; padding: 12px; }
 .fleet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .fleet-grid .turbine-node { min-height: 210px; }
+#view-fleet .turbine-node { touch-action: manipulation; }
 .fleet-map-wrap { position: relative; }
 .fleet-map {
   width: 100%;
