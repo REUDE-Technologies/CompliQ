@@ -22,7 +22,8 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="dashboard.css?v=reportSlide2">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="dashboard.css?v=fleetCap2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -56,14 +57,14 @@
         <span class="brand-by">BY</span>
         <img src="images/reude-logo.png" alt="Reude Technologies">
       </a>
-      <div>
+      <div id="page-heading" hidden>
         <h2 id="page-title">Fleet Overview</h2>
         <p id="page-sub">Real-time monitoring of all turbine assets</p>
       </div>
     </div>
     <div class="topbar-right">
       <div class="nl-search-wrap">
-        <input type="text" id="nl-input" placeholder="Ask AI" aria-label="Ask AI">
+        <input type="text" id="nl-input" placeholder="Search" aria-label="Search">
       </div>
       <div class="notif-bell-wrap" id="notif-wrap">
         <button class="icon-btn" id="notif-bell">
@@ -116,24 +117,7 @@
          VIEW: FLEET OVERVIEW
     =========================================== -->
     <section class="view active" id="view-fleet">
-      <!-- Metric Cards -->
-      <div class="metrics-row">
-        <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Fleet Health Index</span>
-            <span class="metric-val" id="m-health">—</span>
-            <span class="metric-sub" id="m-health-sub">Loading...</span>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Active Anomalies</span>
-            <span class="metric-val" id="m-anomalies">—</span>
-            <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
-          </div>
-        </div>
+      <div class="metrics-row" hidden>
         <div class="metric-card" id="metric-coverage" hidden>
           <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
           <div class="metric-body">
@@ -142,28 +126,32 @@
             <span class="metric-sub" id="m-cov-sub">Loading...</span>
           </div>
         </div>
-        <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-          <div class="metric-body">
-            <span class="metric-label">Fleet Capacity</span>
-            <span class="metric-val" id="m-conf">—</span>
-            <span class="metric-sub" id="m-conf-sub">Loading...</span>
-          </div>
-        </div>
       </div>
 
-      <!-- Fleet Grid -->
-      <div class="panel full-panel">
-        <div class="panel-header">
-          <h3>Interactive Fleet Grid</h3>
-          <div class="legend-row" id="fleet-status-filters">
-            <button type="button" class="fleet-filter" data-status="normal"><span class="leg-dot good"></span>Normal</button>
-            <button type="button" class="fleet-filter" data-status="warning"><span class="leg-dot warn"></span>Warning</button>
-            <button type="button" class="fleet-filter" data-status="critical"><span class="leg-dot crit"></span>Critical</button>
+      <div class="panel fleet-shell">
+        <form class="fleet-toolbar" autocomplete="off" onsubmit="return false">
+          <input type="search" id="fleet-search" placeholder="Search fleet" aria-label="Search fleet" autocomplete="off">
+          <div class="fleet-dd" data-filter="capacity">
+            <button type="button" class="fleet-dd-btn" aria-expanded="false">Capacity</button>
+            <div class="fleet-dd-menu" hidden role="group" aria-label="Capacity"></div>
           </div>
-        </div>
-        <div class="panel-body">
-          <div class="fleet-grid" id="fleet-grid"></div>
+          <div class="fleet-dd" data-filter="region">
+            <button type="button" class="fleet-dd-btn" aria-expanded="false">Region</button>
+            <div class="fleet-dd-menu" hidden role="group" aria-label="Region"></div>
+          </div>
+          <div class="fleet-dd" data-filter="severity">
+            <button type="button" class="fleet-dd-btn" aria-expanded="false">Severity</button>
+            <div class="fleet-dd-menu" hidden role="group" aria-label="Severity C1 to C5"></div>
+          </div>
+          <button type="button" class="fleet-clear-btn" id="fleet-clear-filters">Remove filters</button>
+        </form>
+        <div class="fleet-workspace">
+          <div class="fleet-grid-wrap">
+            <div class="fleet-grid" id="fleet-grid"></div>
+          </div>
+          <div class="fleet-map-wrap">
+            <div id="fleet-map" class="fleet-map" aria-label="India map of fleet locations"></div>
+          </div>
         </div>
       </div>
 
@@ -265,6 +253,7 @@
               <div class="asset-poc-stage" id="asset-poc-stage">
                 <img id="asset-poc-annotated" src="" alt="Annotated station capture" draggable="false">
                 <svg class="asset-poc-bbox-overlay" id="asset-poc-bbox-overlay" aria-hidden="true"></svg>
+                <svg class="measure-overlay" id="asset-measure-svg" aria-hidden="true"></svg>
               </div>
               <div class="asset-poc-defect-callout" id="asset-poc-defect-callout" hidden></div>
               <div class="asset-poc-slide-row">
@@ -279,6 +268,10 @@
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-fit" title="Fit to view">Fit</button>
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-100" title="Actual size">100%</button>
                   <button type="button" class="asset-zoom-btn" id="asset-image-full" title="Full screen">Full</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-measure-dist" title="Distance">Dist</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-measure-area" title="Area">Area</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-measure-clear" title="Clear measurements">Clr</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-share-link" title="Copy shareable image link">Share</button>
                 </div>
                 <span class="asset-zoom-level" id="asset-zoom-level">100%</span>
               </div>
@@ -408,12 +401,14 @@
         <div class="panel flex-3" id="report-viewer-panel">
           <div class="panel-header report-viewer-header">
             <h3 id="report-viewer-title">Inspection photo</h3>
+            <button type="button" class="ghost-btn" id="report-share-link" title="Copy a link to this station photo" hidden>Copy image link</button>
             <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
           <div class="panel-body viewer-body">
             <div class="report-viewport" id="report-viewport">
               <div class="report-stage" id="report-stage">
                 <img id="img-rgb" alt="Station capture" draggable="false" hidden>
+                <svg class="measure-overlay" id="report-measure-svg" aria-hidden="true"></svg>
               </div>
               <p class="viewer-empty" id="viewer-empty">Select a defect to open its station photo.</p>
               <div class="asset-poc-slide-row report-slide-row">
@@ -428,8 +423,12 @@
                   <button type="button" class="asset-zoom-btn" id="report-zoom-fit" title="Fit to view">Fit</button>
                   <button type="button" class="asset-zoom-btn" id="report-zoom-100" title="Actual size">100%</button>
                   <button type="button" class="asset-zoom-btn" id="report-image-full" title="Full screen">Full</button>
+                  <button type="button" class="asset-zoom-btn" id="report-measure-dist" title="Distance (pixels)">Dist</button>
+                  <button type="button" class="asset-zoom-btn" id="report-measure-area" title="Area (pixels)">Area</button>
+                  <button type="button" class="asset-zoom-btn" id="report-measure-clear" title="Clear measurements">Clr</button>
                 </div>
                 <span class="asset-zoom-level" id="report-zoom-level">100%</span>
+                <span class="measure-readout" id="report-measure-readout">px</span>
               </div>
             </div>
           </div>
@@ -643,28 +642,54 @@
          VIEW: ANALYTICS
     =========================================== -->
     <section class="view" id="view-analytics">
+      <div class="metrics-row analytics-metrics">
+        <div class="metric-card">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Fleet Health Index</span>
+            <span class="metric-val" id="m-health">—</span>
+            <span class="metric-sub" id="m-health-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Active Anomalies</span>
+            <span class="metric-val" id="m-anomalies">—</span>
+            <span class="metric-sub" id="m-anomalies-sub">Loading...</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <div class="metric-body">
+            <span class="metric-label">Fleet Capacity</span>
+            <span class="metric-val" id="m-conf">—</span>
+            <span class="metric-sub" id="m-conf-sub">Loading...</span>
+          </div>
+        </div>
+      </div>
       <div class="analytics-summary" id="analytics-summary" hidden></div>
       <div class="analytics-grid">
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-live-pill">Live</span></div>
+          <div class="panel-header"><h3>Fleet Health by Turbine</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Defect Distribution by Type</h3><span class="analytics-live-pill">Live</span></div>
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-defects" aria-label="Defect type distribution"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Severity Distribution</h3><span class="analytics-live-pill">Live</span></div>
+          <div class="panel-header"><h3>Severity Distribution</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-severity" aria-label="Severity distribution"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Inspections Timeline</h3><span class="analytics-live-pill">Live · 6 mo</span></div>
+          <div class="panel-header"><h3>Inspections Timeline</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-timeline" aria-label="Inspections timeline"></canvas>
           </div>
@@ -731,7 +756,8 @@
   <img id="bp-lightbox-img" src="" alt="Expanded station image">
 </div>
 
-<script src="dashboard.js?v=reportSlide1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="dashboard.js?v=fleetCap2"></script>
 </body>
 </html>
 
