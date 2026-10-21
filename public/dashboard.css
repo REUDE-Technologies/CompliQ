@@ -4282,7 +4282,7 @@ html:not([data-theme="light"]) #view-report .report-override-actions .review-btn
 }
 .fleet-map-soon { margin-top: 4px; color: #647b82; font-size: 11px; }
 .fleet-map-message { margin: 18px; color: var(--c-muted); font-size: .84rem; }
-@media (max-width: 1050px) {
+@media (max-width: 850px) {
   .fleet-workspace { grid-template-columns: minmax(0, 1fr); }
   .fleet-grid-wrap { max-height: 430px; }
   .fleet-map { min-height: 310px; }
