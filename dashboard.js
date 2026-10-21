@@ -411,11 +411,7 @@ const FLEET_CAPACITY_BANDS = [
   { id: '500kw-1mw', minKw: 500, maxKw: 1000, label: '500 kW – 1 MW' },
   { id: '1-2mw', minKw: 1000, maxKw: 2000, label: '1 – 2 MW' },
   { id: '2-3mw', minKw: 2000, maxKw: 3000, label: '2 – 3 MW' },
-  { id: '3-5mw', minKw: 3000, maxKw: 5000, label: '3 – 5 MW' },
-  { id: '5-8mw', minKw: 5000, maxKw: 8000, label: '5 – 8 MW' },
-  { id: '8-12mw', minKw: 8000, maxKw: 12000, label: '8 – 12 MW' },
-  { id: '12-16mw', minKw: 12000, maxKw: 16000, label: '12 – 16 MW' },
-  { id: '16-20mw', minKw: 16000, maxKw: 20000, label: '16 – 20 MW' }
+  { id: '3-5mw', minKw: 3000, maxKw: 5000, label: '3 – 5 MW' }
 ];
 
 const fleetFilters = {
@@ -428,8 +424,6 @@ const fleetFilters = {
 function turbineCapacityBand(mw) {
   const kw = Number(mw) * 1000;
   if (!Number.isFinite(kw) || kw < 225) return '';
-  const last = FLEET_CAPACITY_BANDS[FLEET_CAPACITY_BANDS.length - 1];
-  if (kw >= last.minKw) return last.id;
   const band = FLEET_CAPACITY_BANDS.find(item => kw >= item.minKw && kw < item.maxKw);
   return band?.id || '';
 }
