@@ -607,7 +607,9 @@
         ({ user: serverUser } = await apiRequest('/api/auth/login', { email, password: pwd, sector }));
       } catch (error) {
         if (error.status === 403) {
-          const prefix = error.message.toLowerCase().includes('rejected') ? '❌' : '⏳';
+          const message = error.message.toLowerCase();
+          const prefix = message.includes('verify your email') ? '✉️'
+            : message.includes('rejected') ? '❌' : '⏳';
           showMsg('login-msg', 'error', `${prefix} ${error.message}`);
         } else if (error.status === 401) {
           showMsg('login-msg', 'error', 'Invalid email or password.');
@@ -683,8 +685,7 @@
         return;
       }
       // Do NOT set session — user must wait for admin approval
-      showMsg('register-msg','success',`✅ Account created! Your account is pending admin approval. Please wait — you will be able to sign in once approved.`);
-      setTimeout(() => { showTab('login'); }, 3000);
+      showMsg('register-msg','success',`✅ Verification email sent to ${email}. Open it and click the confirmation link. After confirming, your account will still need admin approval before you can sign in.`);
     }
 
     // Check URL param to open correct tab
@@ -788,6 +789,16 @@
         document.getElementById('reset-password-wrap').style.display = 'block';
         document.getElementById('forgot-title').textContent = 'Choose a new password';
         document.getElementById('forgot-submit').textContent = 'Update Password';
+      }
+      if (params.get('mode') === 'verify') {
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        const error = hashParams.get('error_description') || hashParams.get('error');
+        if (error) {
+          showMsg('login-msg', 'error', `Email verification failed: ${error.replace(/\+/g, ' ')}`);
+        } else {
+          showMsg('login-msg', 'success', '✅ Email verified. Your account will be available to sign in after admin approval.');
+        }
+        history.replaceState(null, '', 'auth.html');
       }
     });
   </script>
