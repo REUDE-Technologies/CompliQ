@@ -22,7 +22,3 @@ Thumbs.db
 # Python cache files from optional analysis tools
 __pycache__/
 *.py[cod]
-
-# Large source videos are kept locally, outside the deployed site
-*.mp4
-*.MP4
