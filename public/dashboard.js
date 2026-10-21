@@ -614,7 +614,11 @@ function renderFleetGrid() {
     card.addEventListener('click', () => {
       if (!isDetailedAssetAvailable(t)) {
         hideFleetTurbinePop();
-        showAssetComingSoon(t);
+        STATE.selectedTurbineId = t.id;
+        document.querySelectorAll('.turbine-node').forEach(node => {
+          node.classList.toggle('active', Number(node.dataset.id) === Number(t.id));
+        });
+        focusFleetMapOnTurbine(t);
         return;
       }
       STATE.selectedTurbineId = t.id;
@@ -697,6 +701,23 @@ function renderFleetMap() {
       map.setView([Number(turbines[0].gps.lat), Number(turbines[0].gps.lng)], 6);
     }
     fleetLeafletMap._fleetInitialFit = true;
+  }
+}
+
+function focusFleetMapOnTurbine(turbine) {
+  const marker = fleetMapMarkers.get(String(turbine?.id));
+  if (!fleetLeafletMap || !marker) {
+    showAssetComingSoon(turbine);
+    return;
+  }
+  fleetMapMarkers.forEach((item, id) => {
+    item.setStyle({ radius: id === String(turbine.id) ? 11 : 8, weight: id === String(turbine.id) ? 3 : 2 });
+  });
+  const targetZoom = Math.max(10, fleetLeafletMap.getZoom());
+  fleetLeafletMap.flyTo(marker.getLatLng(), targetZoom, { duration: 0.7 });
+  fleetLeafletMap.once('moveend', () => marker.openPopup());
+  if (window.matchMedia('(max-width: 850px)').matches) {
+    document.querySelector('.fleet-map-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
