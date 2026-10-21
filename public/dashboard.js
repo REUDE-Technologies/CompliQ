@@ -340,6 +340,7 @@ function activateTab(tab) {
   // Defer heavy page work so the tab switch paints first.
   requestAnimationFrame(() => {
     if (STATE.activeTab !== next) return;
+    if (next === 'fleet') renderFleetMap();
     if (next === 'analytics') renderCharts();
     if (next === 'asset') openAssetOverview();
     if (next === 'report') openReportForSelection();
@@ -409,6 +410,166 @@ function animateNumber(id, target) {
 // ══════════════════════════════════════════════════
 let fleetStatusFilter = 'all';
 const AVAILABLE_DETAILED_ASSET = 'WTG-001';
+const FLEET_CAT_OPTIONS = [
+  { value: 1, label: 'C1 · Cosmetic' },
+  { value: 2, label: 'C2 · Minor' },
+  { value: 3, label: 'C3 · Moderate' },
+  { value: 4, label: 'C4 · Serious' },
+  { value: 5, label: 'C5 · Critical' }
+];
+const FLEET_CAPACITY_BANDS = [
+  { id: '225-500kw', minKw: 225, maxKw: 500, label: '225–500 kW' },
+  { id: '500kw-1mw', minKw: 500, maxKw: 1000, label: '500 kW–1 MW' },
+  { id: '1-2mw', minKw: 1000, maxKw: 2000, label: '1–2 MW' },
+  { id: '2-3mw', minKw: 2000, maxKw: 3000, label: '2–3 MW' },
+  { id: '3-5mw', minKw: 3000, maxKw: 5000, label: '3–5 MW' },
+  { id: '5-8mw', minKw: 5000, maxKw: 8000, label: '5–8 MW' },
+  { id: '8-12mw', minKw: 8000, maxKw: 12000, label: '8–12 MW' },
+  { id: '12-16mw', minKw: 12000, maxKw: 16000, label: '12–16 MW' },
+  { id: '16-20mw', minKw: 16000, maxKw: 20000, label: '16–20 MW' }
+];
+const fleetFilters = { query: '', capacity: [], region: [], severity: [] };
+
+function turbineCapacityBand(mw) {
+  const kw = Number(mw) * 1000;
+  if (!Number.isFinite(kw) || kw < FLEET_CAPACITY_BANDS[0].minKw) return '';
+  for (const band of FLEET_CAPACITY_BANDS) {
+    if (kw >= band.minKw && (kw <= band.maxKw || band === FLEET_CAPACITY_BANDS[FLEET_CAPACITY_BANDS.length - 1])) return band.id;
+  }
+  return '';
+}
+
+function turbineSearchBlob(turbine) {
+  return [turbine.assetId, turbine.name, turbine.site, turbine.state, turbine.location, turbine.manufacturer, turbine.model, turbine.campaign]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function turbineSeveritySet(turbine) {
+  const id = String(turbine.id);
+  return new Set((STATE.db?.defects || [])
+    .filter(defect => String(defect.assetId ?? defect.turbineId) === id)
+    .map(defect => Number(defect.severity))
+    .filter(severity => severity >= 1 && severity <= 5));
+}
+
+function filteredFleetTurbines() {
+  const query = fleetFilters.query.trim().toLowerCase();
+  return (STATE.db?.turbines || []).filter(turbine => {
+    if (fleetStatusFilter !== 'all' && turbine.status !== fleetStatusFilter) return false;
+    if (query && !turbineSearchBlob(turbine).includes(query)) return false;
+    if (fleetFilters.capacity.length && !fleetFilters.capacity.includes(turbineCapacityBand(turbine.power))) return false;
+    const region = turbine.state || turbine.region || '';
+    if (fleetFilters.region.length && !fleetFilters.region.includes(region)) return false;
+    if (fleetFilters.severity.length) {
+      const severities = turbineSeveritySet(turbine);
+      if (!fleetFilters.severity.some(severity => severities.has(severity))) return false;
+    }
+    return true;
+  });
+}
+
+function syncFleetFilterButtons() {
+  document.querySelectorAll('.fleet-dd').forEach(dropdown => {
+    const key = dropdown.dataset.filter;
+    const button = dropdown.querySelector('.fleet-dd-btn');
+    if (!button) return;
+    const label = key === 'capacity' ? 'Capacity' : key === 'region' ? 'Region' : 'Severity';
+    const count = fleetFilters[key]?.length || 0;
+    button.textContent = count ? `${label} · ${count}` : label;
+    button.classList.toggle('is-on', count > 0);
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear) clear.disabled = fleetStatusFilter === 'all' && !fleetFilters.query.trim() && !fleetFilters.capacity.length && !fleetFilters.region.length && !fleetFilters.severity.length;
+}
+
+function closeFleetDropdowns(except = null) {
+  document.querySelectorAll('.fleet-dd').forEach(dropdown => {
+    if (dropdown === except) return;
+    const menu = dropdown.querySelector('.fleet-dd-menu');
+    const button = dropdown.querySelector('.fleet-dd-btn');
+    if (menu) menu.hidden = true;
+    if (button) button.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function populateFleetFilterMenus() {
+  const turbines = STATE.db?.turbines || [];
+  const capMenu = document.querySelector('.fleet-dd[data-filter="capacity"] .fleet-dd-menu');
+  const regionMenu = document.querySelector('.fleet-dd[data-filter="region"] .fleet-dd-menu');
+  const severityMenu = document.querySelector('.fleet-dd[data-filter="severity"] .fleet-dd-menu');
+  if (capMenu) capMenu.innerHTML = FLEET_CAPACITY_BANDS.map(band => `
+    <label class="fleet-dd-item"><input type="checkbox" value="${band.id}"><span>${band.label}</span></label>`).join('');
+  const regions = [...new Set(turbines.map(turbine => turbine.state || turbine.region).filter(Boolean))].sort();
+  if (regionMenu) regionMenu.innerHTML = regions.map(region => `
+    <label class="fleet-dd-item"><input type="checkbox" value="${escHtml(region)}"><span>${escHtml(region)}</span></label>`).join('') || '<p class="fleet-empty">No regions available</p>';
+  if (severityMenu) severityMenu.innerHTML = FLEET_CAT_OPTIONS.map(option => `
+    <label class="fleet-dd-item"><input type="checkbox" value="${option.value}"><span>${option.label}</span></label>`).join('');
+  document.querySelectorAll('.fleet-dd').forEach(dropdown => {
+    const key = dropdown.dataset.filter;
+    dropdown.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.checked = fleetFilters[key].includes(key === 'severity' ? Number(input.value) : input.value);
+    });
+  });
+  syncFleetFilterButtons();
+}
+
+function initFleetToolbar() {
+  const search = document.getElementById('fleet-search');
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = '1';
+    search.addEventListener('input', () => {
+      fleetFilters.query = search.value;
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  }
+  document.querySelectorAll('.fleet-dd').forEach(dropdown => {
+    const button = dropdown.querySelector('.fleet-dd-btn');
+    const menu = dropdown.querySelector('.fleet-dd-menu');
+    if (!button || !menu || button.dataset.bound) return;
+    button.dataset.bound = '1';
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const shouldOpen = menu.hidden;
+      closeFleetDropdowns(dropdown);
+      menu.hidden = !shouldOpen;
+      button.setAttribute('aria-expanded', String(shouldOpen));
+    });
+    menu.addEventListener('change', event => {
+      const input = event.target.closest('input[type="checkbox"]');
+      if (!input) return;
+      const key = dropdown.dataset.filter;
+      const value = key === 'severity' ? Number(input.value) : input.value;
+      if (input.checked && !fleetFilters[key].includes(value)) fleetFilters[key].push(value);
+      if (!input.checked) fleetFilters[key] = fleetFilters[key].filter(item => item !== value);
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear && !clear.dataset.bound) {
+    clear.dataset.bound = '1';
+    clear.addEventListener('click', () => {
+      fleetFilters.query = '';
+      fleetFilters.capacity = [];
+      fleetFilters.region = [];
+      fleetFilters.severity = [];
+      fleetStatusFilter = 'all';
+      document.querySelectorAll('.fleet-filter').forEach(button => button.classList.remove('active'));
+      if (search) search.value = '';
+      populateFleetFilterMenus();
+      closeFleetDropdowns();
+      renderFleetGrid();
+    });
+  }
+  if (!document.body.dataset.fleetDropdownBound) {
+    document.body.dataset.fleetDropdownBound = '1';
+    document.addEventListener('click', event => {
+      if (!event.target.closest('.fleet-dd')) closeFleetDropdowns();
+    });
+  }
+  populateFleetFilterMenus();
+}
 
 function isDetailedAssetAvailable(turbine) {
   return turbine?.assetId === AVAILABLE_DETAILED_ASSET;
@@ -420,13 +581,14 @@ function showAssetComingSoon(turbine) {
 
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
+  if (!grid) return;
   grid.innerHTML = '';
-  let turbines = STATE.db.turbines;
-  if (fleetStatusFilter === 'normal') turbines = turbines.filter(t => t.status === 'normal');
-  if (fleetStatusFilter === 'warning') turbines = turbines.filter(t => t.status === 'warning');
-  if (fleetStatusFilter === 'critical') turbines = turbines.filter(t => t.status === 'critical');
+  const turbines = filteredFleetTurbines();
+  const count = document.getElementById('fleet-result-count');
+  if (count) count.textContent = `${turbines.length} of ${STATE.db.turbines.length} turbines`;
   if (!turbines.length) {
-    grid.innerHTML = '<p class="fleet-empty">No turbines in this status.</p>';
+    grid.innerHTML = '<p class="fleet-empty">No turbines match these filters.</p>';
+    renderFleetMap();
     return;
   }
   turbines.forEach(t => {
@@ -465,6 +627,77 @@ function renderFleetGrid() {
     card.addEventListener('mouseleave', scheduleHideFleetPop);
     grid.appendChild(card);
   });
+  renderFleetMap();
+}
+
+const FLEET_MAP_CENTER = [22.35, 78.96];
+let fleetLeafletMap = null;
+let fleetMarkerLayer = null;
+const fleetMapMarkers = new Map();
+
+function ensureFleetLeafletMap() {
+  const host = document.getElementById('fleet-map');
+  if (!host || typeof L === 'undefined') return null;
+  if (fleetLeafletMap) {
+    requestAnimationFrame(() => fleetLeafletMap?.invalidateSize());
+    return fleetLeafletMap;
+  }
+  fleetLeafletMap = L.map(host, { center: FLEET_MAP_CENTER, zoom: 4.5, minZoom: 3, maxZoom: 16, zoomControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  }).addTo(fleetLeafletMap);
+  fleetMarkerLayer = L.layerGroup().addTo(fleetLeafletMap);
+  fleetLeafletMap.on('popupopen', event => {
+    const button = event.popup.getElement()?.querySelector('[data-open-asset]');
+    button?.addEventListener('click', () => {
+      const turbine = STATE.db.turbines.find(item => String(item.id) === button.dataset.openAsset);
+      if (!turbine) return;
+      if (!isDetailedAssetAvailable(turbine)) {
+        showAssetComingSoon(turbine);
+        return;
+      }
+      STATE.selectedTurbineId = turbine.id;
+      navigateTo('asset');
+    }, { once: true });
+  });
+  return fleetLeafletMap;
+}
+
+function renderFleetMap() {
+  const host = document.getElementById('fleet-map');
+  if (!host) return;
+  if (typeof L === 'undefined') {
+    host.innerHTML = '<p class="fleet-map-message">The fleet map could not load. Check your connection and refresh.</p>';
+    return;
+  }
+  const map = ensureFleetLeafletMap();
+  if (!map || !fleetMarkerLayer) return;
+  fleetMarkerLayer.clearLayers();
+  fleetMapMarkers.clear();
+  const turbines = filteredFleetTurbines().filter(t => Number.isFinite(Number(t.gps?.lat)) && Number.isFinite(Number(t.gps?.lng)) && Number(t.gps.lat) !== 0 && Number(t.gps.lng) !== 0);
+  turbines.forEach(turbine => {
+    const statusColor = turbine.status === 'critical' ? '#eb5757' : turbine.status === 'warning' ? '#f2c94c' : '#2ecc71';
+    const marker = L.circleMarker([Number(turbine.gps.lat), Number(turbine.gps.lng)], {
+      radius: Number(turbine.id) === Number(STATE.selectedTurbineId) ? 10 : 8,
+      color: '#fff', weight: 2, fillColor: statusColor, fillOpacity: 0.95
+    });
+    const openAction = isDetailedAssetAvailable(turbine)
+      ? `<button type="button" class="fleet-map-open" data-open-asset="${escHtml(turbine.id)}">Open asset details</button>`
+      : '<span class="fleet-map-soon">Detailed view coming soon</span>';
+    marker.bindPopup(`<div class="fleet-map-popup"><strong>${escHtml(turbine.assetId || turbine.name)}</strong><span>${escHtml(turbine.site || turbine.location || '')}</span><span>${Number(turbine.health) || 0}% health · ${escHtml(turbine.status || 'unknown')}</span>${openAction}</div>`);
+    marker.addTo(fleetMarkerLayer);
+    fleetMapMarkers.set(String(turbine.id), marker);
+  });
+  if (!fleetLeafletMap._fleetInitialFit) {
+    if (turbines.length > 1) {
+      const bounds = L.latLngBounds(turbines.map(turbine => [Number(turbine.gps.lat), Number(turbine.gps.lng)]));
+      map.fitBounds(bounds.pad(0.18), { maxZoom: 6 });
+    } else if (turbines.length === 1) {
+      map.setView([Number(turbines[0].gps.lat), Number(turbines[0].gps.lng)], 6);
+    }
+    fleetLeafletMap._fleetInitialFit = true;
+  }
 }
 
 let fleetPopTimer = null;
@@ -578,6 +811,7 @@ document.getElementById('fleet-status-filters')?.addEventListener('click', event
   document.querySelectorAll('.fleet-filter').forEach(item => {
     item.classList.toggle('active', item.dataset.status === fleetStatusFilter);
   });
+  syncFleetFilterButtons();
   renderFleetGrid();
 });
 
@@ -5506,6 +5740,7 @@ function initApp() {
   STATE.db = loadDB();
   initBgCanvas();
   setupNav();
+  initFleetToolbar();
   document.getElementById('asset-back-overview')?.addEventListener('click', () => openAssetOverview());
   renderMetrics();
   renderFleetGrid();

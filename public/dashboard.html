@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer">
   <!-- jsPDF for PDF report generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Chart.js for interactive charts -->
@@ -126,7 +127,7 @@
     =========================================== -->
     <section class="view active" id="view-fleet">
       <!-- Fleet Grid -->
-      <div class="panel full-panel">
+      <div class="panel full-panel" id="fleet-overview-panel">
         <div class="panel-header">
           <h3>Interactive Fleet Grid</h3>
           <div class="legend-row" id="fleet-status-filters">
@@ -135,8 +136,32 @@
             <button type="button" class="fleet-filter" data-status="critical"><span class="leg-dot crit"></span>Critical</button>
           </div>
         </div>
-        <div class="panel-body">
-          <div class="fleet-grid" id="fleet-grid"></div>
+        <div class="panel-body fleet-panel-body">
+          <form class="fleet-toolbar" autocomplete="off" onsubmit="return false">
+            <input type="search" id="fleet-search" placeholder="Search turbines, sites, or models" aria-label="Search fleet" autocomplete="off">
+            <div class="fleet-dd" data-filter="capacity">
+              <button type="button" class="fleet-dd-btn" aria-expanded="false">Capacity</button>
+              <div class="fleet-dd-menu" hidden role="group" aria-label="Capacity"></div>
+            </div>
+            <div class="fleet-dd" data-filter="region">
+              <button type="button" class="fleet-dd-btn" aria-expanded="false">Region</button>
+              <div class="fleet-dd-menu" hidden role="group" aria-label="Region"></div>
+            </div>
+            <div class="fleet-dd" data-filter="severity">
+              <button type="button" class="fleet-dd-btn" aria-expanded="false">Severity</button>
+              <div class="fleet-dd-menu" hidden role="group" aria-label="Severity category"></div>
+            </div>
+            <button type="button" class="fleet-clear-btn" id="fleet-clear-filters" disabled>Clear filters</button>
+            <span class="fleet-result-count" id="fleet-result-count" aria-live="polite"></span>
+          </form>
+          <div class="fleet-workspace">
+            <div class="fleet-grid-wrap">
+              <div class="fleet-grid" id="fleet-grid"></div>
+            </div>
+            <div class="fleet-map-wrap">
+              <div id="fleet-map" class="fleet-map" aria-label="Map showing filtered turbine locations"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -729,6 +754,7 @@
 </div>
 
 <script src="compliq-sync.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="dashboard.js?v=inspectionFolders1"></script>
 </body>
 </html>
