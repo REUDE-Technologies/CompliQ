@@ -579,6 +579,8 @@ function showAssetComingSoon(turbine) {
   showToast(`${turbine?.assetId || 'This turbine'} detailed view will be updated soon.`, 'info');
 }
 
+let fleetCardTapTimer = null;
+
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
   if (!grid) return;
@@ -596,6 +598,9 @@ function renderFleetGrid() {
     const card = document.createElement('div');
     card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''}`;
     card.dataset.id = t.id;
+    card.title = isDetailedAssetAvailable(t)
+      ? 'Single click or tap to locate on the map; double click or tap to open asset details.'
+      : 'Click or tap to locate this turbine on the map.';
     const spinSpeed = t.status === 'critical' ? '3s' : t.status === 'warning' ? '6s' : '10s';
     card.innerHTML = `
       <div class="t-status-dot ${cls}"></div>
@@ -611,7 +616,9 @@ function renderFleetGrid() {
       <div class="t-health">${t.health}% Health</div>
       <div class="t-loc">${t.site}</div>
     `;
-    card.addEventListener('click', () => {
+    card.addEventListener('click', event => {
+      clearTimeout(fleetCardTapTimer);
+      fleetCardTapTimer = null;
       if (!isDetailedAssetAvailable(t)) {
         hideFleetTurbinePop();
         STATE.selectedTurbineId = t.id;
@@ -621,9 +628,28 @@ function renderFleetGrid() {
         focusFleetMapOnTurbine(t);
         return;
       }
+      if (event.detail >= 2) {
+        STATE.selectedTurbineId = t.id;
+        hideFleetTurbinePop();
+        navigateTo('asset');
+        return;
+      }
+      fleetCardTapTimer = setTimeout(() => {
+        fleetCardTapTimer = null;
+        STATE.selectedTurbineId = t.id;
+        document.querySelectorAll('.turbine-node').forEach(node => {
+          node.classList.toggle('active', Number(node.dataset.id) === Number(t.id));
+        });
+        hideFleetTurbinePop();
+        focusFleetMapOnTurbine(t);
+      }, 320);
+    });
+    card.addEventListener('dblclick', event => {
+      if (!isDetailedAssetAvailable(t)) return;
+      event.preventDefault();
+      clearTimeout(fleetCardTapTimer);
+      fleetCardTapTimer = null;
       STATE.selectedTurbineId = t.id;
-      document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
-      card.classList.add('active');
       hideFleetTurbinePop();
       navigateTo('asset');
     });
