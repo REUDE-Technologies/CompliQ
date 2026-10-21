@@ -482,7 +482,14 @@ body {
   object-position: center;
   z-index: 0;
   transform-origin: center;
-  transition: transform 0.1s linear;
+  transition: opacity 0.45s ease, transform 0.1s linear;
+}
+.hero-bg-img-day { opacity: 0; }
+.hero-bg-img-night { opacity: 1; }
+[data-theme="light"] .hero-bg-img-day { opacity: 1; }
+[data-theme="light"] .hero-bg-img-night { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-bg-img { transition: none; }
 }
 .hero-bg-video {
   position: absolute;
@@ -2056,6 +2063,18 @@ body {
 
 /* ── Hero desc dark color in light theme ── */
 [data-theme="light"] .hero-desc { color: #003135 !important; -webkit-text-fill-color: #003135 !important; }
+
+/* Keep hero copy readable over the moonlit background in dark mode. */
+:root:not([data-theme="light"]) .hero-line-left {
+  color: #F4FBFF !important;
+  -webkit-text-fill-color: #F4FBFF !important;
+  text-shadow: 0 3px 18px rgba(0, 18, 32, 0.75);
+}
+:root:not([data-theme="light"]) .hero-desc {
+  color: #E4F2F7 !important;
+  -webkit-text-fill-color: #E4F2F7 !important;
+  text-shadow: 0 2px 12px rgba(0, 18, 32, 0.9);
+}
 
 /* ── Explore Features button visible ── */
 .btn-hero-outline {
