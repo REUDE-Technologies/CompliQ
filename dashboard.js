@@ -10,6 +10,46 @@
 // 1. SESSION & AUTH GATE
 // ══════════════════════════════════════════════════
 const SESSION_KEY = 'compliq_session';
+const USERS_KEY = 'compliq_users';
+
+function avatarStoreKey(email) {
+  return 'compliq_avatar:' + String(email || '').trim().toLowerCase();
+}
+
+function getStoredAvatar(email) {
+  const keyEmail = String(email || '').trim().toLowerCase();
+  if (!keyEmail) return '';
+  try {
+    const dedicated = localStorage.getItem(avatarStoreKey(keyEmail));
+    if (dedicated) return dedicated;
+  } catch (e) { /* ignore */ }
+  try {
+    const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+    if (String(sess.email || '').trim().toLowerCase() === keyEmail && sess.avatarUrl) return sess.avatarUrl;
+  } catch (e) { /* ignore */ }
+  try {
+    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    const u = users.find(x => String(x.email || '').trim().toLowerCase() === keyEmail);
+    if (u && u.avatarUrl) return u.avatarUrl;
+  } catch (e) { /* ignore */ }
+  return '';
+}
+
+function applyUserAvatar(el, user) {
+  if (!el || !user) return;
+  const url = getStoredAvatar(user.email) || user.avatarUrl || '';
+  const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
+  if (url) {
+    el.textContent = '';
+    el.classList.add('has-photo');
+    el.style.backgroundImage = `url("${url}")`;
+    el.setAttribute('aria-label', 'Profile photo');
+  } else {
+    el.classList.remove('has-photo');
+    el.style.backgroundImage = '';
+    el.textContent = initials;
+  }
+}
 
 function checkAuth() {
   const session = localStorage.getItem(SESSION_KEY);
@@ -20,10 +60,12 @@ function checkAuth() {
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
     const user = JSON.parse(session);
-    const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
-    document.getElementById('user-av').textContent = initials;
-    document.getElementById('user-display-name').textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
-    document.getElementById('user-display-role').textContent = user.role || 'Fleet Operator';
+    const av = document.getElementById('user-av');
+    const nameEl = document.getElementById('user-display-name');
+    const roleEl = document.getElementById('user-display-role');
+    applyUserAvatar(av, user);
+    if (nameEl) nameEl.textContent = `${user.firstName || 'Operator'} ${user.lastName || ''}`.trim();
+    if (roleEl) roleEl.textContent = user.role || 'Fleet Operator';
     
     // Show admin button if user is administrator
     const adminBtn = document.getElementById('admin-nav-btn');
@@ -71,9 +113,9 @@ const DB_KEY = 'reude_fleet_db';
 
 const DEFAULT_TURBINES = [
   {
-    id: 1, assetId: 'WTG-001', name: 'Gamesa G97 — Blade 5297',
-    site: 'Muppandal Wind Farm', state: 'Tamil Nadu',
-    gps: { lat: 8.3833, lng: 77.3292 }, location: 'Muppandal, Kanyakumari District, Tamil Nadu',
+    id: 1, assetId: 'WTG-001', name: 'WTG-001-Tamil Nadu - Kayathar - Gamesa G97',
+    site: 'Kayathar', state: 'Tamil Nadu',
+    gps: { lat: 8.3833, lng: 77.3292 }, location: 'Kayathar, Tamil Nadu',
     status: 'warning', health: 78, rotorDia: 97, bladeLength: 48.5, hubHeight: 90, power: 2.0,
     manufacturer: 'Siemens Gamesa', model: 'Gamesa G97 2 MW', commYear: 2018,
     windSpeed: 11.2, rpm: 14.5, inspCoverage: 100,
@@ -166,13 +208,21 @@ function saveDB(db) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
+function turbineLabel(t) {
+  if (!t) return '';
+  if (t.name && t.assetId && String(t.name).startsWith(t.assetId)) return t.name;
+  return `${t.assetId} — ${t.name}`;
+}
+
 function migrateFleetDb(db) {
   if (!db?.turbines?.length) return;
   const t1 = db.turbines.find(t => t.id === 1);
   const template = DEFAULT_TURBINES[0];
-  if (t1 && (t1.model !== template.model || t1.bladeLength !== template.bladeLength || t1.name !== template.name)) {
+  if (t1 && (t1.model !== template.model || t1.bladeLength !== template.bladeLength || t1.name !== template.name || t1.site !== template.site)) {
     Object.assign(t1, {
       name: template.name,
+      site: template.site,
+      location: template.location,
       manufacturer: template.manufacturer,
       model: template.model,
       rotorDia: template.rotorDia,
@@ -195,7 +245,7 @@ let STATE = {
   db: null,
   selectedTurbineId: 1,
   selectedBlade: 'A',
-  selectedPart: 'blade-A',
+  selectedPart: 'full',
   activeDefect: null,
   zoomLevel: 1,
   filterMode: 'all',
@@ -204,8 +254,48 @@ let STATE = {
   pocMode: false,
   pocSurface: 'PS',
   pocPointIndex: 5,
-  pocSelectedDefectId: null
+  pocSelectedDefectId: null,
+  assetEpoch: 0,
+  activeTab: 'fleet'
 };
+
+let _profileFitRO = null;
+let _profileFitRaf = 0;
+
+function bumpAssetEpoch() {
+  STATE.assetEpoch = (STATE.assetEpoch || 0) + 1;
+  return STATE.assetEpoch;
+}
+
+function disconnectProfileFit() {
+  if (_profileFitRO) {
+    try { _profileFitRO.disconnect(); } catch (_) {}
+    _profileFitRO = null;
+  }
+  if (_profileFitRaf) {
+    cancelAnimationFrame(_profileFitRaf);
+    _profileFitRaf = 0;
+  }
+}
+
+/** Stop Asset Detail heavy work so leaving the tab cannot freeze navigation. */
+function teardownAssetHeavyWork() {
+  bumpAssetEpoch();
+  disconnectProfileFit();
+  stopTurbine3D();
+  ['overview-photo', 'asset-poc-annotated'].forEach(id => {
+    const img = document.getElementById(id);
+    if (!img) return;
+    img.onload = null;
+    img.onerror = null;
+    try { img.removeAttribute('src'); } catch (_) {}
+  });
+  document.querySelectorAll('#overview-compare img, #asset-compare-host img').forEach(img => {
+    img.onload = null;
+    img.onerror = null;
+    try { img.removeAttribute('src'); } catch (_) {}
+  });
+}
 
 // ══════════════════════════════════════════════════
 // 3. NAVIGATION
@@ -219,21 +309,44 @@ const PAGE_TITLES = {
   analytics: ['Analytics', 'Fleet performance trends & defect analysis charts']
 };
 
+function activateTab(tab) {
+  const next = tab || 'fleet';
+  const blocked = document.querySelector(`.nav-item[data-tab="${next}"]`);
+  if (blocked && blocked.classList.contains('is-unavailable')) return;
+  const leavingAsset = STATE.activeTab === 'asset' && next !== 'asset';
+  if (leavingAsset) teardownAssetHeavyWork();
+
+  STATE.activeTab = next;
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.nav-item[data-tab="${next}"]`)?.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${next}`)?.classList.add('active');
+  const [title, sub] = PAGE_TITLES[next] || ['Dashboard', ''];
+  const titleEl = document.getElementById('page-title');
+  const subEl = document.getElementById('page-sub');
+  if (titleEl) titleEl.textContent = title;
+  if (subEl) subEl.textContent = sub;
+
+  // Defer heavy page work so the tab switch paints first.
+  requestAnimationFrame(() => {
+    if (STATE.activeTab !== next) return;
+    if (next === 'analytics') renderCharts();
+    if (next === 'fleet') invalidateFleetMap();
+    if (next === 'asset') openAssetOverview();
+    if (next === 'report') openReportForSelection();
+    if (next === 'manual') populateManualSelects();
+    if (next === 'ingest') populateIngestSelects();
+  });
+}
+
 function setupNav() {
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(`view-${tab}`).classList.add('active');
-      const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
-      document.getElementById('page-title').textContent = title;
-      document.getElementById('page-sub').textContent = sub;
-      if (tab === 'analytics') renderCharts();
-      if (tab === 'asset') renderAssetView();
-      if (tab === 'manual') populateManualSelects();
-      if (tab === 'ingest') populateIngestSelects();
+    btn.addEventListener('click', (event) => {
+      if (btn.disabled || btn.classList.contains('is-unavailable')) {
+        event.preventDefault();
+        return;
+      }
+      activateTab(btn.dataset.tab);
     });
   });
 }
@@ -246,8 +359,6 @@ function renderMetrics() {
   const avgHealth = db.turbines.reduce((s,t) => s + t.health, 0) / db.turbines.length;
   const totalAnomalies = db.turbines.reduce((s,t) => s + t.anomalies, 0);
   const avgCoverage = db.turbines.reduce((s,t) => s + t.inspCoverage, 0) / db.turbines.length;
-  const highConf = db.defects.filter(d => d.confidence >= 0.85).length;
-  const avgConf = db.defects.reduce((s,d) => s + d.confidence, 0) / Math.max(db.defects.length, 1);
 
   animateNumber('m-health', avgHealth.toFixed(1) + '%');
   document.getElementById('m-health-sub').textContent = `${db.turbines.filter(t=>t.status==='normal').length} nominal, ${db.turbines.filter(t=>t.status!=='normal').length} flagged`;
@@ -255,7 +366,16 @@ function renderMetrics() {
   document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
-  animateNumber('m-conf', (avgConf * 100).toFixed(0) + '%');
+  const capacityMw = db.turbines.reduce((sum, turbine) => sum + (Number(turbine.power) || 0), 0);
+  const confSub = document.getElementById('m-conf-sub');
+  if (capacityMw >= 1000) {
+    animateNumber('m-conf', (capacityMw / 1000).toFixed(1).replace(/\.0$/, '') + ' GW');
+    if (confSub) confSub.textContent = `${db.turbines.length} turbines`;
+  } else {
+    const mwText = (Math.round(capacityMw * 10) / 10);
+    animateNumber('m-conf', (mwText % 1 === 0 ? mwText.toFixed(0) : mwText.toFixed(1)) + ' MW');
+    if (confSub) confSub.textContent = `${db.turbines.length} turbines`;
+  }
 }
 
 function animateNumber(id, target) {
@@ -278,14 +398,250 @@ function animateNumber(id, target) {
 // ══════════════════════════════════════════════════
 // 5. FLEET GRID
 // ══════════════════════════════════════════════════
+const FLEET_CAT_OPTIONS = [
+  { value: 1, label: 'C1 – Cosmetic' },
+  { value: 2, label: 'C2 – Minor' },
+  { value: 3, label: 'C3 – Moderate' },
+  { value: 4, label: 'C4 – Serious' },
+  { value: 5, label: 'C5 – Critical' }
+];
+
+const FLEET_CAPACITY_BANDS = [
+  { id: '225kw-500kw', minKw: 225, maxKw: 500, label: '225 – 500 kW' },
+  { id: '500kw-1mw', minKw: 500, maxKw: 1000, label: '500 kW – 1 MW' },
+  { id: '1-2mw', minKw: 1000, maxKw: 2000, label: '1 – 2 MW' },
+  { id: '2-3mw', minKw: 2000, maxKw: 3000, label: '2 – 3 MW' },
+  { id: '3-5mw', minKw: 3000, maxKw: 5000, label: '3 – 5 MW' },
+  { id: '5-8mw', minKw: 5000, maxKw: 8000, label: '5 – 8 MW' },
+  { id: '8-12mw', minKw: 8000, maxKw: 12000, label: '8 – 12 MW' },
+  { id: '12-16mw', minKw: 12000, maxKw: 16000, label: '12 – 16 MW' },
+  { id: '16-20mw', minKw: 16000, maxKw: 20000, label: '16 – 20 MW' }
+];
+
+const fleetFilters = {
+  query: '',
+  capacity: [],
+  region: [],
+  severity: []
+};
+
+function turbineCapacityBand(mw) {
+  const kw = Number(mw) * 1000;
+  if (!Number.isFinite(kw) || kw < 225) return '';
+  const last = FLEET_CAPACITY_BANDS[FLEET_CAPACITY_BANDS.length - 1];
+  if (kw >= last.minKw) return last.id;
+  const band = FLEET_CAPACITY_BANDS.find(item => kw >= item.minKw && kw < item.maxKw);
+  return band?.id || '';
+}
+
+function turbineSearchBlob(t) {
+  return [t.assetId, t.name, t.site, t.state, t.location, t.manufacturer, t.model, t.campaign]
+    .filter(Boolean).join(' ').toLowerCase();
+}
+
+function turbineSeveritySet(t) {
+  return new Set(
+    (STATE.db.defects || [])
+      .filter(d => Number(d.assetId) === Number(t.id))
+      .map(d => Number(d.severity))
+      .filter(n => n >= 1 && n <= 5)
+  );
+}
+
+function filteredFleetTurbines() {
+  const query = fleetFilters.query.trim().toLowerCase();
+  return (STATE.db?.turbines || []).filter(t => {
+    if (query && !turbineSearchBlob(t).includes(query)) return false;
+    if (fleetFilters.capacity.length && !fleetFilters.capacity.includes(turbineCapacityBand(t.power))) return false;
+    if (fleetFilters.region.length && !fleetFilters.region.includes(t.state || '')) return false;
+    if (fleetFilters.severity.length) {
+      const cats = turbineSeveritySet(t);
+      if (!fleetFilters.severity.some(sev => cats.has(sev))) return false;
+    }
+    return true;
+  });
+}
+
+function fleetFilterCount() {
+  return fleetFilters.capacity.length + fleetFilters.region.length + fleetFilters.severity.length + (fleetFilters.query.trim() ? 1 : 0);
+}
+
+function syncFleetFilterButtons() {
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    const key = dd.dataset.filter;
+    const count = fleetFilters[key]?.length || 0;
+    const btn = dd.querySelector('.fleet-dd-btn');
+    if (!btn) return;
+    const base = key === 'capacity' ? 'Capacity' : key === 'region' ? 'Region' : 'Severity';
+    btn.textContent = count ? `${base} · ${count}` : base;
+    btn.classList.toggle('is-on', count > 0);
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear) clear.disabled = fleetFilterCount() === 0;
+}
+
+function closeFleetDropdowns(except) {
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    if (dd === except) return;
+    const menu = dd.querySelector('.fleet-dd-menu');
+    const btn = dd.querySelector('.fleet-dd-btn');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function populateFleetFilterMenus() {
+  if (!STATE.db?.turbines) return;
+  const capMenu = document.querySelector('.fleet-dd[data-filter="capacity"] .fleet-dd-menu');
+  const regionMenu = document.querySelector('.fleet-dd[data-filter="region"] .fleet-dd-menu');
+  const sevMenu = document.querySelector('.fleet-dd[data-filter="severity"] .fleet-dd-menu');
+  const regions = [...new Set(STATE.db.turbines.map(t => t.state).filter(Boolean))].sort();
+  if (capMenu) {
+    capMenu.innerHTML = FLEET_CAPACITY_BANDS.map(band => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${band.id}" ${fleetFilters.capacity.includes(band.id) ? 'checked' : ''}>
+        <span>${escHtml(band.label)}</span>
+      </label>
+    `).join('');
+  }
+  if (regionMenu) {
+    regionMenu.innerHTML = regions.map(region => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${escHtml(region)}" ${fleetFilters.region.includes(region) ? 'checked' : ''}>
+        <span>${escHtml(region)}</span>
+      </label>
+    `).join('') || '<p class="fleet-empty">No regions</p>';
+  }
+  if (sevMenu) {
+    sevMenu.innerHTML = FLEET_CAT_OPTIONS.map(opt => `
+      <label class="fleet-dd-item">
+        <input type="checkbox" autocomplete="off" value="${opt.value}" ${fleetFilters.severity.includes(opt.value) ? 'checked' : ''}>
+        <span>${escHtml(opt.label)}</span>
+      </label>
+    `).join('');
+  }
+  document.querySelectorAll('.fleet-dd-menu input[type="checkbox"]').forEach(input => {
+    const dd = input.closest('.fleet-dd');
+    const key = dd?.dataset.filter;
+    if (!key) return;
+    const value = (key === 'region' || key === 'capacity') ? input.value : Number(input.value);
+    input.checked = fleetFilters[key].includes(value);
+  });
+  syncFleetFilterButtons();
+}
+
+function initFleetToolbar() {
+  const search = document.getElementById('fleet-search');
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = '1';
+    search.addEventListener('input', () => {
+      fleetFilters.query = search.value;
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  }
+  document.querySelectorAll('.fleet-dd').forEach(dd => {
+    const btn = dd.querySelector('.fleet-dd-btn');
+    const menu = dd.querySelector('.fleet-dd-menu');
+    if (!btn || !menu || btn.dataset.bound) return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const open = menu.hidden;
+      closeFleetDropdowns(dd);
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    menu.addEventListener('change', event => {
+      const input = event.target.closest('input[type="checkbox"]');
+      if (!input) return;
+      const key = dd.dataset.filter;
+      const raw = input.value;
+      const value = (key === 'region' || key === 'capacity') ? raw : Number(raw);
+      if (input.checked) {
+        if (!fleetFilters[key].includes(value)) fleetFilters[key].push(value);
+      } else {
+        fleetFilters[key] = fleetFilters[key].filter(item => item !== value);
+      }
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  });
+  const clear = document.getElementById('fleet-clear-filters');
+  if (clear && !clear.dataset.bound) {
+    clear.dataset.bound = '1';
+    clear.addEventListener('click', () => {
+      fleetFilters.query = '';
+      fleetFilters.capacity = [];
+      fleetFilters.region = [];
+      fleetFilters.severity = [];
+      if (search) search.value = '';
+      document.querySelectorAll('.fleet-dd-menu input[type="checkbox"]').forEach(box => { box.checked = false; });
+      closeFleetDropdowns();
+      syncFleetFilterButtons();
+      renderFleetGrid();
+    });
+  }
+  if (!document.body.dataset.fleetDdBound) {
+    document.body.dataset.fleetDdBound = '1';
+    document.addEventListener('click', event => {
+      if (event.target.closest('.fleet-dd')) return;
+      closeFleetDropdowns();
+    });
+  }
+  populateFleetFilterMenus();
+}
+
+function turbineHasAssetView(t) {
+  return Number(t?.id) === 1 || t?.assetId === 'WTG-001';
+}
+
+function syncFleetSelection() {
+  const id = Number(STATE.selectedTurbineId);
+  document.querySelectorAll('.turbine-node').forEach(n => {
+    n.classList.toggle('active', Number(n.dataset.id) === id);
+  });
+  fleetMapMarkers.forEach((marker, key) => {
+    const t = STATE.db.turbines.find(item => String(item.id) === String(key));
+    if (!t) return;
+    marker.setIcon(fleetPinIcon(t, Number(key) === id));
+    marker.setZIndexOffset(Number(key) === id ? 1000 : 0);
+  });
+}
+
+function selectFleetTurbine(t, { openAsset = false } = {}) {
+  if (!t) return;
+  STATE.selectedTurbineId = t.id;
+  syncFleetSelection();
+  if (openAsset && turbineHasAssetView(t)) {
+    hideFleetTurbinePop();
+    navigateTo('asset');
+    return;
+  }
+  if (fleetLeafletMap && t.gps && Number.isFinite(t.gps.lat) && Number.isFinite(t.gps.lng)) {
+    const zoom = Math.max(fleetLeafletMap.getZoom(), 6.5);
+    fleetLeafletMap.flyTo([t.gps.lat, t.gps.lng], zoom, { duration: 0.55 });
+  }
+  showFleetTurbinePop(null, t);
+}
+
 function renderFleetGrid() {
   const grid = document.getElementById('fleet-grid');
+  if (!grid) return;
   grid.innerHTML = '';
-  STATE.db.turbines.forEach(t => {
+  const turbines = filteredFleetTurbines();
+  if (!turbines.length) {
+    grid.innerHTML = '<p class="fleet-empty">No turbines match these filters.</p>';
+    renderFleetMap();
+    return;
+  }
+  turbines.forEach(t => {
     const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
     const card = document.createElement('div');
-    card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''}`;
+    const canOpen = turbineHasAssetView(t);
+    card.className = `turbine-node ${t.id === STATE.selectedTurbineId ? 'active' : ''} ${canOpen ? 'has-asset' : 'no-asset'}`.trim();
     card.dataset.id = t.id;
+    card.title = 'Show turbine on map';
     const spinSpeed = t.status === 'critical' ? '3s' : t.status === 'warning' ? '6s' : '10s';
     card.innerHTML = `
       <div class="t-status-dot ${cls}"></div>
@@ -300,29 +656,201 @@ function renderFleetGrid() {
       <div class="t-name">${t.assetId}</div>
       <div class="t-health">${t.health}% Health</div>
       <div class="t-loc">${t.site}</div>
+      ${canOpen ? '<button type="button" class="fleet-open-asset">Open asset</button>' : ''}
     `;
-    card.addEventListener('click', () => {
-      STATE.selectedTurbineId = t.id;
-      document.querySelectorAll('.turbine-node').forEach(n => n.classList.remove('active'));
-      card.classList.add('active');
-      navigateTo('asset');
-    });
+    card.addEventListener('click', () => selectFleetTurbine(t));
+    const openBtn = card.querySelector('.fleet-open-asset');
+    if (openBtn) {
+      openBtn.addEventListener('click', event => {
+        event.stopPropagation();
+        selectFleetTurbine(t, { openAsset: true });
+      });
+    }
     grid.appendChild(card);
+  });
+  renderFleetMap();
+}
+
+const INDIA_BOUNDS = [[6.5, 68.0], [37.1, 97.4]];
+const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const ESRI_SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+let fleetLeafletMap = null;
+let fleetMarkerLayer = null;
+let fleetOsmLayer = null;
+let fleetSatLayer = null;
+const fleetMapMarkers = new Map();
+
+function fleetStatusColor(t) {
+  return t.status === 'critical' ? '#EB5757' : t.status === 'warning' ? '#F2C94C' : '#2ECC71';
+}
+
+function fleetPinIcon(t, selected) {
+  return L.divIcon({
+    className: `fleet-map-pin${selected ? ' is-on' : ''}`,
+    html: `<span class="fleet-map-dot" style="background:${fleetStatusColor(t)}"></span><span class="fleet-map-label">${escHtml(t.assetId)}</span>`,
+    iconSize: [76, 34],
+    iconAnchor: [8, 8]
+  });
+}
+
+function syncFleetMapTheme() {
+  if (!fleetLeafletMap) return;
+  const usingOsm = fleetOsmLayer && fleetLeafletMap.hasLayer(fleetOsmLayer);
+  fleetLeafletMap.getContainer().classList.toggle('fleet-map-dark-tiles', !isLightTheme() && !!usingOsm);
+}
+
+function invalidateFleetMap() {
+  if (!fleetLeafletMap) return;
+  requestAnimationFrame(() => {
+    fleetLeafletMap.invalidateSize();
+    syncFleetMapTheme();
+  });
+}
+
+function ensureFleetLeafletMap(host) {
+  if (fleetLeafletMap) {
+    invalidateFleetMap();
+    return fleetLeafletMap;
+  }
+  fleetLeafletMap = L.map(host, {
+    center: [22.35, 78.96],
+    zoom: 4.7,
+    minZoom: 4,
+    maxZoom: 16,
+    maxBounds: [[5.4, 66.4], [38.2, 99.2]],
+    maxBoundsViscosity: 0.85,
+    zoomSnap: 0.25,
+    zoomControl: true,
+    attributionControl: false
+  });
+  fleetOsmLayer = L.tileLayer(OSM_TILE_URL, {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  });
+  fleetSatLayer = L.tileLayer(ESRI_SAT_URL, {
+    maxZoom: 17,
+    attribution: 'Tiles &copy; Esri'
+  });
+  fleetOsmLayer.addTo(fleetLeafletMap);
+  L.control.layers(
+    { 'India streets': fleetOsmLayer, 'Satellite': fleetSatLayer },
+    {},
+    { position: 'topright', collapsed: true }
+  ).addTo(fleetLeafletMap);
+  fleetLeafletMap.on('baselayerchange', syncFleetMapTheme);
+  fleetLeafletMap.on('click', hideFleetTurbinePop);
+  fleetLeafletMap.fitBounds(INDIA_BOUNDS, { padding: [18, 18], maxZoom: 5.3 });
+  fleetMarkerLayer = L.layerGroup().addTo(fleetLeafletMap);
+  addFleetMapRestoreControl();
+  syncFleetMapTheme();
+  invalidateFleetMap();
+  return fleetLeafletMap;
+}
+
+function resetFleetMapView() {
+  if (!fleetLeafletMap) return;
+  fleetLeafletMap.stop();
+  fleetLeafletMap.fitBounds(INDIA_BOUNDS, { padding: [18, 18], maxZoom: 5.3, animate: true });
+}
+
+function addFleetMapRestoreControl() {
+  const bar = document.querySelector('#fleet-map .leaflet-control-zoom');
+  if (!bar || bar.querySelector('.leaflet-control-zoom-restore') || typeof L === 'undefined') return;
+  const btn = L.DomUtil.create('a', 'leaflet-control-zoom-restore', bar);
+  btn.href = '#';
+  btn.title = 'Restore map view';
+  btn.setAttribute('role', 'button');
+  btn.setAttribute('aria-label', 'Restore map view');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
+  L.DomEvent.disableClickPropagation(btn);
+  L.DomEvent.on(btn, 'click', event => {
+    L.DomEvent.preventDefault(event);
+    resetFleetMapView();
+  });
+}
+
+function renderFleetMap() {
+  const host = document.getElementById('fleet-map');
+  if (!host) return;
+  if (typeof L === 'undefined') {
+    host.innerHTML = '<p class="fleet-empty">India map API did not load. Refresh to retry.</p>';
+    return;
+  }
+  const map = ensureFleetLeafletMap(host);
+  if (!map || !fleetMarkerLayer) return;
+  fleetMarkerLayer.clearLayers();
+  fleetMapMarkers.clear();
+  const turbines = filteredFleetTurbines().filter(t => t.gps && Number.isFinite(t.gps.lat) && Number.isFinite(t.gps.lng));
+  turbines.forEach(t => {
+    const selected = Number(t.id) === Number(STATE.selectedTurbineId);
+    const marker = L.marker([t.gps.lat, t.gps.lng], {
+      icon: fleetPinIcon(t, selected),
+      keyboard: true,
+      title: t.assetId,
+      riseOnHover: true,
+      zIndexOffset: selected ? 1000 : 0
+    });
+    marker.on('click', event => {
+      L.DomEvent.stopPropagation(event);
+      selectFleetTurbine(t);
+    });
+    marker.addTo(fleetMarkerLayer);
+    fleetMapMarkers.set(String(t.id), marker);
+  });
+}
+
+let fleetPopTimer = null;
+
+function scheduleHideFleetPop() {
+  clearTimeout(fleetPopTimer);
+  fleetPopTimer = setTimeout(hideFleetTurbinePop, 140);
+}
+
+function hideFleetTurbinePop() {
+  const pop = document.getElementById('fleet-turbine-pop');
+  if (pop) pop.hidden = true;
+}
+
+function showFleetTurbinePop(card, t) {
+  const pop = document.getElementById('fleet-turbine-pop');
+  const host = document.querySelector('.fleet-map-wrap') || document.getElementById('fleet-map');
+  if (!pop || !t) return;
+  if (host && pop.parentElement !== host) host.appendChild(pop);
+  clearTimeout(fleetPopTimer);
+  const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
+  const gps = t.gps ? `${t.gps.lat}°N, ${t.gps.lng}°E` : '';
+  const canOpen = turbineHasAssetView(t);
+  pop.innerHTML = `
+    <div class="fleet-pop-head">
+      <strong>${escHtml(turbineLabel(t))}</strong>
+      <span>${escHtml([t.manufacturer, t.model].filter(Boolean).join(' '))}</span>
+    </div>
+    <div class="fleet-pop-health">
+      <span>${t.health}% Health</span>
+      <div class="hbar-bg"><div class="hbar-fill ${cls}" style="width:${Number(t.health) || 0}%"></div></div>
+    </div>
+    <p>${t.anomalies} anomalies</p>
+    <p>${escHtml(t.location || t.site || '')}</p>
+    <p>${escHtml(gps)}</p>
+    <p>Last inspection date: ${escHtml(t.lastInspection || '—')}</p>
+    ${canOpen ? '<button type="button" class="view-btn" id="fleet-pop-open-asset">Open asset →</button>' : ''}
+  `;
+  pop.hidden = false;
+  pop.classList.add('on-map');
+  pop.style.left = '';
+  pop.style.top = '';
+  pop.onmouseenter = null;
+  pop.onmouseleave = null;
+  pop.onclick = event => event.stopPropagation();
+  pop.querySelector('#fleet-pop-open-asset')?.addEventListener('click', event => {
+    event.stopPropagation();
+    selectFleetTurbine(t, { openAsset: true });
   });
 }
 
 function navigateTo(tab) {
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById(`view-${tab}`).classList.add('active');
-  const [title, sub] = PAGE_TITLES[tab] || ['Dashboard', ''];
-  document.getElementById('page-title').textContent = title;
-  document.getElementById('page-sub').textContent = sub;
-  if (tab === 'asset') renderAssetView();
-  if (tab === 'analytics') renderCharts();
-  if (tab === 'manual') populateManualSelects();
-  if (tab === 'ingest') populateIngestSelects();
+  activateTab(tab);
 }
 
 // ══════════════════════════════════════════════════
@@ -340,9 +868,9 @@ function renderAssetList(filter = 'all') {
     const row = document.createElement('div');
     row.className = 'asset-row';
     row.innerHTML = `
-      <div class="asset-thumb"><img src="images/turbine_teal.jpg" alt="${t.assetId}"></div>
+      <div class="asset-thumb" aria-hidden="true">${escHtml(t.assetId)}</div>
       <div class="asset-name">
-        <h4>${t.assetId} — ${t.name}</h4>
+        <h4>${turbineLabel(t)}</h4>
         <p>${t.manufacturer} ${t.model}</p>
       </div>
       <div class="asset-health-col">
@@ -354,21 +882,20 @@ function renderAssetList(filter = 'all') {
         <span>${t.location}</span>
         <span class="asset-gps">📍 ${t.gps.lat}°N, ${t.gps.lng}°E</span>
       </div>
-      <div style="font-size:0.7rem;color:var(--c-muted)">Last: ${t.lastInspection}<br>Cov: ${t.inspCoverage}%</div>
+      <div style="font-size:0.7rem;color:var(--c-muted)">Last inspection date: ${t.lastInspection}</div>
       <button class="view-btn" data-id="${t.id}">View Detail →</button>
     `;
     row.querySelector('.view-btn').addEventListener('click', () => {
-      STATE.selectedTurbineId = t.id;
-      navigateTo('asset');
+      selectFleetTurbine(t, { openAsset: turbineHasAssetView(t) });
     });
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('view-btn')) return;
-      STATE.selectedTurbineId = t.id;
-      navigateTo('asset');
+      selectFleetTurbine(t, { openAsset: turbineHasAssetView(t) });
     });
     list.appendChild(row);
   });
 }
+
 
 // Filter buttons
 document.querySelectorAll('.fbtn').forEach(btn => {
@@ -382,19 +909,31 @@ document.querySelectorAll('.fbtn').forEach(btn => {
 // ══════════════════════════════════════════════════
 // 7. ASSET DETAIL VIEW
 // ══════════════════════════════════════════════════
+function openAssetOverview() {
+  if (STATE.activeTab !== 'asset') return;
+  STATE.selectedPart = 'full';
+  const sel = document.getElementById('part-selector');
+  if (sel) sel.value = 'full';
+  renderAssetView();
+}
+
 function renderAssetView() {
+  if (STATE.activeTab !== 'asset') return;
+  const epoch = bumpAssetEpoch();
   populateTurbineSelector();
   const t = STATE.db.turbines.find(x => x.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
   bindPartSelector(t);
   renderTurbineInfo(t);
-  renderPartSchematic(t, STATE.selectedPart);
+  renderPartSchematic(t, STATE.selectedPart, epoch);
   renderDefectsTable(t);
+  const backBtn = document.getElementById('asset-back-overview');
+  if (backBtn) backBtn.hidden = STATE.selectedPart === 'full';
 }
 
 function populateTurbineSelector() {
   const sel = document.getElementById('turbine-selector');
   sel.innerHTML = STATE.db.turbines.map(t =>
-    `<option value="${t.id}" ${t.id === STATE.selectedTurbineId ? 'selected' : ''}>${t.assetId} — ${t.name} (${t.state})</option>`
+    `<option value="${t.id}" ${t.id === STATE.selectedTurbineId ? 'selected' : ''}>${turbineLabel(t)}</option>`
   ).join('');
   sel.onchange = () => {
     STATE.selectedTurbineId = parseInt(sel.value);
@@ -407,67 +946,93 @@ function bindPartSelector(turbine) {
   if (!sel) return;
   sel.value = STATE.selectedPart;
   sel.onchange = () => {
+    const epoch = bumpAssetEpoch();
     STATE.selectedPart = sel.value;
     if (sel.value.startsWith('blade-')) {
       STATE.selectedBlade = sel.value.replace('blade-', '');
     }
-    renderPartSchematic(turbine, STATE.selectedPart);
+    renderPartSchematic(turbine, STATE.selectedPart, epoch);
     renderDefectsTable(turbine);
   };
 }
 
+function selectedTurbine() {
+  return STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0] || null;
+}
+
+function bladeDisplayName(letter, turbine) {
+  const current = turbine || selectedTurbine();
+  const index = { A: 0, B: 1, C: 2 }[letter];
+  const number = index == null ? '' : (current?.blades || [])[index];
+  return number ? `Blade ${number}` : `Blade ${letter}`;
+}
+
+function refreshBladeMenus(turbine) {
+  const current = turbine || selectedTurbine();
+  document.querySelectorAll('#part-selector option').forEach(opt => {
+    const letter = String(opt.value || '').replace('blade-', '');
+    if (!['A', 'B', 'C'].includes(letter)) return;
+    opt.textContent = bladeDisplayName(letter, current);
+  });
+  document.querySelectorAll('#report-blade option').forEach(opt => {
+    if (!['A', 'B', 'C'].includes(opt.value)) return;
+    opt.textContent = bladeDisplayName(opt.value, current);
+  });
+  const defectBlade = document.getElementById('md-blade');
+  if (defectBlade) {
+    const selected = defectBlade.value;
+    defectBlade.innerHTML = ['A', 'B', 'C'].map(letter =>
+      `<option value="${letter}">${escHtml(bladeDisplayName(letter, current))}</option>`
+    ).join('');
+    if (selected) defectBlade.value = selected;
+  }
+}
+
 function renderTurbineInfo(t) {
-  const panel = document.getElementById('turbine-info-panel');
   const extra = document.getElementById('turbine-details-extra');
   const toggle = document.getElementById('turbine-details-toggle');
-  const hClass = t.health >= 85 ? '#2ECC71' : t.health >= 65 ? '#F2C94C' : '#EB5757';
-
-  const maker = (t.manufacturer || '').trim();
-  const model = (t.model || '').trim();
-  const modelText = maker && model.toLowerCase().includes(maker.split(' ').pop().toLowerCase())
-    ? model
-    : [maker, model].filter(Boolean).join(' ');
-
-  panel.innerHTML = `
-    <div class="turbine-basic-chip name">
-      <small>Asset</small>
-      <strong><span class="turbine-status-dot" style="background:${hClass};box-shadow:0 0 8px ${hClass}"></span>${t.assetId}</strong>
-      <span>${t.name}</span>
+  if (!extra || !t) return;
+  refreshBladeMenus(t);
+  extra.innerHTML = `
+    <div class="turbine-extra-grid">
+      ${stat('Location', t.location)}
+      ${stat('GPS Coordinates', `${t.gps.lat}°N, ${t.gps.lng}°E`)}
+      ${stat('State', t.state)}
+      ${stat('Blade Length', (t.bladeLength || (t.rotorDia/2)) + ' m')}
+      ${stat('Hub Height', t.hubHeight + ' m')}
+      ${stat('Commission Year', t.commYear)}
+      ${stat('Wind Speed', t.windSpeed + ' m/s')}
+      ${stat('RPM', t.rpm)}
+      ${stat('Anomalies', t.anomalies)}
+      ${stat('Last Inspection', t.lastInspection)}
+      ${stat('Campaign', t.campaign)}
+      ${stat('Blade IDs', (t.blades || []).join(', ') || '—')}
     </div>
-    <div class="turbine-basic-chip"><small>Site</small><strong>${t.site}</strong></div>
-    <div class="turbine-basic-chip"><small>Model</small><strong>${modelText}</strong></div>
-    <div class="turbine-basic-chip"><small>Rotor / Blade</small><strong>${t.rotorDia} m / ${t.bladeLength || (t.rotorDia/2).toFixed(1)} m</strong></div>
-    <div class="turbine-basic-chip"><small>Power</small><strong>${t.power} MW</strong></div>
-    <div class="turbine-basic-chip"><small>Health</small><strong style="color:${hClass}">${t.health}%</strong></div>
   `;
 
-  if (extra) {
-    extra.innerHTML = `
-      <div class="turbine-extra-grid">
-        ${stat('Location', t.location)}
-        ${stat('GPS Coordinates', `${t.gps.lat}°N, ${t.gps.lng}°E`)}
-        ${stat('State', t.state)}
-        ${stat('Blade Length', (t.bladeLength || (t.rotorDia/2)) + ' m')}
-        ${stat('Hub Height', t.hubHeight + ' m')}
-        ${stat('Commission Year', t.commYear)}
-        ${stat('Wind Speed', t.windSpeed + ' m/s')}
-        ${stat('RPM', t.rpm)}
-        ${stat('Anomalies', t.anomalies)}
-        ${stat('Last Inspection', t.lastInspection)}
-        ${stat('Campaign', t.campaign)}
-        ${stat('Blade IDs', (t.blades || []).join(', ') || '—')}
-      </div>
-    `;
-  }
-
-  if (toggle && !toggle.dataset.bound) {
-    toggle.addEventListener('click', () => {
-      const open = extra && !extra.hidden;
-      if (extra) extra.hidden = open;
-      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-      toggle.textContent = open ? 'More details' : 'Hide details';
-    });
-    toggle.dataset.bound = '1';
+  const row = extra.closest('.asset-turbine-row');
+  const pop = toggle && toggle.closest('.turbine-details-pop');
+  if (row && pop && !row.dataset.bound) {
+    let closeTimer = 0;
+    const setOpen = (open) => {
+      row.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    const holdOpen = () => {
+      window.clearTimeout(closeTimer);
+      setOpen(true);
+    };
+    const queueClose = () => {
+      window.clearTimeout(closeTimer);
+      closeTimer = window.setTimeout(() => setOpen(false), 160);
+    };
+    pop.addEventListener('mouseenter', holdOpen);
+    pop.addEventListener('mouseleave', queueClose);
+    extra.addEventListener('mouseenter', holdOpen);
+    extra.addEventListener('mouseleave', queueClose);
+    pop.addEventListener('focusin', holdOpen);
+    pop.addEventListener('focusout', queueClose);
+    row.dataset.bound = '1';
   }
 }
 
@@ -495,150 +1060,1598 @@ function setPocEvidenceVisible(show) {
     standalone.classList.toggle('is-hidden', !!show);
   }
   if (view) view.classList.toggle('poc-layout', !!show);
+  const pocTable = document.getElementById('asset-defects-panel');
+  if (pocTable) {
+    pocTable.hidden = !show;
+    pocTable.classList.toggle('is-hidden', !show);
+  }
+  if (show) {
+    const host = document.getElementById('asset-compare-host');
+    if (host) host.replaceChildren();
+  }
+  updateFindingsSheetMeta();
   if (pdfBtn) {
     pdfBtn.textContent = '⬇ AI inspection report (PDF)';
   }
   STATE.pocMode = !!show;
 }
 
-async function renderPartSchematic(turbine, part) {
+function updateFindingsSheetMeta() {
+  const countEl = document.getElementById('asset-sheet-count');
+  const hintEl = document.getElementById('asset-sheet-hint');
+  const sheet = document.getElementById('asset-bottom-sheet');
+  if (!countEl || !hintEl) return;
+  let n = 0;
+  if (STATE.pocMode) {
+    n = document.querySelectorAll('#defects-tbody tr.defect-row').length;
+  } else {
+    try { n = overviewAnomalyRows().length; } catch (_) { n = 0; }
+  }
+  countEl.textContent = n ? `${n} anomal${n === 1 ? 'y' : 'ies'}` : '';
+  const open = sheet?.classList.contains('is-open');
+  hintEl.textContent = open
+    ? (STATE.pocMode ? 'Hide defect table' : 'Hide comparison & table')
+    : (STATE.pocMode ? 'Show defect table' : 'Show comparison & table');
+}
+
+async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
+  if (STATE.activeTab !== 'asset') return;
+  const backBtn = document.getElementById('asset-back-overview');
+  if (backBtn) backBtn.hidden = (part || STATE.selectedPart) === 'full';
   const title = document.getElementById('schematic-title');
   const titleDefault = document.getElementById('schematic-title-default');
   const hint = document.getElementById('schematic-hint');
   const bladeLetter = part.startsWith('blade-') ? part.replace('blade-', '') : '';
 
   if (bladeLetter === 'A' || bladeLetter === 'B' || bladeLetter === 'C') {
-    if (title) title.textContent = `Blade ${bladeLetter} — Profile (Gamesa G97 2 MW)`;
-    if (hint) hint.textContent = 'Colored dots follow the defect category. Click a critical dot or a table row to open that station.';
+    if (title) title.textContent = bladeDisplayName(bladeLetter);
+    if (hint) hint.textContent = '';
     setPocEvidenceVisible(true);
-    await renderBladeAPocProfile();
+    await renderBladeAPocProfile(epoch);
     return;
   }
 
+  disconnectProfileFit();
   setPocEvidenceVisible(false);
   const container = document.getElementById('blade-schematic-default');
+  const legend = document.getElementById('schematic-legend');
+  if (legend) legend.hidden = true;
   if (part === 'full') {
     if (titleDefault) titleDefault.textContent = 'Full Turbine Overview';
-    if (hint) hint.textContent = 'Click Blade A, B, or C on the rotor to open its 20-point profile';
-    renderFullTurbineOverview(container);
+    if (hint) hint.textContent = '';
+    await loadBladeFindings();
+    if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch || STATE.selectedPart !== 'full') return;
+    renderFullTurbineOverview(container, turbine);
+    renderDefectsTable(turbine);
     return;
   }
 
+  clearCompareHost();
   if (part.startsWith('blade-')) {
     const blade = part.replace('blade-', '');
-    if (titleDefault) titleDefault.textContent = `Blade ${blade} Schematic`;
-    if (hint) hint.textContent = 'Click hotspots → Report Viewer';
+    if (titleDefault) titleDefault.textContent = `${bladeDisplayName(blade)} Schematic`;
+    if (hint) hint.textContent = '';
     renderBlade(turbine, blade, container);
     return;
   }
 
   if (titleDefault) titleDefault.textContent = 'Component Schematic';
-  if (hint) hint.textContent = 'Select a blade for inspection evidence';
+  if (hint) hint.textContent = '';
   if (container) {
     container.innerHTML = `
       <div class="asset-part-placeholder">
         <strong>${part.replace(/-/g, ' ').toUpperCase()}</strong>
-        <p>Select <em>Full Turbine Overview</em> or a blade to inspect the Gamesa G97 profile.</p>
       </div>`;
   }
 }
 
-function renderFullTurbineOverview(container) {
-  if (!container) return;
+const DUTY_COLOR = { healthy: '#2ECC71', cleaning: '#F5B400', repair: '#F97316', critical: '#EF4444' };
+const DUTY_LABEL = { healthy: 'Healthy', cleaning: 'Cleaning needed', repair: 'Repair needed', critical: 'Critical' };
+const SIDE_NAME = { SS: 'Suction side', LE: 'Leading edge', PS: 'Pressure side', TE: 'Trailing edge' };
+const ANOMALY_BOX_KEY = 'compliq_anomaly_boxes';
+/* DNV five-category severity theme for anomaly details + drawn box */
+const DEFECT_CLASSES = [
+  { name: 'Leading Edge Erosion', cats: 'CAT 1 – 4', detail: 'Pitting, coating loss or laminate exposure along the leading edge', match: /leading edge erosion|le erosion|\blep\b|coating loss/i },
+  { name: 'Coating & Gelcoat Damage', cats: 'CAT 1 – 3', detail: 'Chipping, peeling, flaking or pinholes in the surface coating', match: /gelcoat|pinhole|peel|flak|chip|grease|oil|dirt|paint|stain|coating/i },
+  { name: 'Cracks', cats: 'CAT 2 – 5', detail: 'Surface or laminate cracks, longitudinal or transverse, on any face', match: /crack|fracture|line mark/i },
+  { name: 'Trailing Edge Split / Debonding', cats: 'CAT 3 – 5', detail: 'Opening or separation along the trailing edge bond line', match: /trailing edge|te split|debond/i },
+  { name: 'Lightning Strike Damage', cats: 'CAT 2 – 5', detail: 'Burn marks, scorching, punctures or damaged receptors, usually near the tip', match: /lightning|scorch|receptor/i },
+  { name: 'Delamination', cats: 'CAT 3 – 5', detail: 'Raised, bubbled or separated laminate layers', match: /delaminat/i }
+];
+
+const SEVERITY_UI = {
+  1: { label: 'CAT 1 – Cosmetic', name: 'Cosmetic', action: 'No action; record for next inspection', condition: 'Surface marks with no effect on blade integrity or performance', bg: '#E5F3D6', text: '#3E6B32', border: '#A8D08A', stroke: '#6AA84F', fill: 'rgba(106,168,79,0.18)' },
+  2: { label: 'CAT 2 – Minor', name: 'Minor', action: 'Monitor; repair at convenience', condition: 'Minor coating damage or early erosion; no structural impact', bg: '#C8E6C9', text: '#1B5E20', border: '#81C784', stroke: '#2E7D32', fill: 'rgba(46,125,50,0.18)' },
+  3: { label: 'CAT 3 – Moderate', name: 'Moderate', action: 'Repair at next scheduled maintenance (within 6 months)', condition: 'Damage reaching the laminate surface; will progress if untreated', bg: '#FFF3C4', text: '#8A6D00', border: '#F5D76E', stroke: '#D4A017', fill: 'rgba(212,160,23,0.22)' },
+  4: { label: 'CAT 4 – Serious', name: 'Serious', action: 'Repair within 1–3 months; increased monitoring', condition: 'Structural laminate damage; progression risk to blade integrity', bg: '#FFE0C2', text: '#C2410C', border: '#F5B183', stroke: '#E07A2F', fill: 'rgba(224,122,47,0.22)' },
+  5: { label: 'CAT 5 – Critical', name: 'Critical', action: 'Stop turbine; immediate repair. Client notified within 24 hours', condition: 'Structural failure risk; major cracks, TE split or severe lightning damage', bg: '#F8D0D0', text: '#B71C1C', border: '#E8A0A0', stroke: '#D32F2F', fill: 'rgba(211,47,47,0.22)' }
+};
+
+function matchDefectClass(text) {
+  const source = `${text || ''}`;
+  return DEFECT_CLASSES.find(item => item.match.test(source)) || null;
+}
+
+function severityAction(sev) {
+  return SEVERITY_UI[Number(sev)]?.action || '';
+}
+
+function fillDefectClassSelect(select, current) {
+  if (!select) return;
+  const names = DEFECT_CLASSES.map(item => item.name);
+  const recorded = `${current || ''}`.trim();
+  const options = [];
+  if (recorded && !names.includes(recorded)) options.push(recorded);
+  options.push(...names);
+  select.innerHTML = options.map(name => {
+    const spec = DEFECT_CLASSES.find(item => item.name === name);
+    const title = spec ? `${spec.detail}. Typical ${spec.cats}` : 'Recorded finding';
+    return `<option value="${escHtml(name)}" title="${escHtml(title)}">${escHtml(name)}</option>`;
+  }).join('');
+  const chosen = options.includes(recorded) ? recorded : (matchDefectClass(recorded)?.name || names[0]);
+  select.value = chosen;
+}
+
+function bindSeverityAction(sevId, actionId) {
+  const sev = document.getElementById(sevId);
+  const action = document.getElementById(actionId);
+  if (!sev || !action || sev.dataset.actionBound) return;
+  sev.dataset.actionBound = '1';
+  const apply = () => {
+    const next = severityAction(sev.value);
+    if (next) action.value = next;
+  };
+  sev.addEventListener('change', apply);
+}
+
+function currentOverviewSeverity() {
+  const n = Number(document.getElementById('overview-anomaly-severity')?.value);
+  return SEVERITY_UI[n] ? n : 2;
+}
+
+function applyOverviewSeverityTheme(cat) {
+  const sev = SEVERITY_UI[cat] ? cat : currentOverviewSeverity();
+  const theme = SEVERITY_UI[sev];
+  const frame = document.getElementById('overview-photo-frame');
+  const form = document.getElementById('overview-anomaly-form');
+  if (form) {
+    form.dataset.sev = String(sev);
+    form.style.removeProperty('--anom-bg');
+    form.style.removeProperty('--anom-text');
+    form.style.removeProperty('--anom-border');
+  }
+  if (frame) {
+    frame.dataset.sev = String(sev);
+    frame.style.setProperty('--anom-stroke', theme.stroke);
+    frame.style.setProperty('--anom-fill', theme.fill);
+  }
+  const box = overviewDraftBox() || (() => {
+    const row = ensureOverviewAnomaly();
+    return row ? (anomalyBoxes()[row.id]?.box || null) : null;
+  })();
+  if (box) paintOverviewBox(box);
+}
+
+function anomalyBoxes() {
+  try { return JSON.parse(localStorage.getItem(ANOMALY_BOX_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function pruneEmptyAnomalyDrafts(exceptId) {
+  const map = anomalyBoxes();
+  let changed = false;
+  Object.keys(map).forEach(key => {
+    if (!String(key).startsWith('custom-') || key === exceptId) return;
+    const item = map[key] || {};
+    const unnamed = !item.anomalyId || item.anomalyId === 'New anomaly';
+    if (!item.box && unnamed && !`${item.type || ''}`.trim()) {
+      delete map[key];
+      changed = true;
+    }
+  });
+  if (changed) writeAnomalyBoxes(map);
+  return anomalyBoxes();
+}
+
+function writeAnomalyBoxes(map) {
+  localStorage.setItem(ANOMALY_BOX_KEY, JSON.stringify(map));
+}
+
+function defectFamily(row) {
+  const text = `${row?.finding || ''}`;
+  const cls = matchDefectClass(text);
+  const kind = cls ? cls.name : 'other';
+  const index = Number(row?.index) || 1;
+  const zone = index <= 5 ? 'root' : index >= 16 ? 'tip' : 'span';
+  return `${kind}-${zone}`;
+}
+
+function isMinorAnomaly(row) {
+  if (anomalyBoxes()[row.id]) return false;
+  const cat = Number(row?.cat) || 1;
+  const kind = defectFamily(row).split('-')[0];
+  if (cat <= 1) return true;
+  if ((kind === 'Coating & Gelcoat Damage' || kind === 'Leading Edge Erosion' || kind === 'other') && cat < 3) return true;
+  return false;
+}
+
+function findingDuty(row) {
+  const cat = Number(row?.cat) || 1;
+  if (cat >= 5) return 'critical';
+  if (cat >= 3) return 'repair';
+  if (cat >= 2) return 'cleaning';
+  return 'healthy';
+}
+
+function bladeSummaryRows(blade) {
+  return overviewAnomalyRows().filter(row => !blade || row.blade === blade);
+}
+
+function bladeDuty(blade) {
+  const rank = { healthy: 0, cleaning: 1, repair: 2, critical: 3 };
+  let worst = 'healthy';
+  bladeSummaryRows(blade).forEach(row => {
+    const duty = findingDuty(row);
+    if (rank[duty] > rank[worst]) worst = duty;
+  });
+  return worst;
+}
+
+function anomalyLabel(row) {
+  const saved = anomalyBoxes()[row.id];
+  if (saved?.anomalyId) return saved.anomalyId;
+  const point = 'P' + String(row.index).padStart(2, '0');
+  const code = (String(row.finding || '').match(/^[A-Z]\d+/) || [])[0];
+  return code ? `${row.blade}-${row.surface}-${point}-${code}` : `${row.blade}-${row.surface}-${point}`;
+}
+
+function overviewAnomalyRows() {
+  const saved = pruneEmptyAnomalyDrafts(STATE.overviewAnomalyId);
+  const byId = new Map();
+  ['A', 'B', 'C'].forEach(blade => {
+    findingsForBlade(blade).forEach(row => {
+      const over = saved[row.id];
+      if (!over) {
+        byId.set(row.id, row);
+        return;
+      }
+      const cat = Number(over.severity) || row.cat;
+      byId.set(row.id, {
+        ...row,
+        finding: over.type || row.finding,
+        cat,
+        color: FINDING_COLOR[cat] || row.color
+      });
+    });
+  });
+  Object.entries(saved).forEach(([id, over]) => {
+    if (byId.has(id)) return;
+    if (String(id).startsWith('custom-') && !over.box && id !== STATE.overviewAnomalyId) return;
+    const cat = Number(over.severity) || 2;
+    byId.set(id, {
+      id,
+      blade: over.blade || 'A',
+      surface: over.surface || 'PS',
+      index: Number(over.index) || 1,
+      finding: over.type || '',
+      cat,
+      color: FINDING_COLOR[cat] || '#F5B400',
+      count: 1,
+      verify: false
+    });
+  });
+  const rank = { critical: 3, repair: 2, cleaning: 1, healthy: 0 };
+  const ranked = [...byId.values()]
+    .filter(row => !isMinorAnomaly(row))
+    .sort((a, b) => (rank[findingDuty(b)] - rank[findingDuty(a)]) || (b.cat - a.cat) || (a.index - b.index));
+  const seen = new Set();
+  const unique = [];
+  ranked.forEach(row => {
+    const kind = defectFamily(row).split('-')[0];
+    const text = `${row.finding || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const key = String(row.id).startsWith('custom-')
+      ? `custom|${row.id}`
+      : (kind === 'other' ? `${row.blade}|${text}` : `${row.blade}|${kind}`);
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(row);
+  });
+  ['A', 'B', 'C'].forEach(blade => {
+    if (unique.some(row => row.blade === blade)) return;
+    const pool = [...byId.values()].filter(row => row.blade === blade);
+    if (!pool.length) return;
+    pool.sort((a, b) => (b.cat - a.cat) || (a.index - b.index));
+    unique.push(pool[0]);
+  });
+  unique.sort((a, b) => (rank[findingDuty(b)] - rank[findingDuty(a)]) || (b.cat - a.cat) || (a.index - b.index));
+  return unique;
+}
+
+function ensureOverviewAnomaly() {
+  const rows = overviewAnomalyRows();
+  if (!rows.length) {
+    STATE.overviewAnomalyId = '';
+    return null;
+  }
+  if (!rows.some(row => row.id === STATE.overviewAnomalyId)) {
+    STATE.overviewAnomalyId = (rows.find(row => findingDuty(row) === 'critical') || rows[0]).id;
+  }
+  return rows.find(row => row.id === STATE.overviewAnomalyId) || null;
+}
+
+function bladeSurfacePoint(rot, along) {
   const hub = { x: 180, y: 168 };
-  const bladePath = 'M180 168 C174 118 168 72 180 28 C192 72 186 118 180 168 Z';
-  /* Letter Y: Blade A straight down, Blade B upper left, Blade C upper right. */
+  const t = Math.min(0.92, Math.max(0.12, along));
+  const dy = -150 * t;
+  const rad = rot * Math.PI / 180;
+  return {
+    x: +(hub.x + dy * -Math.sin(rad)).toFixed(1),
+    y: +(hub.y + dy * Math.cos(rad)).toFixed(1)
+  };
+}
+
+function bladeDutyDots(blade, rot) {
+  return bladeSummaryRows(blade).slice(0, 4).map(row => {
+    const at = bladeSurfacePoint(rot, ((Number(row.index) || 1) - 1) / 19);
+    return { duty: findingDuty(row), id: row.id, ...at };
+  });
+}
+
+let TURBINE_3D = null;
+
+function stopTurbine3D() {
+  if (!TURBINE_3D) return;
+  cancelAnimationFrame(TURBINE_3D.frame);
+  try { TURBINE_3D.ro?.disconnect(); } catch (_) {}
+  try { TURBINE_3D.renderer?.dispose(); } catch (_) {}
+  TURBINE_3D = null;
+}
+
+async function mountTurbine3D(host, turbine, onPick) {
+  if (!host) return;
+  stopTurbine3D();
+  const epoch = STATE.assetEpoch;
+  let THREE;
+  let GLTFLoader;
+  try {
+    THREE = await import('three');
+    ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+  } catch (err) {
+    console.warn('3D rotor unavailable', err);
+    host.textContent = '3D view unavailable';
+    return;
+  }
+  if (!host.isConnected || epoch !== STATE.assetEpoch || STATE.activeTab !== 'asset') return;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.replaceChildren(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xffffff, 1.45);
+  key.position.set(6, 10, 8);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xd7e8ee, 0.5);
+  fill.position.set(-6, 3, -4);
+  scene.add(fill);
+
+  const pivot = new THREE.Group();
+  scene.add(pivot);
+  const pickables = [];
+  const bladeLabels = [];
+  let nacelleMesh = null;
+  const nacellePieces = [];
+  const hubCenterWorld = new THREE.Vector3();
+  let bladeRootReach = 0;
+  const tagMesh = (mesh, part, label) => {
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(m => m.clone())
+      : mesh.material.clone();
+    mesh.userData.part = part;
+    mesh.userData.label = label;
+    pickables.push(mesh);
+  };
+  const splitBlades = (source) => {
+    const geo = source.geometry;
+    const pos = geo.attributes.position;
+    const norm = geo.attributes.normal;
+    const index = geo.index;
+    const groups = [0, 1, 2].map(() => ({ pos: [], norm: [] }));
+    let maxR = 0;
+    for (let i = 0; i < pos.count; i++) {
+      maxR = Math.max(maxR, Math.hypot(pos.getX(i), pos.getY(i)));
+    }
+    const samples = [];
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      if (Math.hypot(x, y) < maxR * 0.5) continue;
+      let ang = Math.atan2(x, y);
+      if (ang < 0) ang += Math.PI * 2;
+      samples.push(ang);
+    }
+    samples.sort((a, b) => a - b);
+    const axes = [];
+    if (samples.length > 12) {
+      const gaps = samples.map((ang, i) => {
+        const nxt = samples[(i + 1) % samples.length];
+        let gap = nxt - ang;
+        if (i + 1 === samples.length) gap = samples[0] + Math.PI * 2 - ang;
+        return { i, gap };
+      }).sort((a, b) => b.gap - a.gap).slice(0, 3).sort((a, b) => a.i - b.i);
+      gaps.forEach((cut, c) => {
+        const end = gaps[(c + 1) % gaps.length].i;
+        const cluster = [];
+        for (let i = cut.i + 1; ; i++) {
+          const k = i % samples.length;
+          cluster.push(samples[k]);
+          if (k === end) break;
+          if (cluster.length > samples.length) break;
+        }
+        let sx = 0;
+        let sy = 0;
+        cluster.forEach(ang => { sx += Math.sin(ang); sy += Math.cos(ang); });
+        let mean = Math.atan2(sx, sy);
+        if (mean < 0) mean += Math.PI * 2;
+        axes.push(mean);
+      });
+    }
+    while (axes.length < 3) axes.push((axes.length * Math.PI * 2) / 3);
+    const axisVec = axes.map(ang => ({ x: Math.sin(ang), y: Math.cos(ang) }));
+    const pushTri = (ia, ib, ic) => {
+      const score = [0, 0, 0];
+      [ia, ib, ic].forEach(i => {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const weight = x * x + y * y;
+        if (weight < 1e-10) return;
+        let best = 0;
+        let bestDist = Infinity;
+        axisVec.forEach((axis, k) => {
+          const dist = Math.abs(x * axis.y - y * axis.x);
+          if (dist < bestDist) { bestDist = dist; best = k; }
+        });
+        score[best] += weight;
+      });
+      let bucket = 0;
+      if (score[1] > score[bucket]) bucket = 1;
+      if (score[2] > score[bucket]) bucket = 2;
+      [ia, ib, ic].forEach(i => {
+        groups[bucket].pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+        if (norm) groups[bucket].norm.push(norm.getX(i), norm.getY(i), norm.getZ(i));
+      });
+    };
+    if (index) {
+      for (let i = 0; i < index.count; i += 3) pushTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    } else {
+      for (let i = 0; i < pos.count; i += 3) pushTri(i, i + 1, i + 2);
+    }
+    return groups.filter(g => g.pos.length >= 3).map(g => {
+      const ggeo = new THREE.BufferGeometry();
+      ggeo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3));
+      if (g.norm.length) ggeo.setAttribute('normal', new THREE.Float32BufferAttribute(g.norm, 3));
+      else ggeo.computeVertexNormals();
+      const mesh = new THREE.Mesh(ggeo, source.material.clone());
+      mesh.position.copy(source.position);
+      mesh.quaternion.copy(source.quaternion);
+      mesh.scale.copy(source.scale);
+      source.parent.add(mesh);
+      return mesh;
+    });
+  };
+
+  try {
+    const gltf = await new GLTFLoader().loadAsync('models/wind-turbine.glb');
+    if (!host.isConnected || epoch !== STATE.assetEpoch) return;
+    const model = gltf.scene;
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.sub(center);
+    pivot.add(model);
+    model.updateMatrixWorld(true);
+
+    const named = {};
+    model.traverse(obj => { if (obj.isMesh && obj.name) named[obj.name] = obj; });
+    const white = named['rotorwhite'] || named['rotor/white'];
+    const red = named['rotorred'] || named['rotor/red'];
+    const hub = named['rotorcharcoal'] || named['rotor/charcoal'];
+    if (white) {
+      const whiteSize = new THREE.Box3().setFromObject(white).getSize(new THREE.Vector3());
+      const whiteMax = Math.max(whiteSize.x, whiteSize.y, whiteSize.z) || 1;
+      const blades = splitBlades(white);
+      white.visible = false;
+      blades.forEach(mesh => {
+        const c = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+        mesh.userData.wy = c.y;
+        mesh.userData.ang = Math.atan2(c.x, c.z);
+      });
+      blades.sort((a, b) => a.userData.wy - b.userData.wy);
+      const down = blades[0];
+      const rest = blades.slice(1).sort((a, b) => a.userData.ang - b.userData.ang);
+      [['A', down], ['B', rest[0]], ['C', rest[1]]].forEach(([letter, mesh]) => {
+        if (!mesh) return;
+        tagMesh(mesh, 'blade-' + letter, bladeDisplayName(letter, turbine));
+        const pos = mesh.geometry.attributes.position;
+        let best = 0;
+        let bestR = -1;
+        for (let i = 0; i < pos.count; i++) {
+          const r = pos.getX(i) * pos.getX(i) + pos.getY(i) * pos.getY(i);
+          if (r > bestR) { bestR = r; best = i; }
+        }
+        const localTip = new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best));
+        localTip.multiplyScalar(1.06);
+        const el = document.createElement('div');
+        el.className = 'blade-tip-label';
+        el.textContent = bladeDisplayName(letter, turbine);
+        host.appendChild(el);
+        bladeLabels.push({ mesh, localTip, el });
+      });
+      if (red) {
+        const redSize = new THREE.Box3().setFromObject(red).getSize(new THREE.Vector3());
+        const redMax = Math.max(redSize.x, redSize.y, redSize.z);
+        if (redMax > whiteMax * 0.35) {
+          const marks = splitBlades(red);
+          red.visible = false;
+          marks.forEach(mark => {
+            const c = new THREE.Box3().setFromObject(mark).getCenter(new THREE.Vector3());
+            let best = null;
+            let gap = Infinity;
+            blades.forEach(blade => {
+              const bc = new THREE.Box3().setFromObject(blade).getCenter(new THREE.Vector3());
+              const dist = c.distanceTo(bc);
+              if (dist < gap) { gap = dist; best = blade; }
+            });
+            if (best) tagMesh(mark, best.userData.part, best.userData.label);
+          });
+        } else {
+          tagMesh(red, 'hub', 'Hub');
+        }
+      }
+      if (hub) {
+        hub.updateWorldMatrix(true, true);
+        const hubAttr = hub.geometry?.attributes?.position;
+        const hubCenter = new THREE.Vector3();
+        const sample = new THREE.Vector3();
+        const hubPts = [];
+        if (hubAttr) {
+          for (let i = 0; i < hubAttr.count; i++) {
+            sample.fromBufferAttribute(hubAttr, i);
+            hub.localToWorld(sample);
+            hubPts.push(sample.clone());
+            hubCenter.add(sample);
+          }
+          hubCenter.multiplyScalar(1 / Math.max(1, hubPts.length));
+        }
+        let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        hubPts.forEach(p => {
+          const x = p.x - hubCenter.x;
+          const y = p.y - hubCenter.y;
+          const z = p.z - hubCenter.z;
+          xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+        });
+        const trace = xx + yy + zz;
+        const covMul = (v) => new THREE.Vector3(
+          xx * v.x + xy * v.y + xz * v.z,
+          xy * v.x + yy * v.y + yz * v.z,
+          xz * v.x + yz * v.y + zz * v.z
+        );
+        let shaft = new THREE.Vector3(1, 1, 1).normalize();
+        for (let k = 0; k < 18; k++) {
+          const Cv = covMul(shaft);
+          shaft.set(trace * shaft.x - Cv.x, trace * shaft.y - Cv.y, trace * shaft.z - Cv.z);
+          if (shaft.lengthSq() < 1e-12) { shaft.set(0, 0, 1); break; }
+          shaft.normalize();
+        }
+        const radial = new THREE.Vector3();
+        let hubRadius = 0;
+        hubPts.forEach(p => {
+          radial.copy(p).sub(hubCenter);
+          radial.addScaledVector(shaft, -radial.dot(shaft));
+          hubRadius = Math.max(hubRadius, radial.length());
+        });
+        const cutoff = hubRadius * 1.04;
+        const project = (v) => {
+          const out = v.clone().sub(hubCenter);
+          out.addScaledVector(shaft, -out.dot(shaft));
+          return out;
+        };
+        const hubCapPos = [];
+        const trimMesh = (mesh, sink) => {
+          const geo = mesh.geometry;
+          const pos = geo?.attributes?.position;
+          if (!pos || cutoff <= 0) return;
+          mesh.updateWorldMatrix(true, true);
+          const keptPos = [];
+          const plane = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+          const segDist = (p, a, b) => {
+            const ab = b.clone().sub(a);
+            const denom = ab.dot(ab);
+            const t = denom < 1e-12 ? 0 : Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / denom));
+            return p.distanceTo(a.clone().addScaledVector(ab, t));
+          };
+          const overlapsHub = () => {
+            const a = plane[0];
+            const b = plane[1];
+            const c = plane[2];
+            if (a.length() < cutoff || b.length() < cutoff || c.length() < cutoff) return true;
+            const ab = b.clone().sub(a);
+            const ac = c.clone().sub(a);
+            const d00 = ab.dot(ab);
+            const d01 = ab.dot(ac);
+            const d11 = ac.dot(ac);
+            const denom = d00 * d11 - d01 * d01;
+            if (Math.abs(denom) > 1e-8) {
+              const d20 = -a.dot(ab);
+              const d21 = -a.dot(ac);
+              const v = (d11 * d20 - d01 * d21) / denom;
+              const w = (d00 * d21 - d01 * d20) / denom;
+              const u = 1 - v - w;
+              if (u >= -0.02 && v >= -0.02 && w >= -0.02) return true;
+            }
+            return Math.min(segDist(new THREE.Vector3(), a, b), segDist(new THREE.Vector3(), b, c), segDist(new THREE.Vector3(), c, a)) < cutoff;
+          };
+          const pushLocal = (a, b, c) => {
+            [a, b, c].forEach(v => keptPos.push(v.x, v.y, v.z));
+          };
+          const worldOf = (local) => mesh.localToWorld(local.clone());
+          const refine = (la, lb, lc, depth) => {
+            plane[0].copy(project(worldOf(la)));
+            plane[1].copy(project(worldOf(lb)));
+            plane[2].copy(project(worldOf(lc)));
+            if (!overlapsHub()) {
+              pushLocal(la, lb, lc);
+              return;
+            }
+            const span = Math.max(plane[0].distanceTo(plane[1]), plane[1].distanceTo(plane[2]), plane[2].distanceTo(plane[0]));
+            const inside = plane[0].length() < cutoff && plane[1].length() < cutoff && plane[2].length() < cutoff;
+            if (inside || depth >= 8 || span < cutoff * 0.18) {
+              if (sink) [la, lb, lc].forEach(v => sink.push(v.x, v.y, v.z));
+              return;
+            }
+            const ab = la.clone().add(lb).multiplyScalar(0.5);
+            const bc = lb.clone().add(lc).multiplyScalar(0.5);
+            const ca = lc.clone().add(la).multiplyScalar(0.5);
+            refine(la, ab, ca, depth + 1);
+            refine(ab, lb, bc, depth + 1);
+            refine(ca, bc, lc, depth + 1);
+            refine(ab, bc, ca, depth + 1);
+          };
+          const consider = (ia, ib, ic) => {
+            refine(
+              new THREE.Vector3(pos.getX(ia), pos.getY(ia), pos.getZ(ia)),
+              new THREE.Vector3(pos.getX(ib), pos.getY(ib), pos.getZ(ib)),
+              new THREE.Vector3(pos.getX(ic), pos.getY(ic), pos.getZ(ic)),
+              0
+            );
+          };
+          const geoIndex = geo.index;
+          if (geoIndex) {
+            for (let i = 0; i < geoIndex.count; i += 3) consider(geoIndex.getX(i), geoIndex.getX(i + 1), geoIndex.getX(i + 2));
+          } else {
+            for (let i = 0; i < pos.count; i += 3) consider(i, i + 1, i + 2);
+          }
+          if (keptPos.length < 9) return;
+          const next = new THREE.BufferGeometry();
+          next.setAttribute('position', new THREE.Float32BufferAttribute(keptPos, 3));
+          next.computeVertexNormals();
+          geo.dispose();
+          mesh.geometry = next;
+        };
+        blades.forEach(mesh => trimMesh(mesh, hubCapPos));
+        blades[0]?.parent?.traverse(obj => {
+          if (obj.isMesh && String(obj.userData.part || '').startsWith('blade-') && !blades.includes(obj)) trimMesh(obj);
+        });
+        if (blades[0]?.material) hub.material = blades[0].material;
+        if (hubCapPos.length >= 9 && blades[0]) {
+          const capGeo = new THREE.BufferGeometry();
+          capGeo.setAttribute('position', new THREE.Float32BufferAttribute(hubCapPos, 3));
+          capGeo.computeVertexNormals();
+          const cap = new THREE.Mesh(capGeo, hub.material);
+          cap.position.copy(blades[0].position);
+          cap.quaternion.copy(blades[0].quaternion);
+          cap.scale.copy(blades[0].scale);
+          blades[0].parent.add(cap);
+          tagMesh(cap, 'hub', 'Hub');
+          cap.renderOrder = 3;
+        }
+      }
+      const downBlade = blades.find(item => item.userData.part === 'blade-C');
+      if (downBlade && hub) {
+        downBlade.updateWorldMatrix(true, true);
+        hub.updateWorldMatrix(true, true);
+        const hubCenter = new THREE.Box3().setFromObject(hub).getCenter(new THREE.Vector3());
+        const posAttr = downBlade.geometry.attributes.position;
+        let tipIndex = 0;
+        let tipRadius = -1;
+        for (let i = 0; i < posAttr.count; i++) {
+          const radius = posAttr.getX(i) ** 2 + posAttr.getY(i) ** 2 + posAttr.getZ(i) ** 2;
+          if (radius > tipRadius) { tipRadius = radius; tipIndex = i; }
+        }
+        const tip = downBlade.localToWorld(new THREE.Vector3(
+          posAttr.getX(tipIndex),
+          posAttr.getY(tipIndex),
+          posAttr.getZ(tipIndex)
+        ));
+        const rel = tip.sub(hubCenter);
+        const shaft = new THREE.Vector3(0, 0, 1)
+          .applyQuaternion(downBlade.getWorldQuaternion(new THREE.Quaternion()))
+          .normalize();
+        const downDir = new THREE.Vector3(0, -1, 0);
+        downDir.sub(shaft.clone().multiplyScalar(downDir.dot(shaft)));
+        const tipDir = rel.clone().sub(shaft.clone().multiplyScalar(rel.dot(shaft)));
+        if (downDir.lengthSq() > 1e-8 && tipDir.lengthSq() > 1e-8) {
+          downDir.normalize();
+          tipDir.normalize();
+          const turn = Math.atan2(
+            new THREE.Vector3().crossVectors(tipDir, downDir).dot(shaft),
+            tipDir.dot(downDir)
+          );
+          const rotorParts = blades.slice();
+          if (!rotorParts.includes(hub)) rotorParts.push(hub);
+          downBlade.parent.traverse(obj => {
+            if (!obj.isMesh || rotorParts.includes(obj)) return;
+            const part = String(obj.userData.part || '');
+            if (part === 'hub' || part.startsWith('blade-')) rotorParts.push(obj);
+          });
+          const spin = new THREE.Quaternion().setFromAxisAngle(shaft, turn);
+          rotorParts.forEach(obj => {
+            obj.updateMatrixWorld(true);
+            const parentInv = obj.parent.matrixWorld.clone().invert();
+            const moved = new THREE.Matrix4()
+              .makeTranslation(hubCenter.x, hubCenter.y, hubCenter.z)
+              .multiply(new THREE.Matrix4().makeRotationFromQuaternion(spin))
+              .multiply(new THREE.Matrix4().makeTranslation(-hubCenter.x, -hubCenter.y, -hubCenter.z))
+              .multiply(obj.matrixWorld);
+            obj.matrix.copy(parentInv.multiply(moved));
+            obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+          });
+        }
+      }
+    }
+    if (hub) {
+      tagMesh(hub, 'hub', 'Hub');
+      hub.renderOrder = 2;
+      const hubMats = Array.isArray(hub.material) ? hub.material : [hub.material];
+      hubMats.forEach(mat => {
+        if (!mat) return;
+        mat.polygonOffset = true;
+        mat.polygonOffsetFactor = -1;
+        mat.polygonOffsetUnits = -1;
+      });
+    }
+    const towerSources = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
+      .map(name => named[name]).filter(Boolean);
+    const worldPoint = new THREE.Vector3();
+    let axisX = 0;
+    let axisZ = 0;
+    let axisN = 0;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const radii = [];
+    towerSources.forEach(mesh => {
+      mesh.updateWorldMatrix(true, true);
+      const attr = mesh.geometry?.attributes?.position;
+      if (!attr) return;
+      for (let i = 0; i < attr.count; i++) {
+        worldPoint.fromBufferAttribute(attr, i);
+        mesh.localToWorld(worldPoint);
+        axisX += worldPoint.x;
+        axisZ += worldPoint.z;
+        axisN += 1;
+        minY = Math.min(minY, worldPoint.y);
+        maxY = Math.max(maxY, worldPoint.y);
+        radii.push(Math.hypot(worldPoint.x, worldPoint.z));
+      }
+    });
+    if (axisN) { axisX /= axisN; axisZ /= axisN; }
+    let shaftN = 0;
+    let shaftX = 0;
+    let shaftZ = 0;
+    const shaftRadii = [];
+    towerSources.forEach(mesh => {
+      const attr = mesh.geometry?.attributes?.position;
+      if (!attr) return;
+      for (let i = 0; i < attr.count; i++) {
+        worldPoint.fromBufferAttribute(attr, i);
+        mesh.localToWorld(worldPoint);
+        const radius = Math.hypot(worldPoint.x - axisX, worldPoint.z - axisZ);
+        if (radius > 1.2) continue;
+        shaftX += worldPoint.x;
+        shaftZ += worldPoint.z;
+        shaftN += 1;
+        shaftRadii.push(radius);
+      }
+    });
+    if (shaftN) { axisX = shaftX / shaftN; axisZ = shaftZ / shaftN; }
+    shaftRadii.sort((a, b) => a - b);
+    const shaftRadius = shaftRadii[Math.floor(shaftRadii.length * 0.6)] || 0.8;
+    const housingRadius = shaftRadius * 1.75;
+    const baseCut = minY + Math.max(0.35, (maxY - minY) * 0.06);
+    const topCut = maxY - Math.max(0.9, (maxY - minY) * 0.16);
+    const splitStructure = (mesh) => {
+      const geo = mesh.geometry;
+      const pos = geo.attributes.position;
+      const norm = geo.attributes.normal;
+      const index = geo.index;
+      const buckets = { foundation: { pos: [], norm: [] }, tower: { pos: [], norm: [] }, nacelle: { pos: [], norm: [] } };
+      const ys = [];
+      const rs = [];
+      mesh.updateWorldMatrix(true, true);
+      for (let i = 0; i < pos.count; i++) {
+        worldPoint.fromBufferAttribute(pos, i);
+        mesh.localToWorld(worldPoint);
+        ys.push(worldPoint.y);
+        rs.push(Math.hypot(worldPoint.x - axisX, worldPoint.z - axisZ));
+      }
+      const pushTri = (ia, ib, ic) => {
+        const radius = (rs[ia] + rs[ib] + rs[ic]) / 3;
+        const top = Math.max(ys[ia], ys[ib], ys[ic]);
+        const low = Math.min(ys[ia], ys[ib], ys[ic]);
+        const key = (radius > housingRadius && low > topCut) ? 'nacelle' : (top < baseCut ? 'foundation' : 'tower');
+        [ia, ib, ic].forEach(i => {
+          buckets[key].pos.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+          if (norm) buckets[key].norm.push(norm.getX(i), norm.getY(i), norm.getZ(i));
+        });
+      };
+      if (index) {
+        for (let i = 0; i < index.count; i += 3) pushTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+      } else {
+        for (let i = 0; i < pos.count; i += 3) pushTri(i, i + 1, i + 2);
+      }
+      const made = [];
+      Object.entries(buckets).forEach(([key, group]) => {
+        if (group.pos.length < 9) return;
+        const ggeo = new THREE.BufferGeometry();
+        ggeo.setAttribute('position', new THREE.Float32BufferAttribute(group.pos, 3));
+        if (group.norm.length) ggeo.setAttribute('normal', new THREE.Float32BufferAttribute(group.norm, 3));
+        else ggeo.computeVertexNormals();
+        const sourceMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        const piece = new THREE.Mesh(ggeo, sourceMat.clone());
+        piece.position.copy(mesh.position);
+        piece.quaternion.copy(mesh.quaternion);
+        piece.scale.copy(mesh.scale);
+        piece.name = mesh.name + '-' + key;
+        mesh.parent.add(piece);
+        const pieceSize = new THREE.Box3().setFromObject(piece).getSize(new THREE.Vector3());
+        if (pieceSize.x < 0.015 || pieceSize.y < 0.015 || pieceSize.z < 0.015) {
+          mesh.parent.remove(piece);
+          ggeo.dispose();
+          if (piece.material?.dispose) piece.material.dispose();
+          return;
+        }
+        const label = key === 'foundation' ? 'Foundation' : (key === 'nacelle' ? 'Nacelle' : 'Tower');
+        tagMesh(piece, key, label);
+        if (key === 'nacelle') nacellePieces.push(piece);
+        made.push(piece);
+      });
+      if (made.length) mesh.visible = false;
+      return made;
+    };
+    towerSources.forEach(splitStructure);
+    if (named['farm-scale-wind-turbine_4']) {
+      tagMesh(named['farm-scale-wind-turbine_4'], 'nacelle', 'Nacelle');
+      nacellePieces.push(named['farm-scale-wind-turbine_4']);
+    }
+    nacelleMesh = nacellePieces[0] || null;
+    if (named['farm-scale-wind-turbine_5']) tagMesh(named['farm-scale-wind-turbine_5'], 'anemometer', 'Anemometer / Sensors');
+    const rotorSeat = pickables.filter(mesh => mesh.userData.part === 'hub' || String(mesh.userData.part || '').startsWith('blade-'));
+    if (hub && nacellePieces.length && rotorSeat.length) {
+      const housingCenter = new THREE.Vector3();
+      const housingBox = new THREE.Box3();
+      nacellePieces.forEach(mesh => housingBox.union(new THREE.Box3().setFromObject(mesh)));
+      housingBox.getCenter(housingCenter);
+      const hubBox = new THREE.Box3().setFromObject(hub);
+      const hubCenter = hubBox.getCenter(new THREE.Vector3());
+      const hubSize = hubBox.getSize(new THREE.Vector3());
+      const shaft = new THREE.Vector3(0, 0, 1).applyQuaternion(hub.getWorldQuaternion(new THREE.Quaternion())).normalize();
+      if (hubCenter.clone().sub(housingCenter).dot(shaft) < 0) shaft.negate();
+      const project = (point) => point.clone().sub(housingCenter).dot(shaft);
+      const lipReach = Math.max(hubSize.x, hubSize.y) * 1.15;
+      const sample = new THREE.Vector3();
+      const radial = new THREE.Vector3();
+      let nose = -Infinity;
+      nacellePieces.forEach(mesh => {
+        const attr = mesh.geometry?.attributes?.position;
+        if (!attr) return;
+        mesh.updateWorldMatrix(true, true);
+        for (let i = 0; i < attr.count; i++) {
+          sample.fromBufferAttribute(attr, i);
+          mesh.localToWorld(sample);
+          radial.copy(sample).sub(hubCenter);
+          const along = radial.dot(shaft);
+          radial.addScaledVector(shaft, -along);
+          if (radial.length() > lipReach) continue;
+          if (Math.abs(sample.y - hubCenter.y) > Math.max(hubSize.y, hubSize.x) * 0.9) continue;
+          nose = Math.max(nose, project(sample));
+        }
+      });
+      let hubBack = Infinity;
+      const hubAttr = hub.geometry?.attributes?.position;
+      if (hubAttr) {
+        hub.updateWorldMatrix(true, true);
+        for (let i = 0; i < hubAttr.count; i++) {
+          sample.fromBufferAttribute(hubAttr, i);
+          hub.localToWorld(sample);
+          hubBack = Math.min(hubBack, project(sample));
+        }
+      }
+      const tuck = Math.max(hubSize.z * 0.12, 0.02);
+      const shift = (nose - tuck) - hubBack;
+      const limit = Math.max(hubSize.length() * 3, 0.2);
+      if (Number.isFinite(nose) && Number.isFinite(hubBack) && Math.abs(shift) > 0.0001 && Math.abs(shift) < limit) {
+        const delta = shaft.clone().multiplyScalar(shift);
+        rotorSeat.forEach(obj => {
+          obj.updateMatrixWorld(true);
+          const parentInv = obj.parent.matrixWorld.clone().invert();
+          const moved = new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z).multiply(obj.matrixWorld);
+          obj.matrix.copy(parentInv.multiply(moved));
+          obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+        });
+      }
+    }
+    const addHotspot = (mesh, scale = 0.9) => {
+      if (!mesh || !mesh.parent) return;
+      const box = new THREE.Box3().setFromObject(mesh);
+      const center = box.getCenter(new THREE.Vector3());
+      const dims = box.getSize(new THREE.Vector3());
+      const worldRadius = Math.max(dims.x, dims.y, dims.z, 0.2) * scale;
+      const parentScale = new THREE.Vector3();
+      mesh.parent.getWorldScale(parentScale);
+      const localRadius = worldRadius / Math.max(parentScale.x, parentScale.y, parentScale.z, 0.001);
+      mesh.parent.worldToLocal(center);
+      const spot = new THREE.Mesh(
+        new THREE.SphereGeometry(localRadius, 10, 8),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false })
+      );
+      spot.position.copy(center);
+      spot.userData.hotspot = true;
+      mesh.parent.add(spot);
+      tagMesh(spot, mesh.userData.part, mesh.userData.label);
+    };
+    if (hub) addHotspot(hub, 0.45);
+    if (named['farm-scale-wind-turbine_4']) addHotspot(named['farm-scale-wind-turbine_4'], 0.55);
+    if (named['farm-scale-wind-turbine_5']) addHotspot(named['farm-scale-wind-turbine_5']);
+    if (hub) {
+      const hb = new THREE.Box3().setFromObject(hub);
+      hubCenterWorld.copy(hb.getCenter(new THREE.Vector3()));
+      const hubSpan = Math.max(hb.getSize(new THREE.Vector3()).length(), 0.2);
+      let tipReach = hubSpan;
+      pickables.forEach(mesh => {
+        if (mesh.userData.hotspot || !String(mesh.userData.part || '').startsWith('blade-')) return;
+        const box = new THREE.Box3().setFromObject(mesh);
+        tipReach = Math.max(tipReach, hubCenterWorld.distanceTo(box.getCenter(new THREE.Vector3())));
+      });
+      bladeRootReach = Math.max(hubSpan * 1.6, tipReach * 0.2);
+    }
+
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const fov = camera.fov * Math.PI / 180;
+    const dist = (maxDim * 0.55) / Math.tan(fov / 2);
+    camera.position.set(dist * 0.42, dist * 0.06, dist);
+    camera.near = Math.max(0.01, dist / 80);
+    camera.far = dist * 12;
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.userData.base = camera.position.clone();
+    camera.userData.zoom = 0.9;
+  } catch (err) {
+    console.warn('Wind turbine model failed to load', err);
+    host.textContent = '3D model failed to load';
+    return;
+  }
+
+  const START_ZOOM = 0.9;
+  const panOffset = new THREE.Vector3();
+  const panRight = new THREE.Vector3();
+  const panUp = new THREE.Vector3();
+  const applyZoom = () => {
+    const z = camera.userData.zoom;
+    camera.position.copy(camera.userData.base).multiplyScalar(z).add(panOffset);
+    camera.lookAt(panOffset);
+  };
+  const nudgeZoom = (factor) => {
+    camera.userData.zoom = Math.min(1.7, Math.max(0.62, camera.userData.zoom * factor));
+    applyZoom();
+  };
+  const resetView = () => {
+    panOffset.set(0, 0, 0);
+    pivot.rotation.set(0, 0, 0);
+    camera.userData.zoom = START_ZOOM;
+    applyZoom();
+  };
+  applyZoom();
+  const zoomBar = document.createElement('div');
+  zoomBar.className = 'turbine-3d-zoom';
+  zoomBar.innerHTML = '<button type="button" data-z="in" title="Zoom in">+</button><button type="button" data-z="out" title="Zoom out">−</button><button type="button" data-z="reset" title="Reset view">↺</button>';
+  host.appendChild(zoomBar);
+  zoomBar.addEventListener('pointerdown', event => event.stopPropagation());
+  zoomBar.addEventListener('click', event => {
+    const btn = event.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.z === 'reset') resetView();
+    else nudgeZoom(btn.dataset.z === 'in' ? 0.86 : 1.16);
+  });
+
+  const fit = () => {
+    const w = Math.max(40, host.clientWidth);
+    const h = Math.max(40, host.clientHeight);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  };
+  fit();
+  const ro = new ResizeObserver(fit);
+  ro.observe(host);
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let dragging = false;
+  let dragMode = 'rotate';
+  let usedTwo = false;
+  let moved = 0;
+  let lx = 0;
+  let ly = 0;
+  let hoveredPart = null;
+  const hoverTip = document.createElement('div');
+  hoverTip.className = 'turbine-hover-label';
+  hoverTip.hidden = true;
+  host.appendChild(hoverTip);
+  const paintMaterials = (mesh, hex) => {
+    const list = !mesh?.material ? [] : (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+    list.forEach(mat => { if (mat?.emissive) mat.emissive.setHex(hex); });
+  };
+  const paintHover = (mesh, clientX, clientY) => {
+    const part = mesh?.userData?.part || null;
+    if (hoveredPart !== part) {
+      pickables.forEach(item => {
+        if (item.userData.hotspot) return;
+        paintMaterials(item, item.userData.part === part ? 0x8fd3d8 : 0x000000);
+      });
+      hoveredPart = part;
+      host.title = mesh?.userData?.label || 'Left drag turns, both buttons pan';
+    }
+    const label = mesh?.userData?.label;
+    if (!label || dragging || clientX == null) {
+      hoverTip.hidden = true;
+      return;
+    }
+    hoverTip.hidden = false;
+    hoverTip.textContent = label;
+    const rect = host.getBoundingClientRect();
+    let x = clientX - rect.left + 16;
+    let y = clientY - rect.top + 18;
+    const tipW = hoverTip.offsetWidth || 64;
+    const tipH = hoverTip.offsetHeight || 18;
+    if (x + tipW > rect.width - 6) x = clientX - rect.left - tipW - 12;
+    if (y + tipH > rect.height - 6) y = clientY - rect.top - tipH - 8;
+    if (x < 4) x = 4;
+    if (y < 4) y = 4;
+    hoverTip.style.transform = `translate(${x}px, ${y}px)`;
+  };
+  const pickObject = (clientX, clientY) => {
+    const rect = host.getBoundingClientRect();
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    pivot.updateMatrixWorld(true);
+    raycaster.setFromCamera(pointer, camera);
+    const nacelleMats = [];
+    nacellePieces.forEach(mesh => {
+      const list = !mesh.material ? [] : (Array.isArray(mesh.material) ? mesh.material : [mesh.material]);
+      list.forEach(mat => {
+        if (!nacelleMats.includes(mat)) nacelleMats.push(mat);
+      });
+    });
+    const savedSides = nacelleMats.map(mat => mat.side);
+    nacelleMats.forEach(mat => { mat.side = THREE.DoubleSide; });
+    let hits = [];
+    try {
+      hits = raycaster.intersectObjects(pickables, false);
+    } finally {
+      nacelleMats.forEach((mat, i) => { mat.side = savedSides[i]; });
+    }
+    if (!hits.length) return null;
+    const solid = hits.find(hit => !hit.object.userData.hotspot);
+    return (solid || hits[0]).object;
+  };
+  const markDrag = () => {
+    host.classList.toggle('is-rotating', dragging && dragMode === 'rotate');
+    host.classList.toggle('is-panning', dragging && dragMode === 'pan');
+  };
+  const panBy = (dx, dy) => {
+    camera.updateMatrixWorld();
+    panRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    panUp.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const dist = Math.max(0.2, camera.position.distanceTo(panOffset));
+    const worldPerPx = (2 * Math.tan((camera.fov * Math.PI / 180) / 2) * dist) / Math.max(1, host.clientHeight);
+    panOffset.addScaledVector(panRight, -dx * worldPerPx);
+    panOffset.addScaledVector(panUp, dy * worldPerPx);
+    const limit = (camera.userData.base?.length() || 10) * 0.55;
+    if (panOffset.length() > limit) panOffset.setLength(limit);
+    applyZoom();
+  };
+  host.addEventListener('contextmenu', event => event.preventDefault());
+  host.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('.turbine-3d-zoom') || event.target.closest('.blade-tip-label')) return;
+    if (event.button !== 0 && event.button !== 2) return;
+    const both = (event.buttons & 3) === 3;
+    if (event.button === 2 && !both) return;
+    if (!dragging) moved = 0;
+    dragging = true;
+    if (both) usedTwo = true;
+    dragMode = both ? 'pan' : 'rotate';
+    lx = event.clientX;
+    ly = event.clientY;
+    markDrag();
+    try { host.setPointerCapture(event.pointerId); } catch (_) {}
+  });
+  host.addEventListener('pointermove', (event) => {
+    paintHover(pickObject(event.clientX, event.clientY), event.clientX, event.clientY);
+    if (!dragging) return;
+    const both = (event.buttons & 3) === 3;
+    if (both) {
+      dragMode = 'pan';
+      usedTwo = true;
+    } else if ((event.buttons & 1) === 1) {
+      dragMode = 'rotate';
+    }
+    markDrag();
+    const dx = event.clientX - lx;
+    const dy = event.clientY - ly;
+    moved += Math.abs(dx) + Math.abs(dy);
+    lx = event.clientX;
+    ly = event.clientY;
+    if (dragMode === 'pan') panBy(dx, dy);
+    else pivot.rotation.y += dx * 0.01;
+  });
+  const choosePart = (part) => {
+    if (!part) return;
+    stopTurbine3D();
+    if (part.startsWith('blade-')) {
+      onPick(part.replace('blade-', ''));
+      return;
+    }
+    STATE.selectedPart = part;
+    const sel = document.getElementById('part-selector');
+    if (sel) sel.value = part;
+    const epochNow = bumpAssetEpoch();
+    renderPartSchematic(turbine, part, epochNow);
+    renderDefectsTable(turbine);
+  };
+  const endDrag = (event) => {
+    if (!dragging) return;
+    if (event.buttons) {
+      dragMode = (event.buttons & 3) === 3 ? 'pan' : 'rotate';
+      markDrag();
+      return;
+    }
+    dragging = false;
+    markDrag();
+    try { if (event.pointerId != null) host.releasePointerCapture(event.pointerId); } catch (_) {}
+    const pick = !usedTwo && moved <= 6;
+    usedTwo = false;
+    moved = 0;
+    if (!pick) return;
+    const hit = pickObject(event.clientX, event.clientY);
+    if (hit?.userData?.part) choosePart(hit.userData.part);
+  };
+  host.addEventListener('pointerup', endDrag);
+  host.addEventListener('pointerleave', () => paintHover(null));
+  host.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    nudgeZoom(event.deltaY > 0 ? 1.08 : 0.92);
+  }, { passive: false });
+
+  const tipWorld = new THREE.Vector3();
+  const spin = { frame: 0 };
+  const loop = () => {
+    if (TURBINE_3D !== spin || epoch !== STATE.assetEpoch) return;
+    pivot.updateMatrixWorld(true);
+    const w = host.clientWidth;
+    const h = host.clientHeight;
+    bladeLabels.forEach(({ mesh, localTip, el }) => {
+      tipWorld.copy(localTip);
+      mesh.localToWorld(tipWorld);
+      tipWorld.project(camera);
+      const onScreen = tipWorld.z < 1;
+      el.hidden = !onScreen;
+      if (!onScreen) return;
+      const x = (tipWorld.x * 0.5 + 0.5) * w;
+      const y = (-tipWorld.y * 0.5 + 0.5) * h;
+      el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    });
+    renderer.render(scene, camera);
+    spin.frame = requestAnimationFrame(loop);
+  };
+  TURBINE_3D = spin;
+  TURBINE_3D.renderer = renderer;
+  TURBINE_3D.ro = ro;
+  TURBINE_3D.frame = requestAnimationFrame(loop);
+}
+
+function renderFullTurbineOverview(container, turbine) {
+  if (!container) return;
+  stopTurbine3D();
   const blades = [
-    { id: 'A', rot: 180, color: '#0FA4AF', lx: 180, ly: 318 },
-    { id: 'B', rot: 300, color: '#E08A3C', lx: 45, ly: 84 },
-    { id: 'C', rot: 60, color: '#7EB6FF', lx: 315, ly: 84 }
+    { id: 'A' },
+    { id: 'B' },
+    { id: 'C' }
   ];
+  ensureOverviewAnomaly();
   container.innerHTML = `
     <div class="turbine-overview">
-      <p class="turbine-overview-lead">Gamesa G97 2 MW · Kayathar. All three blades are on this rotor. Click a blade to open its tapered 20-point profile (P1 root/hub to P20 tip) on SS, LE, PS, and TE.</p>
-      <div class="turbine-single-card">
-        <svg class="turbine-svg turbine-svg-single" viewBox="0 0 360 400" role="img" aria-label="Gamesa G97 rotor with Blade A, Blade B, and Blade C">
-          <line x1="180" y1="180" x2="180" y2="372" stroke="#5a7882" stroke-width="10" stroke-linecap="round"/>
-          <path d="M148 158 h64 l-10 26 h-44 z" fill="#123038" stroke="#0FA4AF" stroke-width="1.4"/>
-          ${blades.map(b => `
-            <g class="turbine-blade-hit" data-blade="${b.id}" tabindex="0" role="button" aria-label="Open Blade ${b.id}">
-              <g transform="rotate(${b.rot} ${hub.x} ${hub.y})">
-                <path class="blade-fill" d="${bladePath}" fill="${b.color}" stroke="${b.color}"/>
-              </g>
-              <circle cx="${b.lx}" cy="${b.ly + 6}" r="13" fill="${b.color}"/>
-              <text class="turbine-blade-label" x="${b.lx}" y="${b.ly + 11}" text-anchor="middle">${b.id}</text>
-            </g>`).join('')}
-          <circle cx="${hub.x}" cy="${hub.y}" r="14" fill="#0e2430" stroke="#d7eef2" stroke-width="3" pointer-events="none"/>
-        </svg>
-      </div>
-      <div class="blade-compare-wrap">
-        <h4>Blade comparison</h4>
-        <p>Two captures for each surface on Blade A, Blade B, and Blade C. Click an image to open that station on the profile. To update a station, put <strong>GAMESA_…_PS-01_annotated.jpg</strong> in that folder, or replace the <strong>.png</strong> with a <strong>.jpg</strong> of the same name. Short names <strong>P01_annotated.jpg</strong>, <strong>P01_corrected.png</strong>, and <strong>P01.jpg</strong> work too. Refresh the page after you save the file.</p>
-        <div class="blade-compare-scroll">
-          <table class="blade-compare">
-            <thead>
-              <tr>
-                <th>Surface</th>
-                <th>Blade A</th>
-                <th>Blade B</th>
-                <th>Blade C</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${POC_SURFACES.map(surface => `
-                <tr>
-                  <th>${surface}</th>
-                  ${['A', 'B', 'C'].map(blade => `
-                    <td>
-                      <div class="blade-compare-shots">
-                        ${COMPARE_SLOTS.map(slot => compareShotMarkup(blade, surface, slot)).join('')}
-                      </div>
-                    </td>`).join('')}
-                </tr>`).join('')}
-            </tbody>
-          </table>
+      <div class="overview-main-grid">
+        <div class="overview-left-col">
+          <div class="turbine-single-card">
+            <div class="turbine-3d-host" id="turbine-3d" role="img" aria-label="3D turbine. Left drag turns it sideways, both mouse buttons pan, scroll to zoom."></div>
+          </div>
+          <form class="anomaly-details" id="overview-anomaly-form">
+            <h4>Anomaly details</h4>
+            <label>Anomaly ID<input id="overview-anomaly-id" class="styled-input" type="text" maxlength="80"></label>
+            <label>Anomaly type
+              <select id="overview-anomaly-type" class="styled-select"></select>
+            </label>
+            <label>Blade side<input id="overview-anomaly-side" class="styled-input" type="text" readonly></label>
+            <label>Radius<input id="overview-anomaly-radius" class="styled-input" type="text" inputmode="decimal"></label>
+            <label>Severity
+              <select id="overview-anomaly-severity" class="styled-select">
+                ${[1, 2, 3, 4, 5].map(n => `<option value="${n}">${SEVERITY_UI[n].label}</option>`).join('')}
+              </select>
+            </label>
+            <div class="anomaly-actions">
+              <button type="button" class="review-btn" id="overview-draw">Place box</button>
+              <button type="button" class="review-btn" id="overview-new">New anomaly</button>
+              <button type="button" class="teal-btn" id="overview-save">Save anomaly</button>
+            </div>
+          </form>
         </div>
+        <div class="overview-right-col">
+          <div class="blade-status-col">
+            <div class="duty-legend">
+              ${Object.entries(DUTY_LABEL).map(([key, label]) => `<span><i style="background:${DUTY_COLOR[key]}"></i>${label}</span>`).join('')}
+            </div>
+            ${blades.map(b => {
+              const duty = bladeDuty(b.id);
+              const count = bladeSummaryRows(b.id).length;
+              return `<button type="button" class="blade-status-card" data-blade="${b.id}" data-duty="${duty}">
+                <span class="blade-status-swatch" style="background:${DUTY_COLOR[duty]}"></span>
+                <strong>${escHtml(bladeDisplayName(b.id, turbine))}</strong>
+                <em>${DUTY_LABEL[duty]}</em>
+                <small>${count} anomal${count === 1 ? 'y' : 'ies'}</small>
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="anomaly-photo-wrap">
+            <div class="anomaly-photo-frame" id="overview-photo-frame">
+              <img id="overview-photo" alt="" draggable="false">
+              <svg id="overview-box-svg" class="overview-box-svg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+              <div id="overview-box-label" class="overview-box-label" hidden></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="compare-view">
+        <h4>Comparison view</h4>
+        <div class="compare-trio" id="overview-compare"></div>
       </div>
     </div>`;
   const open = (letter) => selectOverviewBlade(letter);
-  container.querySelectorAll('.turbine-blade-hit').forEach(node => {
-    node.addEventListener('click', () => open(node.dataset.blade));
-    node.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        open(node.dataset.blade);
-      }
+  container.querySelectorAll('.blade-status-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const top = overviewAnomalyRows().find(row => row.blade === card.dataset.blade);
+      if (!top) return;
+      STATE.overviewAnomalyId = top.id;
+      renderDefectsTable(turbine);
+      paintOverviewDetail(turbine);
     });
   });
-  container.querySelectorAll('.blade-compare-shot').forEach(btn => {
-    btn.addEventListener('click', () => openCompareShot(btn.dataset.blade, btn.dataset.surface, btn.dataset.point));
-    const img = btn.querySelector('img');
-    if (!img) return;
-    const candidates = g97StationCandidates(btn.dataset.blade, btn.dataset.surface, Number(btn.dataset.point));
-    useFirstExistingImage(img, candidates, () => {
-      img.replaceWith(Object.assign(document.createElement('span'), { className: 'compare-pending', textContent: 'Add image' }));
+  bindOverviewEditors(turbine);
+  paintOverviewDetail(turbine);
+  parkCompareView();
+  mountTurbine3D(document.getElementById('turbine-3d'), turbine, open);
+}
+
+function overviewDraftBox() {
+  return STATE.overviewDraftBox || null;
+}
+
+function paintOverviewBox(box) {
+  const svg = document.getElementById('overview-box-svg');
+  if (!svg) return;
+  if (!box || box.length < 4) {
+    svg.innerHTML = '';
+    const tag = document.getElementById('overview-box-label');
+    if (tag) {
+      tag.hidden = true;
+      tag.textContent = '';
+    }
+    return;
+  }
+  const theme = SEVERITY_UI[currentOverviewSeverity()];
+  const [x1, y1, x2, y2] = box;
+  const x = Math.min(x1, x2) * 100;
+  const y = Math.min(y1, y2) * 100;
+  const w = Math.abs(x2 - x1) * 100;
+  const h = Math.abs(y2 - y1) * 100;
+  svg.innerHTML = `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${theme.fill}" stroke="${theme.stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"></rect>
+    <circle cx="${x}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>
+    <circle cx="${x + w}" cy="${y + h}" r="1.1" fill="#fff" stroke="${theme.stroke}" stroke-width="0.6"></circle>`;
+  placeOverviewBoxLabel(x, y, w, theme);
+}
+
+function overviewBoxLabel() {
+  const id = (document.getElementById('overview-anomaly-id')?.value || '').trim();
+  const type = (document.getElementById('overview-anomaly-type')?.value || '').trim();
+  if (id && type) return `${id} · ${type}`;
+  return id || type || '';
+}
+
+function placeOverviewBoxLabel(x, y, w, theme) {
+  const tag = document.getElementById('overview-box-label');
+  if (!tag) return;
+  const label = overviewBoxLabel();
+  if (!label) {
+    tag.hidden = true;
+    tag.textContent = '';
+    return;
+  }
+  const nearTop = y < 12;
+  tag.hidden = false;
+  tag.textContent = label;
+  tag.title = label;
+  tag.style.left = `${x + w}%`;
+  tag.style.top = `${y}%`;
+  tag.style.transform = nearTop ? 'translate(-100%, 6px)' : 'translate(-100%, calc(-100% - 4px))';
+  tag.style.color = theme.text;
+  tag.style.background = theme.bg;
+  tag.style.borderColor = theme.border;
+}
+
+function normFromPointer(event, svg) {
+  const rect = svg.getBoundingClientRect();
+  return {
+    x: Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(rect.width, 1))),
+    y: Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(rect.height, 1)))
+  };
+}
+
+function bindOverviewEditors(turbine) {
+  const svg = document.getElementById('overview-box-svg');
+  const drawBtn = document.getElementById('overview-draw');
+  if (svg && !svg.dataset.bound) {
+    svg.dataset.bound = '1';
+    let start = null;
+    svg.addEventListener('pointerdown', event => {
+      if (!svg.classList.contains('is-drawing')) return;
+      start = normFromPointer(event, svg);
+      svg.setPointerCapture(event.pointerId);
+      STATE.overviewDraftBox = [start.x, start.y, start.x, start.y];
+      paintOverviewBox(STATE.overviewDraftBox);
     });
+    svg.addEventListener('pointermove', event => {
+      if (!start) return;
+      const end = normFromPointer(event, svg);
+      STATE.overviewDraftBox = [start.x, start.y, end.x, end.y];
+      paintOverviewBox(STATE.overviewDraftBox);
+    });
+    const finish = () => { start = null; };
+    svg.addEventListener('pointerup', finish);
+    svg.addEventListener('pointercancel', finish);
+  }
+  drawBtn?.addEventListener('click', () => {
+    svg?.classList.toggle('is-drawing');
+    if (drawBtn) drawBtn.classList.toggle('is-on', svg?.classList.contains('is-drawing'));
+  });
+  document.getElementById('overview-anomaly-form')?.addEventListener('submit', event => event.preventDefault());
+  const radius = document.getElementById('overview-anomaly-radius');
+  if (radius && !radius.dataset.bound) {
+    radius.dataset.bound = '1';
+    radius.addEventListener('change', () => {
+      const metres = parseFloat(radius.value);
+      STATE.overviewCompareMetres = Number.isFinite(metres) ? metres : null;
+      paintBladeComparison(turbine, ensureOverviewAnomaly());
+    });
+  }
+  ['overview-anomaly-id', 'overview-anomaly-type'].forEach(id => {
+    const field = document.getElementById(id);
+    if (!field || field.dataset.labelBound) return;
+    field.dataset.labelBound = '1';
+    field.addEventListener('input', () => {
+      const row = ensureOverviewAnomaly();
+      const box = overviewDraftBox() || (row ? (anomalyBoxes()[row.id]?.box || null) : null);
+      if (box) paintOverviewBox(box);
+    });
+    field.addEventListener('change', () => field.dispatchEvent(new Event('input')));
+  });
+  document.getElementById('overview-save')?.addEventListener('click', () => saveOverviewAnomaly(turbine));
+  document.getElementById('overview-new')?.addEventListener('click', () => createOverviewAnomaly(turbine));
+  const severitySel = document.getElementById('overview-anomaly-severity');
+  if (severitySel && !severitySel.dataset.sevBound) {
+    severitySel.dataset.sevBound = '1';
+    severitySel.addEventListener('change', () => applyOverviewSeverityTheme(Number(severitySel.value)));
+  }
+  applyOverviewSeverityTheme(Number(severitySel?.value) || 2);
+}
+
+function paintOverviewDetail(turbine) {
+  const row = ensureOverviewAnomaly();
+  const idInput = document.getElementById('overview-anomaly-id');
+  const typeInput = document.getElementById('overview-anomaly-type');
+  const sideInput = document.getElementById('overview-anomaly-side');
+  const radiusInput = document.getElementById('overview-anomaly-radius');
+  const severity = document.getElementById('overview-anomaly-severity');
+  const photo = document.getElementById('overview-photo');
+  if (!idInput || !photo) return;
+  STATE.overviewDraftBox = null;
+  STATE.overviewCompareMetres = null;
+  if (!row) {
+    idInput.value = '';
+    typeInput.value = '';
+    fillDefectClassSelect(typeInput, '');
+    sideInput.value = '';
+    radiusInput.value = '';
+    photo.removeAttribute('src');
+    paintOverviewBox(null);
+    paintBladeComparison(turbine, null);
+    return;
+  }
+  const saved = anomalyBoxes()[row.id] || {};
+  const span = bladeSpanM(turbine);
+  const metres = pointMetres(row.index, span);
+  idInput.value = saved.anomalyId || anomalyLabel(row);
+  fillDefectClassSelect(typeInput, saved.type || row.finding || '');
+  sideInput.value = `${SIDE_NAME[row.surface] || row.surface} · ${bladeDisplayName(row.blade)}`;
+  if (STATE.overviewCompareMetres == null) radiusInput.value = `${metres.toFixed(1)} m`;
+  if (severity) severity.value = String(saved.severity || row.cat || 2);
+  const photos = g97StationCandidates(row.blade, row.surface, row.index);
+  photo.alt = `${row.blade} ${row.surface}`;
+  useFirstExistingImage(photo, photos, () => photo.removeAttribute('src'));
+  applyOverviewSeverityTheme(Number(severity?.value) || saved.severity || row.cat || 2);
+  paintOverviewBox(saved.box || null);
+  paintBladeComparison(turbine, row);
+}
+
+function nearestStationIndex(metres, span) {
+  let best = 1;
+  let gap = Infinity;
+  for (let i = 1; i <= 20; i += 1) {
+    const delta = Math.abs(pointMetres(i, span) - metres);
+    if (delta < gap) {
+      gap = delta;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function comparisonPlace(selected, turbine) {
+  const span = bladeSpanM(turbine);
+  const entered = STATE.overviewCompareMetres;
+  let index = selected?.index || 1;
+  let surface = selected?.surface || 'PS';
+  if (entered != null) index = nearestStationIndex(entered, span);
+  const duty = selected && entered == null ? findingDuty(selected) : '';
+  const low = !duty || duty === 'cleaning' || duty === 'healthy';
+  if (low) {
+    const severe = overviewAnomalyRows()
+      .filter(row => findingDuty(row) === 'repair' || findingDuty(row) === 'critical')
+      .sort((a, b) => a.index - b.index || b.cat - a.cat);
+    const next = severe.find(row => row.index >= index) || severe[severe.length - 1];
+    if (next) {
+      surface = next.surface;
+      index = next.index;
+    }
+  }
+  return { surface, index, metres: pointMetres(index, span) };
+}
+
+function stationFileCandidates(blade, surface, index) {
+  const all = g97StationCandidates(blade, surface, index);
+  const local = [];
+  const remote = [];
+  [1, 7, 3, 5, 0, 6, 2, 4].forEach(slot => {
+    const url = all[slot];
+    if (!url) return;
+    if (/^https?:/i.test(url)) remote.push(url);
+    else local.push(url);
+  });
+  const here = typeof location !== 'undefined' && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  return here ? local.concat(remote) : remote.concat(local);
+}
+
+function compareCandidates(blade, surface, index) {
+  const list = [];
+  [0, 1, -1, 2, -2, 3, -3].forEach(delta => {
+    const station = index + delta;
+    if (station < 1 || station > 20) return;
+    list.push(...stationFileCandidates(blade, surface, station));
+  });
+  return list;
+}
+
+function paintBladeComparison(turbine, row) {
+  const host = document.getElementById('overview-compare');
+  if (!host) return;
+  const place = comparisonPlace(row, turbine);
+  const side = SIDE_NAME[place.surface] || place.surface;
+  host.innerHTML = ['A', 'B', 'C'].map(blade => `
+    <figure>
+      <figcaption>Blade ${blade} · ${escHtml(side)} · ${place.metres.toFixed(1)} m</figcaption>
+      <img data-blade="${blade}" alt="Blade ${blade} ${escHtml(place.surface)}" draggable="false">
+    </figure>`).join('');
+  host.querySelectorAll('img').forEach(img => {
+    const photos = compareCandidates(img.dataset.blade, place.surface, place.index);
+    useFirstExistingImage(img, photos, () => img.removeAttribute('src'));
   });
 }
 
-function compareShotMarkup(blade, surface, slot) {
-  const candidates = g97StationCandidates(blade, surface, slot.pointIndex);
-  const defect = stationDefect(blade, surface, slot.pointIndex);
-  const finding = defect ? `<em>${defect.label}</em>` : '';
-  const media = candidates.length
-    ? `<img alt="Blade ${blade} ${surface} ${slot.label}">`
-    : `<span class="compare-pending">Add image</span>`;
-  return `
-    <button type="button" class="blade-compare-shot" data-blade="${blade}" data-surface="${surface}" data-point="${slot.pointIndex}">
-      ${media}
-      <span class="compare-caption"><strong>${slot.label}</strong>${finding}</span>
-    </button>`;
+function saveOverviewAnomaly(turbine) {
+  const row = ensureOverviewAnomaly();
+  if (!row) return;
+  const map = anomalyBoxes();
+  const prev = map[row.id] || {};
+  const severity = Number(document.getElementById('overview-anomaly-severity')?.value) || row.cat || 2;
+  const type = (document.getElementById('overview-anomaly-type')?.value || '').trim();
+  const anomalyId = (document.getElementById('overview-anomaly-id')?.value || '').trim() || anomalyLabel(row);
+  const box = overviewDraftBox() || prev.box || null;
+  const label = overviewBoxLabel();
+  map[row.id] = {
+    anomalyId,
+    type,
+    label,
+    blade: row.blade,
+    surface: row.surface,
+    index: row.index,
+    severity,
+    box
+  };
+  writeAnomalyBoxes(map);
+  const overrides = defectOverrides();
+  overrides[row.id] = { ...(overrides[row.id] || {}), cat: severity, name: type };
+  writeDefectOverrides(overrides);
+  STATE.overviewDraftBox = null;
+  const draw = document.getElementById('overview-box-svg');
+  draw?.classList.remove('is-drawing');
+  document.getElementById('overview-draw')?.classList.remove('is-on');
+  document.getElementById('overview-new')?.classList.remove('is-on');
+  renderDefectsTable(turbine);
+  paintOverviewDetail(turbine);
+  showToast('Anomaly saved', 'success');
 }
 
-function openCompareShot(blade, surface, pointIndex) {
-  STATE.pocSurface = surface;
-  STATE.pocPointIndex = Number(pointIndex);
-  selectOverviewBlade(blade);
+function createOverviewAnomaly(turbine) {
+  const current = ensureOverviewAnomaly();
+  const id = `custom-${Date.now()}`;
+  const map = anomalyBoxes();
+  map[id] = {
+    anomalyId: 'New anomaly',
+    type: '',
+    blade: current?.blade || 'A',
+    surface: current?.surface || 'PS',
+    index: current?.index || 1,
+    severity: 2,
+    box: null
+  };
+  writeAnomalyBoxes(map);
+  STATE.overviewAnomalyId = id;
+  STATE.overviewDraftBox = null;
+  renderDefectsTable(turbine);
+  paintOverviewDetail(turbine);
+  const draw = document.getElementById('overview-box-svg');
+  draw?.classList.add('is-drawing');
+  document.getElementById('overview-draw')?.classList.add('is-on');
+  document.getElementById('overview-new')?.classList.add('is-on');
+  const idInput = document.getElementById('overview-anomaly-id');
+  idInput?.focus();
+  idInput?.select();
+  applyOverviewSeverityTheme(2);
+  showToast('Name it, draw a box on the photo, then Save anomaly', 'success');
 }
 
 function selectOverviewBlade(letter) {
@@ -771,7 +2784,6 @@ function renderDefectsTable(turbine) {
 
   if (STATE.pocMode && ['blade-A', 'blade-B', 'blade-C'].includes(STATE.selectedPart)) {
     const blade = activeBladeLetter();
-    const findings = findingsForBlade(blade);
     if (!BLADE_FINDINGS.ready) {
       fill(tbody, `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">Loading defect categories…</td></tr>`);
       loadBladeFindings().then(() => {
@@ -779,8 +2791,9 @@ function renderDefectsTable(turbine) {
       });
       return;
     }
+    const pt = getSelectedPocPoint(turbine);
+    const findings = findingsForStation(blade, pt.surface, pt.pointIndex);
     if (findings.length) {
-      const pt = getSelectedPocPoint(turbine);
       const span = bladeSpanM(turbine);
       const html = findings.map(d => {
         const metres = pointMetres(d.index, span);
@@ -790,15 +2803,16 @@ function renderDefectsTable(turbine) {
         const isSel = STATE.pocSelectedDefectId ? STATE.pocSelectedDefectId === d.id : onStation;
         const point = 'P' + String(d.index).padStart(2, '0');
         const code = (d.finding.match(/^C\d+/) || [point])[0];
+        const typeName = String(d.finding || '').replace(/^C\d+\s+/, '');
         return `
         <tr class="defect-row ${d.cat >= DOT_MIN_CAT ? 'is-critical' : ''} ${isSel ? 'is-selected' : ''}"
           data-surface="${d.surface}" data-point="${d.index}" data-finding-id="${escHtml(d.id)}" tabindex="0">
           <td data-col="id"><span style="font-family:var(--font-mono);font-size:0.73rem;color:${d.color}">${escHtml(d.surface)}-${point}-${escHtml(code)}</span></td>
           <td data-col="surface">${escHtml(d.surface)}</td>
-          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m / ${span} m (${pct}%)</span></td>
-          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
           <td data-col="location" style="font-size:0.75rem">${escHtml(d.surface)} · ${point}</td>
-          <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(d.finding)}</td>
+          <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(typeName)}</td>
+          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${pct}%</span></td>
+          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
           <td data-col="intensity"><span class="sev-pill" style="background:${d.color}22;color:${d.color};border:1px solid ${d.color}">CAT ${d.cat}${d.verify ? ' · Verify' : ''}</span></td>
           <td data-col="size" style="font-size:0.72rem">${d.count} mark${d.count === 1 ? '' : 's'}</td>
           <td data-col="priority"><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
@@ -812,9 +2826,9 @@ function renderDefectsTable(turbine) {
       const selectedRow = tbody && tbody.querySelector('tr.is-selected');
       if (selectedRow) selectedRow.scrollIntoView({ block: 'nearest' });
       renderPocBboxOverlay(pt, turbine);
+      updateFindingsSheetMeta();
       return;
     }
-    const pt = getSelectedPocPoint(turbine);
     const defects = defectsForPocPoint(pt);
     const selectedId = STATE.pocSelectedDefectId;
     const html = defects.map(d => {
@@ -828,10 +2842,10 @@ function renderDefectsTable(turbine) {
         onclick="selectPocDefect('${d.id}')" onkeydown="if(event.key==='Enter')selectPocDefect('${d.id}')">
         <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${pt.point}-${d.id}</span></td>
         <td>${pt.surface}</td>
-        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.radial}</span></td>
-        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.distRoot}</span></td>
         <td style="font-size:0.75rem">${geo.location}</td>
         <td>${d.defect_class}</td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${Math.round(geo.pct)}%</span></td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.distRoot}</span></td>
         <td><span class="sev-pill sev-${d.severity}">${intensity}</span></td>
         <td style="font-size:0.72rem;max-width:160px;">${size}</td>
         <td><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
@@ -841,20 +2855,26 @@ function renderDefectsTable(turbine) {
     }).join('') || `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">${pt.stationImage ? `Station ${pt.surface} ${pt.point} is linked (${formatRadial(pt, turbine)}). No boxed defects on this capture.` : `No station image for ${pt.surface} ${pt.point} (${formatRadial(pt, turbine)}).`}</td></tr>`;
     fill(tbody, html);
     renderPocBboxOverlay(pt, turbine);
+    updateFindingsSheetMeta();
     return;
   }
 
   const defects = turbine
     ? STATE.db.defects.filter(d => d.assetId === turbine.id && d.blade === STATE.selectedBlade)
     : STATE.db.defects;
+  if (STATE.selectedPart === 'full' && isG97Turbine(turbine)) {
+    renderOverviewDefectTable(turbine, tbodyAlt);
+    return;
+  }
+  setStandaloneColumns(false);
   const html = defects.map(d => `
     <tr>
       <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${d.id}</span></td>
       <td>Blade ${d.blade}</td>
-      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.radialPos || (d.dist + ' m')}</span></td>
-      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.dist} m</span></td>
       <td style="font-size:0.75rem">${d.location || ('Blade ' + d.blade)}</td>
       <td>${d.type}</td>
+      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.radialPos || (d.dist + ' m')}</span></td>
+      <td><span style="font-family:var(--font-mono);font-size:0.72rem">${d.dist} m</span></td>
       <td><span class="sev-pill sev-${d.severity}">${d.intensity || ('SEV-' + d.severity)}</span></td>
       <td style="font-size:0.72rem">${d.size || '—'}</td>
       <td><span class="prio-pill prio-${d.priority.toLowerCase()}">${d.priority}</span></td>
@@ -863,6 +2883,57 @@ function renderDefectsTable(turbine) {
     </tr>
   `).join('') || `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">No defects recorded for Blade ${STATE.selectedBlade}</td></tr>`;
   fill(tbodyAlt, html);
+  updateFindingsSheetMeta();
+}
+
+function setStandaloneColumns(full) {
+  const head = document.querySelector('#asset-defects-standalone thead tr');
+  const title = document.querySelector('#asset-defects-standalone .panel-header h3');
+  if (title) title.textContent = full ? 'Blade summary' : 'Detected Defects & Decisions';
+  if (!head) return;
+  head.innerHTML = full
+    ? '<th>Anomaly ID</th><th>Anomaly Type</th><th>Blade</th><th>Blade Side</th><th>Radius</th><th>Severity</th><th></th>'
+    : '<th>Defect ID</th><th>Surface</th><th>Location</th><th>Defect Type</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>';
+}
+
+function renderOverviewDefectTable(turbine, tbodyAlt) {
+  setStandaloneColumns(true);
+  if (!BLADE_FINDINGS.ready) {
+    if (tbodyAlt) tbodyAlt.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">Loading anomalies…</td></tr>';
+    loadBladeFindings().then(() => {
+      if (STATE.selectedPart === 'full') renderDefectsTable(turbine);
+    });
+    return;
+  }
+  const span = bladeSpanM(turbine);
+  const selected = ensureOverviewAnomaly();
+  const rows = overviewAnomalyRows();
+  const html = rows.map(row => {
+    const metres = pointMetres(row.index, span);
+    const duty = findingDuty(row);
+    const on = selected && selected.id === row.id;
+    return `<tr class="defect-row ${on ? 'is-selected' : ''}" data-anomaly-id="${escHtml(row.id)}">
+      <td style="font-family:var(--font-mono);font-size:0.73rem;color:${row.color || DUTY_COLOR[duty]}">${escHtml(anomalyLabel(row))}</td>
+      <td>${escHtml(row.finding)}</td>
+      <td>${escHtml(bladeDisplayName(row.blade, turbine))}</td>
+      <td>${escHtml(SIDE_NAME[row.surface] || row.surface)}</td>
+      <td style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</td>
+      <td><span class="sev-pill" style="background:${DUTY_COLOR[duty]}22;color:${DUTY_COLOR[duty]};border:1px solid ${DUTY_COLOR[duty]}">${DUTY_LABEL[duty]} · ${row.cat}</span></td>
+      <td><button type="button" class="review-btn">Open</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">No anomalies on this turbine.</td></tr>';
+  if (tbodyAlt) tbodyAlt.innerHTML = html;
+  if (tbodyAlt && !tbodyAlt.dataset.overviewBound) {
+    tbodyAlt.dataset.overviewBound = '1';
+    tbodyAlt.addEventListener('click', event => {
+      const tr = event.target.closest('tr[data-anomaly-id]');
+      if (!tr || !tbodyAlt.contains(tr)) return;
+      STATE.overviewAnomalyId = tr.dataset.anomalyId;
+      const current = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || turbine;
+      renderDefectsTable(current);
+      paintOverviewDetail(current);
+    });
+  }
 }
 
 function selectPocDefect(defectId) {
@@ -887,161 +2958,575 @@ function openReport(defectId) {
   renderReport();
 }
 
+const REPORT_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
+const REPORT_SLIDES = { items: [], index: 0 };
+
 function renderReport() {
   const d = STATE.activeDefect;
   if (!d) return;
   const turbine = STATE.db.turbines.find(t => t.id === d.assetId);
-  document.getElementById('report-viewer-title').textContent = `${d.id} — ${d.type} on ${turbine?.assetId} Blade ${d.blade}`;
-  document.getElementById('provenance-tag').textContent = `Campaign: ${d.campaign} | ${d.method} | ${turbine?.manufacturer} ${turbine?.model}`;
+  const title = document.getElementById('report-viewer-title');
+  if (title) title.textContent = `${d.type} · ${bladeDisplayName(d.blade, turbine)} · ${turbineLabel(turbine)}`;
 
-  const rgb = document.getElementById('img-rgb');
-  if (rgb && d.stationImage) rgb.src = d.stationImage;
+  const blade = d.blade || document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const sides = selectedReportSides();
+  rebuildReportSlides(blade, sides, {
+    side: d.location?.split('·')[0]?.trim() || STATE.pocSurface,
+    index: STATE.pocPointIndex,
+    findingId: d.findingId,
+    candidates: d.stationCandidates?.length ? d.stationCandidates : (d.stationImage ? [d.stationImage] : [])
+  });
 
   const badge = document.getElementById('report-priority-badge');
-  badge.textContent = d.priority;
-  badge.className = `priority-badge ${d.priority}`;
-
-  // Draw bounding box overlay
-  const svg = document.getElementById('overlay-svg');
-  svg.innerHTML = `
-    <rect x="15%" y="20%" width="50%" height="60%" fill="none"
-      stroke="${d.severity >= 4 ? '#EB5757' : d.severity >= 3 ? '#F2C94C' : '#0FA4AF'}"
-      stroke-width="2.5" stroke-dasharray="8,4" opacity="0.85"/>
-    <text x="16%" y="19%" font-family="JetBrains Mono,monospace" font-size="11"
-      fill="${d.severity >= 4 ? '#EB5757' : '#F2C94C'}">${d.type} | SEV-${d.severity} | ${(d.confidence*100).toFixed(0)}%</text>
-    <circle cx="38%" cy="50%" r="6" fill="rgba(235,87,87,0.6)" opacity="0.8">
-      <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite"/>
-    </circle>
-  `;
-
-  const editor = d.findingId ? `
-    <div class="assess-section defect-report-editor">
-      <h4>Manual override</h4>
-      <label>Category
-        <select id="report-review-cat" class="styled-select">
-          ${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${Number(d.severity) === n ? 'selected' : ''}>CAT ${n}</option>`).join('')}
-        </select>
-      </label>
-      <label>Defect name
-        <input id="report-review-name" class="styled-input" type="text" maxlength="120" value="${escHtml(d.type)}">
-      </label>
-      <div class="defect-review-actions" style="margin-top:8px">
-        <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-        <button type="button" class="review-btn" onclick="resetDefectOverride()">Reset</button>
-      </div>
-      <h4 style="margin-top:14px">Report table columns</h4>
-      <div id="report-column-picker" class="defect-column-picker"></div>
-    </div>` : '';
-
-  // Decision body
-  const body = document.getElementById('report-decision-body');
-  body.innerHTML = editor + `
-    <div class="assess-section">
-      <h4>Asset & Location</h4>
-      <p><strong>${turbine?.assetId}</strong> — ${turbine?.name}<br>
-      ${turbine?.location}<br>
-      GPS: ${d.gps || `${turbine?.gps.lat}°N, ${turbine?.gps.lng}°E`}<br>
-      Model: ${turbine?.manufacturer || ''} ${turbine?.model || ''}<br>
-      Blade length: ${turbine?.bladeLength || (turbine?.rotorDia ? turbine.rotorDia/2 : '—')} m<br>
-      Location: <strong>${d.location || ('Blade ' + d.blade)}</strong><br>
-      Radial position: <strong>${d.radialPos || (d.dist + ' m from root')}</strong></p>
-    </div>
-    <div class="assess-section">
-      <h4>Detection Details</h4>
-      <p>Type: <strong>${d.type}</strong><br>
-      Crack / defect intensity: <strong>${d.intensity || ('SEV-' + d.severity)}</strong><br>
-      Severity: <strong>Level ${d.severity}/5</strong><br>
-      Length / size: <strong>${d.size || 'See observations'}</strong><br>
-      Model Confidence: <strong>${(d.confidence*100).toFixed(0)}%</strong><br>
-      Status: <strong style="color:${d.status === 'Dispatched' ? '#F2C94C' : d.status === 'Resolved' ? '#2ECC71' : '#EB5757'}">${d.status}</strong><br>
-      Method: ${d.method}<br>
-      Detected: ${d.inspDate}</p>
-    </div>
-    <div class="assess-section">
-      <h4>Observations</h4>
-      <p>${d.notes}</p>
-    </div>
-    <div class="assess-section">
-      <h4>Recommended Action</h4>
-      <ul class="rules-list">
-        <li class="rule-li">🔧 ${d.action}</li>
-        ${d.severity >= 4 ? '<li class="rule-li">⚠️ Escalate to Site Manager within 24h</li>' : ''}
-        ${d.severity >= 5 ? '<li class="rule-li" style="color:#EB5757">🛑 CONSIDER HALTING TURBINE OPERATION</li>' : ''}
-      </ul>
-    </div>
-    <div class="assess-section">
-      <h4>Integrity Assessment</h4>
-      <p>IEC 61400-22 ${d.severity >= 4 ? 'FAIL — Mandatory maintenance action' : d.severity >= 3 ? 'ADVISORY — Schedule remediation' : 'PASS — Monitor and log'}</p>
-    </div>
-  `;
-  if (d.findingId) renderColumnPicker(document.getElementById('report-column-picker'));
-  syncReportPicker();
-
-  // Update dispatch button style/status dynamically
-  const btn = document.getElementById('dispatch-btn');
-  if (btn) {
-    if (d.status === 'Dispatched') {
-      btn.disabled = true;
-      btn.textContent = '✓ Dispatch Order Approved';
-      btn.style.opacity = '0.6';
-      btn.style.cursor = 'not-allowed';
-    } else if (d.status === 'Resolved') {
-      btn.disabled = true;
-      btn.textContent = '✓ Defect Resolved';
-      btn.style.opacity = '0.6';
-      btn.style.cursor = 'not-allowed';
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Approve Dispatch Order';
-      btn.style.opacity = '1';
-      btn.style.cursor = 'pointer';
-    }
+  if (badge) {
+    badge.textContent = d.priority || '';
+    badge.className = `priority-badge ${d.priority || ''}`;
   }
+
+  syncReportOverride(d);
+  syncReportPicker();
+  bindReportViewerControls();
 }
 
-// Thermal slider
-document.getElementById('therm-slider')?.addEventListener('input', function() {
-  const v = this.value / 100;
-  document.getElementById('img-therm').style.opacity = v;
-  document.getElementById('img-rgb').style.opacity = 1 - v;
-});
+function syncReportOverride(d) {
+  const cat = document.getElementById('report-review-cat');
+  if (cat && d?.severity) cat.value = String(d.severity);
+  const name = document.getElementById('report-review-name');
+  if (name && document.activeElement !== name) fillDefectClassSelect(name, d?.type || '');
+}
 
-// Mask toggle
-document.getElementById('mask-toggle')?.addEventListener('change', function() {
-  document.getElementById('overlay-svg').style.opacity = this.checked ? 1 : 0;
-});
+function applyReportZoom() {
+  const stage = document.getElementById('report-stage');
+  const img = document.getElementById('img-rgb');
+  const target = stage || img;
+  if (!target) return;
+  target.style.transform = `translate(${REPORT_VIEW.tx}px, ${REPORT_VIEW.ty}px) scale(${REPORT_VIEW.scale})`;
+  const lvl = document.getElementById('report-zoom-level');
+  if (lvl) lvl.textContent = `${Math.round(REPORT_VIEW.scale * 100)}%`;
+}
 
-// Zoom controls
+function fitReportImage() {
+  const viewport = document.getElementById('report-viewport');
+  const img = document.getElementById('img-rgb');
+  if (!viewport || !img || !img.naturalWidth || img.hidden) {
+    REPORT_VIEW.scale = 1;
+    REPORT_VIEW.tx = 0;
+    REPORT_VIEW.ty = 0;
+    applyReportZoom();
+    return;
+  }
+  const pad = 2;
+  const availW = Math.max(40, viewport.clientWidth - pad);
+  const availH = Math.max(40, viewport.clientHeight - pad);
+  const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+  REPORT_VIEW.userZoom = false;
+  REPORT_VIEW.scale = fit;
+  REPORT_VIEW.tx = 0;
+  REPORT_VIEW.ty = 0;
+  applyReportZoom();
+}
+
 function zoomIn() {
-  STATE.zoomLevel = Math.min(STATE.zoomLevel + 0.25, 3);
-  applyZoom();
+  REPORT_VIEW.userZoom = true;
+  REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, REPORT_VIEW.scale * 1.25);
+  applyReportZoom();
 }
 function zoomOut() {
-  STATE.zoomLevel = Math.max(STATE.zoomLevel - 0.25, 0.5);
-  applyZoom();
+  REPORT_VIEW.userZoom = true;
+  REPORT_VIEW.scale = Math.max(REPORT_VIEW.min, REPORT_VIEW.scale / 1.25);
+  applyReportZoom();
 }
 function resetZoom() {
-  STATE.zoomLevel = 1;
-  applyZoom();
+  fitReportImage();
 }
 function applyZoom() {
-  const frame = document.getElementById('img-frame');
-  frame.querySelectorAll('img').forEach(img => {
-    img.style.transform = `scale(${STATE.zoomLevel})`;
-    img.style.transformOrigin = 'center center';
-  });
-  document.getElementById('zoom-badge').textContent = `Zoom: ${Math.round(STATE.zoomLevel * 100)}%`;
+  applyReportZoom();
 }
 
-// Approve dispatch
-function approveDispatch() {
-  if (STATE.activeDefect) {
-    STATE.activeDefect.status = 'Dispatched';
-    saveDB(STATE.db);
-    showToast(`Dispatch order approved for ${STATE.activeDefect.id}`, 'success');
-    renderReport();
-    addNotification(`Dispatch approved: ${STATE.activeDefect.id}`, 'info');
+function reportStationCandidates(blade, side, index) {
+  const found = g97StationCandidates(blade, side, index);
+  if (!found.length) return [];
+  const preferred = [];
+  [0, 1, 6, 7].forEach(slot => { if (found[slot]) preferred.push(found[slot]); });
+  return preferred.length ? preferred : found;
+}
+
+function rebuildReportSlides(blade, sides, prefer) {
+  /* One continuous L→R deck across every selected side: Side A stations, then Side B, … */
+  const sideList = (sides && sides.length) ? sides : ['PS'];
+  const findings = findingsForBlade(blade).filter(row => sideList.includes(row.surface));
+  const findingByStation = new Map();
+  findings.forEach(row => {
+    const key = `${row.surface}-${row.index}`;
+    if (!findingByStation.has(key)) findingByStation.set(key, row);
+  });
+
+  const seen = new Set();
+  const items = [];
+
+  sideList.forEach(side => {
+    for (let index = 1; index <= 20; index += 1) {
+      const key = `${side}-${index}`;
+      if (seen.has(key)) continue;
+      const row = findingByStation.get(key);
+      const known = !G97_MISSING.has(`${blade}-${side}-${index}`);
+      if (!known && !row) continue;
+      const candidates = reportStationCandidates(blade, side, index);
+      if (!candidates.length && !(prefer?.candidates?.length && prefer.side === side && Number(prefer.index) === index)) continue;
+      seen.add(key);
+      items.push({
+        blade,
+        side,
+        index,
+        findingId: row?.id || null,
+        finding: row?.finding || '',
+        cat: row?.cat ?? null,
+        candidates: candidates.length
+          ? candidates
+          : (prefer?.side === side && Number(prefer.index) === index ? prefer.candidates : [])
+      });
+    }
+  });
+
+  if (prefer?.candidates?.length) {
+    const preferSide = prefer.side || sideList[0];
+    const preferIndex = Number(prefer.index) || 0;
+    const key = `${preferSide}-${preferIndex}`;
+    if (preferIndex && !seen.has(key)) {
+      items.push({
+        blade,
+        side: preferSide,
+        index: preferIndex,
+        findingId: prefer.findingId || null,
+        finding: '',
+        cat: null,
+        candidates: prefer.candidates
+      });
+      seen.add(key);
+    }
   }
+
+  REPORT_SLIDES.items = items;
+  let idx = 0;
+  if (prefer?.findingId) {
+    const byFinding = items.findIndex(item => item.findingId === prefer.findingId);
+    if (byFinding >= 0) idx = byFinding;
+  } else if (prefer?.side && prefer?.index) {
+    const byStation = items.findIndex(item => item.side === prefer.side && item.index === Number(prefer.index));
+    if (byStation >= 0) idx = byStation;
+  } else if (sideList.length) {
+    const firstSide = items.findIndex(item => item.side === sideList[0]);
+    if (firstSide >= 0) idx = firstSide;
+  }
+  REPORT_SLIDES.index = items.length ? Math.max(0, Math.min(idx, items.length - 1)) : 0;
+  showReportSlide(REPORT_SLIDES.index, { syncFinding: false });
+}
+
+function showReportSlide(index, opts = {}) {
+  const items = REPORT_SLIDES.items;
+  const rgb = document.getElementById('img-rgb');
+  const empty = document.getElementById('viewer-empty');
+  const label = document.getElementById('report-station-label');
+  const title = document.getElementById('report-viewer-title');
+  const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
+
+  if (!items.length) {
+    if (rgb) {
+      rgb.hidden = true;
+      rgb.removeAttribute('src');
+      rgb.onload = null;
+      rgb.onerror = null;
+    }
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = opts.emptyText || 'No station photo for this selection.';
+    }
+    if (label) label.textContent = 'No image';
+    applyReportZoom();
+    return;
+  }
+
+  REPORT_SLIDES.index = (index + items.length) % items.length;
+  const slide = items[REPORT_SLIDES.index];
+  clearMeasure('report');
+  const pointLabel = 'P' + String(slide.index).padStart(2, '0');
+  if (label) label.textContent = `${slide.side} · ${pointLabel} · ${REPORT_SLIDES.index + 1}/${items.length}`;
+
+  STATE.pocSurface = slide.side;
+  STATE.pocPointIndex = slide.index;
+
+  if (title) {
+    const sideBit = `${slide.side} · ${pointLabel}`;
+    if (slide.finding) title.textContent = `${slide.finding} · ${sideBit} · ${bladeDisplayName(slide.blade, turbine)}`;
+    else title.textContent = `${bladeDisplayName(slide.blade, turbine)} · ${sideBit}`;
+  }
+
+  if (opts.syncFinding !== false && slide.findingId) {
+    STATE.reviewFindingId = slide.findingId;
+    const raw = rawFinding(slide.findingId);
+    if (raw) {
+      const view = findingView(raw);
+      syncReportOverride({ severity: view.cat, type: view.finding });
+    }
+  }
+
+  if (!rgb) return;
+  const photos = slide.candidates || [];
+  if (!photos.length) {
+    rgb.hidden = true;
+    rgb.removeAttribute('src');
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
+    }
+    return;
+  }
+
+  rgb.hidden = false;
+  if (empty) empty.hidden = true;
+  rgb.onload = () => {
+    if (!REPORT_VIEW.userZoom) fitReportImage();
+    else applyReportZoom();
+    syncMeasureLayer('report');
+  };
+  useFirstExistingImage(rgb, photos, () => {
+    rgb.hidden = true;
+    rgb.removeAttribute('src');
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
+    }
+  });
+}
+
+function stepReportSlide(delta) {
+  if (!REPORT_SLIDES.items.length) return;
+  showReportSlide(REPORT_SLIDES.index + delta, { syncFinding: true });
+}
+
+function bindReportViewerControls() {
+  const viewport = document.getElementById('report-viewport');
+  const img = document.getElementById('img-rgb');
+  if (!viewport || !img || viewport.dataset.bound) return;
+
+  document.getElementById('report-zoom-in')?.addEventListener('click', () => zoomIn());
+  document.getElementById('report-zoom-out')?.addEventListener('click', () => zoomOut());
+  document.getElementById('report-zoom-fit')?.addEventListener('click', () => fitReportImage());
+  document.getElementById('report-zoom-100')?.addEventListener('click', () => {
+    REPORT_VIEW.userZoom = true;
+    REPORT_VIEW.scale = 1;
+    REPORT_VIEW.tx = 0;
+    REPORT_VIEW.ty = 0;
+    applyReportZoom();
+  });
+  document.getElementById('report-image-full')?.addEventListener('click', () => {
+    const panel = document.getElementById('report-viewer-panel');
+    const btn = document.getElementById('report-image-full');
+    if (!panel) return;
+    const on = panel.classList.toggle('is-full');
+    if (btn) {
+      btn.textContent = on ? 'Exit' : 'Full';
+      btn.title = on ? 'Exit full screen' : 'Full screen';
+    }
+    if (on) {
+      const req = panel.requestFullscreen?.();
+      if (req && typeof req.catch === 'function') req.catch(() => {});
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    }
+    requestAnimationFrame(() => fitReportImage());
+  });
+
+  document.getElementById('report-slide-prev')?.addEventListener('click', () => stepReportSlide(-1));
+  document.getElementById('report-slide-next')?.addEventListener('click', () => stepReportSlide(1));
+
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    REPORT_VIEW.userZoom = true;
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, Math.max(REPORT_VIEW.min, REPORT_VIEW.scale * factor));
+    applyReportZoom();
+  }, { passive: false });
+
+  viewport.classList.add('pan-on');
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !REPORT_VIEW.pan) return;
+    if (viewport.classList.contains('is-measuring')) return;
+    if (e.target.closest('button, a, input, select')) return;
+    REPORT_VIEW.dragging = true;
+    REPORT_VIEW.userZoom = true;
+    REPORT_VIEW.lx = e.clientX;
+    REPORT_VIEW.ly = e.clientY;
+    try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+    viewport.classList.add('panning');
+    e.preventDefault();
+  });
+  viewport.addEventListener('pointermove', (e) => {
+    if (!REPORT_VIEW.dragging) return;
+    REPORT_VIEW.tx += e.clientX - REPORT_VIEW.lx;
+    REPORT_VIEW.ty += e.clientY - REPORT_VIEW.ly;
+    REPORT_VIEW.lx = e.clientX;
+    REPORT_VIEW.ly = e.clientY;
+    applyReportZoom();
+  });
+  const endPan = (e) => {
+    REPORT_VIEW.dragging = false;
+    viewport.classList.remove('panning');
+    try { viewport.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  viewport.addEventListener('pointerup', endPan);
+  viewport.addEventListener('pointercancel', endPan);
+
+  img.addEventListener('dblclick', () => {
+    if (viewport.classList.contains('is-measuring')) return;
+    if (img.src) openBladeLightbox(img.src);
+  });
+
+  viewport.dataset.bound = '1';
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => {
+      if (!REPORT_VIEW.userZoom) fitReportImage();
+    });
+    ro.observe(viewport);
+  }
+  applyReportZoom();
+}
+
+const MEASURE = {
+  report: { mode: null, draft: [], shapes: [] },
+  asset: { mode: null, draft: [], shapes: [] }
+};
+const MEASURE_NS = 'http://www.w3.org/2000/svg';
+
+function measureIds(which) {
+  return which === 'asset'
+    ? { viewport: 'asset-poc-viewport', svg: 'asset-measure-svg', img: 'asset-poc-annotated', readout: 'asset-zoom-level' }
+    : { viewport: 'report-viewport', svg: 'report-measure-svg', img: 'img-rgb', readout: 'report-measure-readout' };
+}
+
+function measureSvgPoint(svg, event) {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+
+function syncMeasureLayer(which) {
+  const ids = measureIds(which);
+  const img = document.getElementById(ids.img);
+  const svg = document.getElementById(ids.svg);
+  if (!img || !svg || !img.naturalWidth) return;
+  svg.setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+  svg.setAttribute('width', String(img.naturalWidth));
+  svg.setAttribute('height', String(img.naturalHeight));
+  svg.style.width = `${img.naturalWidth}px`;
+  svg.style.height = `${img.naturalHeight}px`;
+  redrawMeasure(which);
+}
+
+function setMeasureMode(which, mode) {
+  const st = MEASURE[which];
+  st.mode = st.mode === mode ? null : mode;
+  st.draft = [];
+  const ids = measureIds(which);
+  document.getElementById(ids.viewport)?.classList.toggle('is-measuring', !!st.mode);
+  const distBtn = document.getElementById(which === 'asset' ? 'asset-measure-dist' : 'report-measure-dist');
+  const areaBtn = document.getElementById(which === 'asset' ? 'asset-measure-area' : 'report-measure-area');
+  distBtn?.classList.toggle('is-on', st.mode === 'dist');
+  areaBtn?.classList.toggle('is-on', st.mode === 'area');
+  const readout = document.getElementById(ids.readout);
+  if (which === 'report' && readout && st.mode) {
+    readout.textContent = st.mode === 'dist' ? 'Click two points' : 'Click polygon, double-click to close';
+  }
+  redrawMeasure(which);
+}
+
+function clearMeasure(which) {
+  MEASURE[which].draft = [];
+  MEASURE[which].shapes = [];
+  redrawMeasure(which);
+  const readout = document.getElementById(measureIds(which).readout);
+  if (which === 'report' && readout) readout.textContent = 'px';
+}
+
+function redrawMeasure(which) {
+  const svg = document.getElementById(measureIds(which).svg);
+  if (!svg) return;
+  svg.replaceChildren();
+  const st = MEASURE[which];
+  const drawShape = (shape, isDraft) => {
+    if (shape.kind === 'dist' && shape.points.length >= 2) {
+      const [a, b] = shape.points;
+      const line = document.createElementNS(MEASURE_NS, 'line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('stroke', '#0FA4AF');
+      line.setAttribute('stroke-width', '3');
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(line);
+      const label = document.createElementNS(MEASURE_NS, 'text');
+      label.setAttribute('x', (a.x + b.x) / 2);
+      label.setAttribute('y', (a.y + b.y) / 2 - 8);
+      label.setAttribute('fill', '#E8F4F6');
+      label.setAttribute('font-size', '22');
+      label.setAttribute('font-weight', '700');
+      label.textContent = `${Math.round(Math.hypot(b.x - a.x, b.y - a.y))} px`;
+      svg.appendChild(label);
+    }
+    if (shape.kind === 'area' && shape.points.length >= 2) {
+      const poly = document.createElementNS(MEASURE_NS, 'polygon');
+      poly.setAttribute('points', shape.points.map(p => `${p.x},${p.y}`).join(' '));
+      poly.setAttribute('fill', 'rgba(15,164,175,0.22)');
+      poly.setAttribute('stroke', '#0FA4AF');
+      poly.setAttribute('stroke-width', '3');
+      poly.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(poly);
+      if (!isDraft && shape.points.length >= 3) {
+        let area = 0;
+        const pts = shape.points;
+        for (let i = 0; i < pts.length; i += 1) {
+          const j = (i + 1) % pts.length;
+          area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+        }
+        area = Math.abs(area) / 2;
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const label = document.createElementNS(MEASURE_NS, 'text');
+        label.setAttribute('x', cx);
+        label.setAttribute('y', cy);
+        label.setAttribute('fill', '#E8F4F6');
+        label.setAttribute('font-size', '22');
+        label.setAttribute('font-weight', '700');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = `${Math.round(area)} px²`;
+        svg.appendChild(label);
+      }
+    }
+    shape.points.forEach(p => {
+      const dot = document.createElementNS(MEASURE_NS, 'circle');
+      dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', '#AFDDE5');
+      svg.appendChild(dot);
+    });
+  };
+  st.shapes.forEach(shape => drawShape(shape, false));
+  if (st.draft.length) drawShape({ kind: st.mode, points: st.draft }, true);
+}
+
+function onMeasureClick(which, event) {
+  const st = MEASURE[which];
+  if (!st.mode) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const svg = document.getElementById(measureIds(which).svg);
+  const p = svg && measureSvgPoint(svg, event);
+  if (!p) return;
+  st.draft.push({ x: p.x, y: p.y });
+  if (st.mode === 'dist' && st.draft.length >= 2) {
+    st.shapes.push({ kind: 'dist', points: st.draft.slice(0, 2) });
+    st.draft = [];
+    const last = st.shapes[st.shapes.length - 1];
+    const len = Math.hypot(last.points[1].x - last.points[0].x, last.points[1].y - last.points[0].y);
+    const readout = document.getElementById(measureIds(which).readout);
+    if (which === 'report' && readout) readout.textContent = `${Math.round(len)} px · uncalibrated`;
+  }
+  redrawMeasure(which);
+}
+
+function onMeasureDblClick(which, event) {
+  const st = MEASURE[which];
+  if (st.mode !== 'area') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (st.draft.length >= 3) {
+    st.shapes.push({ kind: 'area', points: st.draft.slice() });
+    st.draft = [];
+    const readout = document.getElementById(measureIds(which).readout);
+    if (which === 'report' && readout) readout.textContent = 'Area · uncalibrated px²';
+  }
+  redrawMeasure(which);
+}
+
+function reportShareHash() {
+  const slide = REPORT_SLIDES.items[REPORT_SLIDES.index] || {};
+  const t = reportTurbineId();
+  const b = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const s = slide.side || currentReportSide();
+  const p = String(slide.index || STATE.pocPointIndex || 1).padStart(2, '0');
+  return `#report?t=${encodeURIComponent(t)}&b=${encodeURIComponent(b)}&s=${encodeURIComponent(s)}&p=${p}`;
+}
+
+async function copyReportShareLink() {
+  const hash = reportShareHash();
+  const url = `${location.origin}${location.pathname}${hash}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Image link copied for the internal team', 'success');
+  } catch (_) {
+    window.prompt('Copy this image link', url);
+  }
+  history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+}
+
+function applyShareHash() {
+  const raw = (location.hash || '').replace(/^#/, '');
+  if (!raw.startsWith('report')) return false;
+  const qs = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : '';
+  const q = new URLSearchParams(qs);
+  const t = q.get('t');
+  const b = q.get('b');
+  const s = q.get('s');
+  const p = Number(q.get('p'));
+  if (t) {
+    const sel = document.getElementById('report-turbine');
+    if (sel) sel.value = String(t);
+    STATE.selectedTurbineId = reportTurbineId();
+  }
+  if (b) {
+    const bladeSel = document.getElementById('report-blade');
+    if (bladeSel) bladeSel.value = b;
+    STATE.selectedBlade = b;
+    STATE.selectedPart = 'blade-' + b;
+  }
+  if (s) {
+    setReportSide(s);
+    STATE.pocSurface = s;
+  }
+  if (p) STATE.pocPointIndex = p;
+  navigateTo('report');
+  applyReportDefect();
+  const idx = REPORT_SLIDES.items.findIndex(item => (!s || item.side === s) && (!p || item.index === p));
+  if (idx >= 0) showReportSlide(idx, { syncFinding: true });
+  return true;
+}
+
+function bindMeasureAndShare() {
+  const reportVp = document.getElementById('report-viewport');
+  if (reportVp && !reportVp.dataset.measureBound) {
+    reportVp.dataset.measureBound = '1';
+    document.getElementById('report-measure-dist')?.addEventListener('click', () => setMeasureMode('report', 'dist'));
+    document.getElementById('report-measure-area')?.addEventListener('click', () => setMeasureMode('report', 'area'));
+    document.getElementById('report-measure-clear')?.addEventListener('click', () => clearMeasure('report'));
+    document.getElementById('report-share-link')?.addEventListener('click', () => copyReportShareLink());
+    const svg = document.getElementById('report-measure-svg');
+    svg?.addEventListener('click', e => onMeasureClick('report', e));
+    svg?.addEventListener('dblclick', e => onMeasureDblClick('report', e));
+  }
+  const assetVp = document.getElementById('asset-poc-viewport');
+  if (assetVp && !assetVp.dataset.measureBound) {
+    assetVp.dataset.measureBound = '1';
+    document.getElementById('asset-measure-dist')?.addEventListener('click', () => setMeasureMode('asset', 'dist'));
+    document.getElementById('asset-measure-area')?.addEventListener('click', () => setMeasureMode('asset', 'area'));
+    document.getElementById('asset-measure-clear')?.addEventListener('click', () => clearMeasure('asset'));
+    document.getElementById('asset-share-link')?.addEventListener('click', () => copyReportShareLink());
+    const svg = document.getElementById('asset-measure-svg');
+    svg?.addEventListener('click', e => onMeasureClick('asset', e));
+    svg?.addEventListener('dblclick', e => onMeasureDblClick('asset', e));
+  }
+  window.addEventListener('hashchange', () => applyShareHash());
 }
 
 function isG97Turbine(turbine) {
@@ -1158,235 +3643,36 @@ async function loadSideImages(rows, limit, seen) {
 // ══════════════════════════════════════════════════
 // 9. PDF REPORT GENERATION
 // ══════════════════════════════════════════════════
+const STATIC_INSPECTION_REPORT_URL = 'reports/Gamesa_2MW_Wind_Turbine_Inspection_Report.pdf';
+
+function inspectionReportDownloadName() {
+  const turbine = STATE.db?.turbines?.find(t => t.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const site = String(turbine?.site || 'Kayathar').replace(/[^\w\-]+/g, '_');
+  const asset = String(turbine?.assetId || 'Gamesa_G97').replace(/[^\w\-]+/g, '_');
+  const date = new Date().toISOString().slice(0, 10);
+  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${date}.pdf`;
+}
+
 async function generatePDFReport() {
-  const { jsPDF } = window.jspdf || {};
-  if (!jsPDF) { showToast('PDF library not loaded. Check CDN connection.', 'error'); return; }
-
-  showToast('Generating AI inspection report…', 'success');
-  try { await loadBladeFindings(); } catch (_) {}
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const turbine = STATE.db.turbines.find(t => t.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
-  const catalog = reportFindings();
-  const seenPhotos = new Set();
-  const now = new Date().toLocaleString();
-  const W = 210;
-  let y = 20;
-
-  const ensure = (mm) => {
-    if (y + mm > 272) { doc.addPage(); y = 16; }
-  };
-  const sectionBar = (title) => {
-    ensure(16);
-    doc.setFillColor(2, 73, 80);
-    doc.rect(10, y - 6, W - 20, 8, 'F');
-    doc.setFontSize(10);
-    doc.setTextColor(15, 164, 175);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, y);
-    y += 10;
-  };
-
-  // ── Header ───────────────────────────────────
-  doc.setFillColor(0, 49, 53);
-  doc.rect(0, 0, W, 38, 'F');
-  doc.setFontSize(18);
-  doc.setTextColor(15, 164, 175);
-  doc.setFont('helvetica', 'bold');
-  doc.text('REUDE Technologies', 15, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text('AI-Powered Wind Turbine Blade Inspection Platform', 15, 20);
-  doc.setFontSize(13);
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`AI Inspection Report — ${turbine.assetId}`, 15, 30);
-  doc.setFontSize(8);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Generated: ${now}  |  Campaign: ${turbine.campaign}  |  CONFIDENTIAL`, 15, 36);
-
-  y = 50;
-
-  // ── Turbine Details ───────────────────────────
-  doc.setFillColor(2, 73, 80);
-  doc.rect(10, y - 6, W - 20, 8, 'F');
-  doc.setFontSize(10);
-  doc.setTextColor(15, 164, 175);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1. TURBINE OVERVIEW', 14, y);
-  y += 10;
-
-  const assetFields = [
-    ['Turbine ID', turbine.assetId], ['Name', turbine.name], ['Site', turbine.site],
-    ['Location', turbine.location], ['GPS Coordinates', `${turbine.gps.lat}°N, ${turbine.gps.lng}°E`],
-    ['State', turbine.state], ['Manufacturer', turbine.manufacturer], ['Model', turbine.model],
-    ['Rated Power', `${turbine.power} MW`], ['Rotor Diameter', `${turbine.rotorDia} m`],
-    ['Hub Height', `${turbine.hubHeight} m`], ['Commissioning Year', turbine.commYear],
-    ['Health Index', `${turbine.health}%`], ['Status', turbine.status.toUpperCase()],
-    ['Last Inspection', turbine.lastInspection], ['Coverage', `${turbine.inspCoverage}%`]
-  ];
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  let col = 0;
-  assetFields.forEach(([label, value], i) => {
-    const xOff = col === 0 ? 14 : 115;
-    doc.setTextColor(150, 71, 52);
-    doc.setFont('helvetica', 'bold');
-    doc.text(label + ':', xOff, y);
-    doc.setTextColor(60, 60, 60);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(value), xOff + 48, y);
-    col++;
-    if (col === 2) { col = 0; y += 7; }
-    if (y > 270) { doc.addPage(); y = 20; }
-  });
-
-  y += 8;
-  doc.setFontSize(8);
-  doc.setTextColor(80, 80, 80);
-  doc.setFont('helvetica', 'normal');
-  const sideCounts = REPORT_SIDES.map(([code, label]) => {
-    const allSide = rowsForSide(catalog, code);
-    const majorRows = allSide.filter(row => row.cat >= DOT_MIN_CAT);
-    const minorRows = allSide.filter(row => row.cat < DOT_MIN_CAT);
-    const rows = majorRows.length >= 4 ? majorRows : majorRows.concat(minorRows.slice(0, Math.max(0, 4 - majorRows.length)));
-    const dominant = (majorRows[0] ? majorRows.slice() : rows.slice()).sort((a, b) => b.count - a.count)[0];
-    return { code, label, rows, allSide, majorCount: majorRows.length, dominant };
-  });
-  const intro = doc.splitTextToSize('Each side lists major findings. A side with fewer than four major findings also lists minor ones. Photographs are different captures; a repeated file is left out.', W - 28);
-  doc.text(intro, 14, y);
-  y += intro.length * 4 + 4;
-
-  sectionBar('Side summary');
-  const sumCols = [14, 70, 110, 140];
-  doc.setFillColor(0, 49, 53);
-  doc.rect(10, y - 5, W - 20, 8, 'F');
-  doc.setFontSize(7.5);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'bold');
-  ['Side', 'Major findings', 'Stations', 'Dominant condition'].forEach((h, i) => doc.text(h, sumCols[i], y));
-  y += 9;
-  sideCounts.forEach((side, idx) => {
-    ensure(10);
-    doc.setFillColor(...(idx % 2 === 0 ? [248, 252, 253] : [240, 248, 250]));
-    doc.rect(10, y - 5, W - 20, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(60, 60, 60);
-    doc.text(side.code, sumCols[0], y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(String(side.majorCount), sumCols[1], y);
-    doc.text(String(new Set(side.rows.map(r => r.blade + '-' + r.index)).size), sumCols[2], y);
-    const dominant = side.dominant ? doc.splitTextToSize(side.dominant.finding, 60)[0] : 'None at this category';
-    doc.text(dominant, sumCols[3], y);
-    y += 9;
-  });
-  y += 6;
-
-  let sectionNo = 2;
-  for (const side of sideCounts) {
-    sectionBar(`${sectionNo}. ${side.label}`);
-    sectionNo += 1;
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-    doc.setFont('helvetica', 'normal');
-    if (!side.rows.length) {
-      doc.text('No findings recorded on this side.', 14, y);
-      y += 10;
-      continue;
-    }
-    const minorNote = side.majorCount < 4 && side.rows.length > side.majorCount
-      ? ' Minor findings are included because major findings are few.'
-      : '';
-    doc.text(`${side.majorCount} major finding${side.majorCount === 1 ? '' : 's'} on ${side.label}.${minorNote}`, 14, y);
-    y += 8;
-
-    ensure(16);
-    const cols = [14, 32, 52, 78, 98];
-    doc.setFillColor(0, 49, 53);
-    doc.rect(10, y - 5, W - 20, 8, 'F');
-    doc.setFontSize(7.5);
-    doc.setTextColor(175, 221, 229);
-    doc.setFont('helvetica', 'bold');
-    ['Blade', 'Station', 'Category', 'Marks', 'Finding'].forEach((h, i) => doc.text(h, cols[i], y));
-    y += 9;
-    side.rows.forEach((d, idx) => {
-      ensure(10);
-      doc.setFillColor(...(idx % 2 === 0 ? [248, 252, 253] : [240, 248, 250]));
-      doc.rect(10, y - 5, W - 20, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(60, 60, 60);
-      doc.text(String(d.blade), cols[0], y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(d.index ? ('P' + String(d.index).padStart(2, '0')) : '—', cols[1], y);
-      doc.text('CAT ' + d.cat, cols[2], y);
-      doc.text(String(d.count), cols[3], y);
-      doc.text(doc.splitTextToSize(d.finding, 95)[0], cols[4], y);
-      y += 8;
-    });
-    y += 4;
-
-    const shots = await loadSideImages(side.allSide, 2, seenPhotos);
-    if (!shots.length) {
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text('No station photograph is available for this side.', 14, y);
-      y += 8;
-      continue;
-    }
-    let photoCol = 0;
-    let rowH = 0;
-    shots.forEach(shot => {
-      let boxW = 88;
-      let boxH = boxW * shot.height / Math.max(shot.width, 1);
-      if (boxH > 78) {
-        boxH = 78;
-        boxW = boxH * shot.width / Math.max(shot.height, 1);
-      }
-      if (photoCol === 0) ensure(boxH + 16);
-      const x = photoCol === 0 ? 14 : 110;
-      doc.addImage(shot.data, 'JPEG', x, y, boxW, boxH);
-      doc.setFontSize(7);
-      doc.setTextColor(40, 40, 40);
-      doc.text(doc.splitTextToSize(shot.caption, boxW)[0], x, y + boxH + 4);
-      rowH = Math.max(rowH, boxH + 10);
-      if (photoCol === 1) { y += rowH; photoCol = 0; rowH = 0; }
-      else photoCol = 1;
-    });
-    if (photoCol === 1) y += rowH;
-    y += 4;
+  const filename = inspectionReportDownloadName();
+  showToast('Preparing Gamesa G97 inspection report…', 'success');
+  try {
+    const res = await fetch(encodeURI(STATIC_INSPECTION_REPORT_URL));
+    if (!res.ok) throw new Error(`Report HTTP ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 2500);
+    showToast(`Report downloaded: ${filename}`, 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not download the inspection report PDF.', 'error');
   }
-
-  ensure(28);
-  y += 4;
-  doc.setFillColor(0, 49, 53);
-  doc.rect(0, y, W, 28, 'F');
-  y += 8;
-  doc.setFontSize(8);
-  doc.setTextColor(175, 221, 229);
-  doc.setFont('helvetica', 'normal');
-  doc.text('PREPARED BY: REUDE CompliQ AI Inspection', 14, y); y += 6;
-  doc.text(`REPORT DATE: ${now}`, 14, y); y += 6;
-  doc.setTextColor(150, 71, 52);
-  doc.text('Indications from visual RGB review. Validate CAT 2 and above by close-up or NDT before repair.', 14, y);
-
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setTextColor(120, 140, 145);
-    doc.setFont('helvetica', 'normal');
-    doc.text('REUDE Technologies  |  CompliQ  |  AI Inspection Report', 14, 292);
-    doc.text(`Page ${i} of ${pageCount}`, W - 14, 292, { align: 'right' });
-  }
-
-  const filename = `AI_Inspection_Report_${turbine.assetId}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
-  showToast(`AI inspection report saved: ${filename}`, 'success');
 }
 
 // ══════════════════════════════════════════════════
@@ -1395,7 +3681,7 @@ async function generatePDFReport() {
 function populateIngestSelects() {
   const sel = document.getElementById('ig-turbine');
   if (!sel) return;
-  sel.innerHTML = STATE.db.turbines.map(t => `<option value="${t.id}">${t.assetId} — ${t.name}</option>`).join('');
+  sel.innerHTML = STATE.db.turbines.map(t => `<option value="${t.id}">${turbineLabel(t)}</option>`).join('');
 }
 
 function handleIngest(e) {
@@ -1720,7 +4006,7 @@ function populateManualSelects() {
   ['md-turbine', 'mi-turbine'].forEach(id => {
     const sel = document.getElementById(id);
     if (sel) sel.innerHTML = STATE.db.turbines.map(t =>
-      `<option value="${t.id}">${t.assetId} — ${t.name}</option>`).join('');
+      `<option value="${t.id}">${turbineLabel(t)}</option>`).join('');
   });
   // Set today as default date
   const today = new Date().toISOString().slice(0,10);
@@ -1740,9 +4026,31 @@ document.querySelectorAll('.manual-tab').forEach(tab => {
   });
 });
 
+function syncBladeNumberFields() {
+  const count = Math.min(6, Math.max(1, parseInt(document.getElementById('mt-blade-count')?.value, 10) || 3));
+  document.querySelectorAll('[data-blade-slot]').forEach(slot => {
+    const n = Number(slot.dataset.bladeSlot);
+    const show = n <= count;
+    slot.hidden = !show;
+    const input = slot.querySelector('input');
+    if (input && !show) input.value = '';
+  });
+}
+
+function bladeNumbersFromForm() {
+  const count = Math.min(6, Math.max(1, parseInt(document.getElementById('mt-blade-count')?.value, 10) || 3));
+  const blades = [];
+  for (let n = 1; n <= count; n += 1) {
+    const value = document.getElementById(`mt-blade-${n}`)?.value.trim();
+    if (value) blades.push(value);
+  }
+  return { count, blades };
+}
+
 function handleAddTurbine(e) {
   e.preventDefault();
   const gps = document.getElementById('mt-gps').value.split(',');
+  const bladeInfo = bladeNumbersFromForm();
   const newT = {
     id: STATE.db.turbines.length + 1,
     assetId: document.getElementById('mt-id').value,
@@ -1764,11 +4072,14 @@ function handleAddTurbine(e) {
     inspCoverage: 0,
     lastInspection: '—',
     campaign: '—',
-    anomalies: 0, defects: []
+    anomalies: 0, defects: [],
+    bladeCount: bladeInfo.count,
+    blades: bladeInfo.blades
   };
   STATE.db.turbines.push(newT);
   saveDB(STATE.db);
-  addManualRecord('turbine', `${newT.assetId}`, `${newT.site} | ${newT.location}`);
+  const bladeNote = bladeInfo.blades.length ? ` | Blades ${bladeInfo.blades.join(', ')}` : ` | ${bladeInfo.count} blades`;
+  addManualRecord('turbine', `${newT.assetId}`, `${newT.site} | ${newT.location}${bladeNote}`);
   renderMetrics();
   renderFleetGrid();
   renderAssetList();
@@ -1776,6 +4087,7 @@ function handleAddTurbine(e) {
   populateTurbineSelector();
   showToast(`Turbine ${newT.assetId} added to fleet!`, 'success');
   e.target.reset();
+  syncBladeNumberFields();
 }
 
 function handleAddDefect(e) {
@@ -1982,10 +4294,6 @@ function renderHealthChart() {
   const turbines = STATE.db.turbines || [];
   const labels = turbines.map(t => t.assetId);
   const data = turbines.map(t => Number(t.health) || 0);
-  const backgroundColors = turbines.map(t => {
-    const h = Number(t.health) || 0;
-    return h >= 85 ? '#2ECC71' : h >= 65 ? '#F2C94C' : '#EB5757';
-  });
 
   CHARTS.health = new Chart(canvas.getContext('2d'), {
     type: 'bar',
@@ -1994,7 +4302,7 @@ function renderHealthChart() {
       datasets: [{
         label: 'Health Index (%)',
         data,
-        backgroundColor: backgroundColors,
+        backgroundColor: '#0FA4AF',
         borderWidth: 0,
         borderRadius: 5,
         barPercentage: 0.62
@@ -2062,21 +4370,11 @@ function renderDefectPieChart() {
     types[key] = (types[key] || 0) + 1;
   });
 
-  const palette = {
-    Crack: '#EB5757',
-    Delamination: '#F2C94C',
-    Erosion: '#0FA4AF',
-    Lightning: '#BB86FC',
-    Corrosion: '#E15A5F',
-    'Oil Leakage': '#F0A03C',
-    Surface: '#B9D896',
-    'Localized Damage': '#FACD96',
-    Other: '#7EB8C0'
-  };
-  const fallback = ['#0FA4AF', '#AFDDE5', '#964734', '#2ECC71', '#F2C94C', '#EB5757', '#BB86FC', '#28666E'];
+  const tealRamp = ['#226876', '#348088', '#12A0AA', '#4EC4CC', '#7ED3DA'];
+  const shadeOrder = [0, 3, 1, 4, 2];
   const labels = Object.keys(types).sort((a, b) => types[b] - types[a]);
   const data = labels.map(t => types[t]);
-  const backgroundColors = labels.map((t, i) => palette[t] || fallback[i % fallback.length]);
+  const backgroundColors = labels.map((_, i) => tealRamp[shadeOrder[i % shadeOrder.length]]);
 
   CHARTS.defects = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -2085,8 +4383,10 @@ function renderDefectPieChart() {
       datasets: [{
         data,
         backgroundColor: backgroundColors,
-        borderWidth: 2,
-        borderColor: theme.pieBorder,
+        borderWidth: 0,
+        hoverBorderWidth: 0,
+        borderColor: 'transparent',
+        hoverBorderColor: 'transparent',
         hoverOffset: 6
       }]
     },
@@ -2109,8 +4409,8 @@ function renderDefectPieChart() {
               return chart.data.labels.map((label, i) => ({
                 text: `${label}  ${ds.data[i]} (${Math.round(ds.data[i] / total * 100)}%)`,
                 fillStyle: ds.backgroundColor[i],
-                strokeStyle: theme.pieBorder,
-                lineWidth: 1,
+                strokeStyle: ds.backgroundColor[i],
+                lineWidth: 0,
                 hidden: false,
                 index: i
               }));
@@ -2415,7 +4715,7 @@ function processAIQuery(q) {
   }
   if (query.includes('lowest health') || query.includes('worst')) {
     const worst = [...db.turbines].sort((a,b) => a.health - b.health)[0];
-    return `Lowest health: <strong>${worst.assetId} — ${worst.name}</strong><br>Health: ${worst.health}% | Status: ${worst.status.toUpperCase()}<br>Anomalies: ${worst.anomalies}<br>Location: ${worst.location}`;
+    return `Lowest health: <strong>${turbineLabel(worst)}</strong><br>Health: ${worst.health}% | Status: ${worst.status.toUpperCase()}<br>Anomalies: ${worst.anomalies}<br>Location: ${worst.location}`;
   }
   if (query.includes('turbine 3') || query.includes('wtg-003') || query.includes('gujarat')) {
     const t = db.turbines.find(t=>t.assetId==='WTG-003');
@@ -2460,7 +4760,7 @@ function processAIQuery(q) {
   );
   if (matchedT) {
     const defs = db.defects.filter(d => d.assetId === matchedT.id);
-    return `<strong>${matchedT.assetId} — ${matchedT.name}</strong><br>
+    return `<strong>${turbineLabel(matchedT)}</strong><br>
       Health: ${matchedT.health}% | Status: ${matchedT.status.toUpperCase()}<br>
       Location: ${matchedT.location}<br>
       Defects: ${defs.length} | Anomalies: ${matchedT.anomalies}<br>
@@ -2472,16 +4772,14 @@ function processAIQuery(q) {
 // ══════════════════════════════════════════════════
 // 16. NL TOPBAR SEARCH
 // ══════════════════════════════════════════════════
-document.getElementById('nl-btn')?.addEventListener('click', () => {
+document.getElementById('nl-input')?.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
   const q = document.getElementById('nl-input').value.trim();
   if (!q) return;
   document.getElementById('ai-chat-box').classList.add('open');
   document.getElementById('ai-input').value = q;
   document.getElementById('nl-input').value = '';
   setTimeout(sendAIMessage, 100);
-});
-document.getElementById('nl-input')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('nl-btn').click();
 });
 
 // ══════════════════════════════════════════════════
@@ -2533,6 +4831,7 @@ const POC_X_MAX = 39;
 const POC_Y_MIN = -4;
 const POC_Y_MAX = 54;
 const POC_SURFACE_CX = { SS: 6.6, LE: 16, PS: 25.6, TE: 35.2 };
+const G97_REMOTE = 'https://pub-8e9091debbe04bb3a5c42871ef2e7bc8.r2.dev/Kayathar_Gamesa_G97';
 const G97_ROOT = 'INPUT/Kayathar_Gamesa_G97';
 const G97_FOLDERS = {
   A: { SS: 'Blade_A/SS', PS: 'Blade_A/PS', LE: 'Blade_A/LE', TE: 'Blade_A/TE' },
@@ -2630,15 +4929,17 @@ function activeBladeLetter() {
 }
 
 function g97FileNumbers(blade, surface) {
-  /* Blade C SS files in INPUT are named BLADE2, not BLADE3. */
+  /* Blade C suction-side files are stored as BLADE2. Never borrow another blade's file. */
   const primary = (blade === 'C' && surface === 'SS') ? '2' : G97_BLADE_NUM[blade];
-  return [primary, ...['1', '2', '3'].filter(n => n !== primary)];
+  return [primary];
 }
 
 function useFirstExistingImage(img, candidates, onMiss) {
+  if (!img) return;
+  const epoch = STATE.assetEpoch;
   let index = 0;
   const tryNext = () => {
-    if (!img.isConnected) return;
+    if (!img.isConnected || epoch !== STATE.assetEpoch) return;
     if (index >= candidates.length) {
       img.onerror = null;
       if (onMiss) onMiss();
@@ -2678,7 +4979,11 @@ function g97StationCandidates(blade, surface, index) {
       paths.push(`${stem}.jpg`, `${stem}.png`);
     });
   }
-  return paths;
+  const prefix = `${G97_ROOT}/`;
+  return paths.flatMap(path => {
+    const rel = path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    return [`${G97_REMOTE}/${rel}`, path];
+  });
 }
 
 function stationDefect(blade, surface, index) {
@@ -2696,7 +5001,9 @@ const FINDING_SOURCES = [
   { blade: 'A', surface: 'LE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/LE/findings_per_frame_LE.csv' },
   { blade: 'A', surface: 'SS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/SS/findings_per_frame_SS.csv' },
   { blade: 'A', surface: 'TE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/TE/findings_per_frame_TE.csv' },
-  { blade: 'B', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_B/PS/findings_per_frame_B2_PS.csv' }
+  { blade: 'B', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_B/PS/findings_per_frame_B2_PS.csv' },
+  { blade: 'B', surface: 'LE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_B/LE/findings_per_frame_B2_LE.csv' },
+  { blade: 'C', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_C/PS/Blade_C_PS_Findings_per_Frame.csv' }
 ];
 const BLADE_FINDINGS = { ready: false, loading: null, rows: [] };
 
@@ -2707,17 +5014,23 @@ function escHtml(value) {
 }
 
 function parseFindingCsv(text, src) {
-  const lines = text.trim().split(/\r?\n/).slice(1);
+  const lines = text.trim().split(/\r?\n/).filter(line => line.trim());
+  if (lines.length < 2) return [];
+  const header = lines[0].split(',').map(cell => cell.trim().toLowerCase());
+  const col = name => header.indexOf(name);
+  const frameCol = col('frame');
+  const findingCol = col('finding');
+  const catCol = col('cat');
+  const countCol = col('count') >= 0 ? col('count') : col('boxes in frame');
+  if (frameCol < 0 || findingCol < 0 || catCol < 0) return [];
   const out = [];
-  lines.forEach(line => {
-    if (!line.trim()) return;
+  lines.slice(1).forEach(line => {
     const parts = line.split(',');
-    if (parts.length < 4) return;
-    const frame = parts[0].trim();
-    const count = Number(parts[parts.length - 1].trim()) || 1;
-    const cat = Number(parts[parts.length - 2].trim());
-    const finding = parts.slice(1, -2).join(',').trim();
-    if (!Number.isFinite(cat) || cat < 1 || /no defect/i.test(finding)) return;
+    const frame = (parts[frameCol] || '').trim();
+    const finding = (parts[findingCol] || '').trim();
+    const cat = Number((parts[catCol] || '').trim());
+    const count = Number((parts[countCol] || '').trim()) || 1;
+    if (!frame || !finding || !Number.isFinite(cat) || cat < 1 || /no defect/i.test(finding)) return;
     const index = stationIndexFromFrame(frame, src.surface);
     if (!index || index > 20) return;
     const verify = /verify/i.test(finding);
@@ -2753,13 +5066,21 @@ async function loadBladeFindings() {
   BLADE_FINDINGS.loading = (async () => {
     const rows = [];
     for (const src of FINDING_SOURCES) {
-      try {
-        const res = await fetch(encodeURI(src.url));
-        if (!res.ok) continue;
-        rows.push(...parseFindingCsv(await res.text(), src));
-      } catch (err) {
-        console.warn('Station findings unavailable:', src.url, err);
+      const prefix = `${G97_ROOT}/`;
+      const rel = src.url.startsWith(prefix) ? src.url.slice(prefix.length) : '';
+      const candidates = rel ? [`${G97_REMOTE}/${rel}`, src.url] : [src.url];
+      let text = '';
+      for (const candidate of candidates) {
+        try {
+          const res = await fetch(encodeURI(candidate));
+          if (!res.ok) continue;
+          text = await res.text();
+          break;
+        } catch (err) {
+          console.warn('Station findings unavailable:', candidate, err);
+        }
       }
+      if (text) rows.push(...parseFindingCsv(text, src));
     }
     BLADE_FINDINGS.rows = aggregateFindings(rows).sort(compareFindings);
     BLADE_FINDINGS.ready = true;
@@ -2790,10 +5111,10 @@ function findingsForBlade(blade) {
 const REPORT_COLUMNS = [
   ['id', 'Defect ID'],
   ['surface', 'Surface'],
-  ['radial', 'Radial Pos.'],
-  ['dist', 'Dist. from Root'],
   ['location', 'Location'],
   ['type', 'Defect Type'],
+  ['radial', 'Radial Pos.'],
+  ['dist', 'Dist. from Root'],
   ['intensity', 'Intensity'],
   ['size', 'Length / Size'],
   ['priority', 'Priority'],
@@ -2897,10 +5218,7 @@ function showDefectReviewBar() {
   const cat = document.getElementById('defect-review-cat');
   if (cat) cat.value = String(view.cat);
   const name = document.getElementById('defect-review-name');
-  if (name && document.activeElement !== name) {
-    name.value = view.finding;
-    name.placeholder = raw.finding;
-  }
+  if (name && document.activeElement !== name) fillDefectClassSelect(name, view.finding);
 }
 
 function openDefectReview(findingId) {
@@ -2968,9 +5286,11 @@ function openFindingDetails() {
   const metres = pointMetres(view.index, span);
   STATE.pocSurface = view.surface;
   STATE.pocPointIndex = view.index;
-  const point = getSelectedPocPoint(turbine);
   const pointLabel = 'P' + String(view.index).padStart(2, '0');
   STATE.reviewFindingId = raw.id;
+  const photos = g97StationCandidates(view.blade, view.surface, view.index);
+  STATE.selectedPart = 'blade-' + view.blade;
+  STATE.selectedBlade = view.blade;
   STATE.activeDefect = {
     id: `${view.blade}-${view.surface}-${pointLabel}`,
     type: view.finding,
@@ -2993,7 +5313,8 @@ function openFindingDetails() {
     gps: turbine?.gps ? `${turbine.gps.lat}°N, ${turbine.gps.lng}°E` : '',
     findingId: raw.id,
     fromFinding: true,
-    stationImage: (point.stationCandidates && point.stationCandidates[0]) || point.stationImage || ''
+    stationImage: photos[0] || '',
+    stationCandidates: photos
   };
   navigateTo('report');
   renderReport();
@@ -3032,13 +5353,37 @@ function reportTurbineId() {
   return raw || STATE.selectedTurbineId;
 }
 
+function selectedReportSides() {
+  const sides = [...document.querySelectorAll('.side-tab.is-on')].map(btn => btn.dataset.side);
+  return sides.length ? sides : ['PS'];
+}
+
+function currentReportSide() {
+  return selectedReportSides()[0];
+}
+
+function ensureReportSide(side) {
+  const btn = document.querySelector(`.side-tab[data-side="${side}"]`);
+  if (!btn) return;
+  btn.classList.add('is-on');
+  btn.setAttribute('aria-pressed', 'true');
+}
+
+function setReportSide(side) {
+  document.querySelectorAll('.side-tab').forEach(btn => {
+    const on = btn.dataset.side === side;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
 function reportFindingOptions() {
   const blade = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
-  const side = document.getElementById('report-side')?.value || STATE.pocSurface || 'SS';
   const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
   if (!turbine) return [];
   if (isG97Turbine(turbine)) {
-    return findingsForBlade(blade).filter(row => row.surface === side);
+    const sides = selectedReportSides();
+    return findingsForBlade(blade).filter(row => sides.includes(row.surface));
   }
   return (STATE.db.defects || [])
     .filter(d => d.assetId === turbine.id && String(d.blade) === String(blade))
@@ -3056,28 +5401,56 @@ function fillReportDefects(selectId) {
       }).join('')
     : '<option value="">No defects for this selection</option>';
   if (selectId && rows.some(row => row.id === selectId)) sel.value = selectId;
+  else if (rows[0]) sel.value = rows[0].id;
+}
+
+function sideWithFindings(blade, side) {
+  const rows = findingsForBlade(blade);
+  if (rows.some(row => row.surface === side)) return side;
+  return ['PS', 'SS', 'LE', 'TE'].find(name => rows.some(row => row.surface === name)) || side;
+}
+
+function clearReportViewer(blade, sides) {
+  STATE.activeDefect = null;
+  STATE.reviewFindingId = null;
+  const sideList = Array.isArray(sides) ? sides : String(sides || 'PS').split('·').map(s => s.trim()).filter(Boolean);
+  const title = document.getElementById('report-viewer-title');
+  if (title) title.textContent = `${bladeDisplayName(blade)} · ${sideList.join(' · ')}`;
+  rebuildReportSlides(blade, sideList);
+  bindReportViewerControls();
 }
 
 function applyReportDefect() {
-  const id = document.getElementById('report-defect')?.value;
-  if (!id) return;
-  const raw = rawFinding(id);
-  if (raw) {
-    STATE.selectedTurbineId = reportTurbineId();
-    STATE.selectedBlade = raw.blade;
-    STATE.pocSurface = raw.surface;
-    STATE.reviewFindingId = raw.id;
-    openFindingDetails();
+  const bladeNow = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const sides = selectedReportSides();
+  const rows = findingsForBlade(bladeNow).filter(row => sides.includes(row.surface));
+  const currentId = STATE.reviewFindingId || STATE.activeDefect?.findingId;
+  const match = rows.find(row => row.id === currentId) || rows[0];
+  STATE.selectedTurbineId = reportTurbineId();
+  STATE.selectedBlade = bladeNow;
+  STATE.selectedPart = 'blade-' + bladeNow;
+  STATE.pocSurface = match?.surface || sides[0] || 'PS';
+  if (!match) {
+    STATE.reviewFindingId = null;
+    STATE.activeDefect = null;
+    clearReportViewer(bladeNow, sides);
+    syncReportOverride(null);
     return;
   }
-  const demo = STATE.db.defects.find(d => d.id === id);
-  if (!demo) return;
-  STATE.selectedTurbineId = demo.assetId;
-  STATE.selectedBlade = demo.blade;
-  STATE.reviewFindingId = null;
-  STATE.activeDefect = demo;
-  navigateTo('report');
-  renderReport();
+  STATE.reviewFindingId = match.id;
+  openFindingDetails();
+}
+
+function openReportForSelection() {
+  const picker = document.getElementById('report-turbine');
+  if (!picker?.dataset.bound) {
+    if (STATE.activeDefect) renderReport();
+    return;
+  }
+  const blade = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+  const defectBlade = STATE.activeDefect?.blade;
+  if (STATE.activeDefect && (!defectBlade || defectBlade === blade)) renderReport();
+  else applyReportDefect();
 }
 
 function syncReportPicker() {
@@ -3088,9 +5461,8 @@ function syncReportPicker() {
   if (d?.assetId) turbineSel.value = String(d.assetId);
   const raw = d?.findingId ? rawFinding(d.findingId) : null;
   const bladeSel = document.getElementById('report-blade');
-  const sideSel = document.getElementById('report-side');
   if (bladeSel) bladeSel.value = raw?.blade || d?.blade || bladeSel.value;
-  if (sideSel && raw?.surface) sideSel.value = raw.surface;
+  if (raw?.surface) ensureReportSide(raw.surface);
   fillReportDefects(raw?.id || d?.id);
   reportPickerLock = false;
 }
@@ -3100,47 +5472,96 @@ function initReportPicker() {
   if (!turbineSel || turbineSel.dataset.bound) return;
   turbineSel.dataset.bound = '1';
   turbineSel.innerHTML = (STATE.db?.turbines || []).map(t =>
-    `<option value="${t.id}">${escHtml(t.assetId)} — ${escHtml(t.name)}</option>`
+    `<option value="${t.id}">${escHtml(turbineLabel(t))}</option>`
   ).join('');
   if (STATE.selectedTurbineId) turbineSel.value = String(STATE.selectedTurbineId);
+  refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === reportTurbineId()));
   const bladeSel = document.getElementById('report-blade');
-  const sideSel = document.getElementById('report-side');
   if (bladeSel && STATE.selectedBlade) bladeSel.value = STATE.selectedBlade;
-  if (sideSel && STATE.pocSurface) sideSel.value = STATE.pocSurface;
+  setReportSide(STATE.pocSurface || currentReportSide());
+  fillDefectClassSelect(document.getElementById('report-review-name'), '');
   fillReportDefects(STATE.activeDefect?.findingId || STATE.activeDefect?.id);
-  const onFilter = () => {
+  const onFilter = (keepSide) => {
     if (reportPickerLock) return;
     STATE.selectedTurbineId = reportTurbineId();
-    STATE.selectedBlade = bladeSel?.value || STATE.selectedBlade;
-    STATE.pocSurface = sideSel?.value || STATE.pocSurface;
+    refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId));
+    const blade = bladeSel?.value || STATE.selectedBlade || 'A';
+    STATE.selectedBlade = blade;
+    STATE.selectedPart = 'blade-' + blade;
+    if (!keepSide) {
+      const sides = selectedReportSides();
+      const has = sides.some(side => findingsForBlade(blade).some(row => row.surface === side));
+      if (!has) setReportSide(sideWithFindings(blade, sides[0]));
+    }
+    STATE.pocSurface = currentReportSide();
     fillReportDefects();
     applyReportDefect();
   };
-  turbineSel.addEventListener('change', onFilter);
-  bladeSel?.addEventListener('change', onFilter);
-  sideSel?.addEventListener('change', onFilter);
+  turbineSel.addEventListener('change', () => onFilter(false));
+  bladeSel?.addEventListener('change', () => onFilter(false));
+  document.querySelectorAll('.side-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (reportPickerLock) return;
+      const turningOff = btn.classList.contains('is-on');
+      if (turningOff && selectedReportSides().length <= 1) return;
+      btn.classList.toggle('is-on');
+      btn.setAttribute('aria-pressed', btn.classList.contains('is-on') ? 'true' : 'false');
+      onFilter(true);
+    });
+  });
   document.getElementById('report-defect')?.addEventListener('change', () => {
     if (!reportPickerLock) applyReportDefect();
   });
   if (STATE.activeDefect) syncReportPicker();
+  else if (document.getElementById('view-report')?.classList.contains('active')) applyReportDefect();
+}
+
+function clearCompareHost() {
+  const host = document.getElementById('asset-compare-host');
+  if (host) host.replaceChildren();
+}
+
+function parkCompareView() {
+  const host = document.getElementById('asset-compare-host');
+  const compare = document.querySelector('#blade-schematic-default .compare-view');
+  if (!host || !compare) return;
+  host.replaceChildren(compare);
+  updateFindingsSheetMeta();
 }
 
 function initSidebarCollapse() {
-  const btn = document.getElementById('sidebar-collapse');
-  const wrap = document.getElementById('app-wrap');
-  if (!btn || !wrap) return;
-  const apply = (collapsed) => {
-    wrap.classList.toggle('sidebar-collapsed', collapsed);
-    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    localStorage.setItem('compliq_sidebar_collapsed', collapsed ? '1' : '0');
-  };
-  apply(localStorage.getItem('compliq_sidebar_collapsed') === '1');
-  document.querySelectorAll('.sidebar .nav-item').forEach(item => {
-    const label = item.querySelector('span');
-    if (label && !item.title) item.title = label.textContent.trim();
+  document.getElementById('app-wrap')?.classList.remove('sidebar-collapsed');
+}
+
+function initProfileMenu() {
+  const menu = document.getElementById('profile-menu');
+  const btn = document.getElementById('profile-trigger');
+  const panel = document.getElementById('profile-panel');
+  if (!btn || !panel) return;
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  btn.addEventListener('click', () => apply(!wrap.classList.contains('sidebar-collapsed')));
+  document.addEventListener('click', (event) => {
+    if (menu && !menu.contains(event.target)) {
+      panel.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+function initAssetSheet() {
+  const sheet = document.getElementById('asset-bottom-sheet');
+  const btn = document.getElementById('asset-sheet-toggle');
+  if (!sheet || !btn) return;
+  btn.addEventListener('click', () => {
+    const open = sheet.classList.toggle('is-open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    updateFindingsSheetMeta();
+  });
+  updateFindingsSheetMeta();
 }
 
 function findingsForStation(blade, surface, index) {
@@ -3269,9 +5690,10 @@ function defectsForPocPoint(pt) {
   return BLADE_POC.annotations.filter(d => d.image === pt.annotationImage);
 }
 
-async function renderBladeAPocProfile() {
+async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
   await loadBladePocAnnotations();
   await loadBladeFindings();
+  if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch) return;
   const container = document.getElementById('blade-schematic');
   if (!container) return;
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
@@ -3282,7 +5704,7 @@ async function renderBladeAPocProfile() {
 
   container.innerHTML = `
     <div class="asset-bp-wrap">
-      <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · Blade ${activeBladeLetter()} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
+      <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · ${escHtml(bladeDisplayName(activeBladeLetter()))} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
       <div class="asset-bp-profile" id="asset-bp-profile">
         <div class="asset-bp-stage">
           <img src="${BLADE_POC.profileSrc}" alt="Blade profile ${span} m after annotation">
@@ -3319,6 +5741,7 @@ async function renderBladeAPocProfile() {
 }
 
 function bindProfileStageFit(root) {
+  disconnectProfileFit();
   const box = root.querySelector('.asset-bp-profile');
   const stage = root.querySelector('.asset-bp-stage');
   const img = stage?.querySelector('img');
@@ -3327,24 +5750,21 @@ function bindProfileStageFit(root) {
   if (!box || !stage || !img) return;
 
   const fit = () => {
+    if (STATE.activeTab !== 'asset' || !img.isConnected) return;
     if (!img.naturalWidth || !img.naturalHeight) return;
     const ar = img.naturalWidth / img.naturalHeight;
     stage.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
 
-    if (panel && window.innerWidth > 980) {
+    if (panel) {
       const view = document.getElementById('view-asset');
-      const hostW = (workspace && workspace.clientWidth > 40)
-        ? workspace.clientWidth
-        : (view?.clientWidth || 0);
-      const imageH = Math.max(220, box.clientHeight - 22);
+      const hostW = view?.clientWidth || workspace?.clientWidth || 0;
+      const imageH = Math.max(140, box.clientHeight - 8);
       let colW = Math.round(imageH * ar) + 8;
-      const share = window.innerWidth >= 1200 ? 0.4 : 0.42;
-      const maxW = Math.max(200, Math.floor(hostW * share));
+      const share = hostW < 760 ? 0.46 : 0.38;
+      const maxW = Math.max(120, Math.floor(hostW * share));
       if (colW > maxW) colW = maxW;
       const next = colW + 'px';
       if (panel.style.width !== next) panel.style.width = next;
-    } else if (panel) {
-      panel.style.width = '';
     }
 
     const bw = box.clientWidth;
@@ -3358,21 +5778,30 @@ function bindProfileStageFit(root) {
     }
     if (w > bw) w = bw;
     if (h > bh) h = bh;
-    stage.style.width = w + 'px';
-    stage.style.height = h + 'px';
+    const nextW = w + 'px';
+    const nextH = h + 'px';
+    if (stage.style.width !== nextW) stage.style.width = nextW;
+    if (stage.style.height !== nextH) stage.style.height = nextH;
   };
 
-  if (img.complete && img.naturalWidth) fit();
-  else img.addEventListener('load', fit, { once: true });
+  const scheduleFit = () => {
+    if (_profileFitRaf) return;
+    _profileFitRaf = requestAnimationFrame(() => {
+      _profileFitRaf = 0;
+      fit();
+    });
+  };
+
+  if (img.complete && img.naturalWidth) scheduleFit();
+  else img.addEventListener('load', scheduleFit, { once: true });
 
   if (typeof ResizeObserver !== 'undefined') {
-    const ro = new ResizeObserver(() => fit());
-    ro.observe(box);
-    const view = document.getElementById('view-asset');
-    if (view) ro.observe(view);
-    if (workspace) ro.observe(workspace);
+    // Observe only the profile box — observing view/workspace while fit()
+    // mutates panel width caused resize loops that froze navigation.
+    _profileFitRO = new ResizeObserver(scheduleFit);
+    _profileFitRO.observe(box);
   } else {
-    window.addEventListener('resize', fit);
+    window.addEventListener('resize', scheduleFit);
   }
 }
 
@@ -3402,6 +5831,8 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
       annotated.onload = () => {
         fitAnnotatedImage();
         renderPocBboxOverlay(pt, turbine);
+        clearMeasure('asset');
+        syncMeasureLayer('asset');
       };
       const candidates = (pt.stationCandidates && pt.stationCandidates.length)
         ? pt.stationCandidates.slice()
@@ -3612,6 +6043,17 @@ function openBladeLightbox(src) {
 
 const ANNO_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
 
+function stepAssetPocPoint(delta) {
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const surface = STATE.pocSurface || 'PS';
+  const points = buildPocPoints(turbine).filter(p => p.surface === surface && (p.stationImage || p.annotated));
+  if (!points.length) return;
+  let idx = points.findIndex(p => p.pointIndex === STATE.pocPointIndex);
+  if (idx < 0) idx = delta > 0 ? 0 : points.length - 1;
+  else idx = (idx + delta + points.length) % points.length;
+  selectAssetPocPoint(points[idx].surface, points[idx].pointIndex);
+}
+
 function bindAnnotatedViewerControls() {
   const viewport = document.getElementById('asset-poc-viewport');
   const stage = document.getElementById('asset-poc-stage');
@@ -3645,11 +6087,6 @@ function bindAnnotatedViewerControls() {
     ANNO_VIEW.ty = 0;
     apply();
   });
-  document.getElementById('asset-pan')?.addEventListener('click', () => {
-    ANNO_VIEW.pan = !ANNO_VIEW.pan;
-    document.getElementById('asset-pan')?.classList.toggle('is-on', ANNO_VIEW.pan);
-    viewport.classList.toggle('pan-on', ANNO_VIEW.pan);
-  });
   document.getElementById('asset-image-full')?.addEventListener('click', () => {
     const panel = document.querySelector('.asset-poc-preview-panel');
     const btn = document.getElementById('asset-image-full');
@@ -3667,17 +6104,9 @@ function bindAnnotatedViewerControls() {
     }
     requestAnimationFrame(() => fitAnnotatedImage());
   });
-  document.getElementById('asset-image-min')?.addEventListener('click', () => {
-    const ws = document.getElementById('asset-poc-workspace');
-    const btn = document.getElementById('asset-image-min');
-    if (!ws) return;
-    ws.classList.toggle('image-min');
-    const min = ws.classList.contains('image-min');
-    if (btn) {
-      btn.textContent = min ? 'Show' : 'Min';
-      btn.title = min ? 'Show image' : 'Minimize image';
-    }
-  });
+
+  document.getElementById('asset-poc-prev')?.addEventListener('click', () => stepAssetPocPoint(-1));
+  document.getElementById('asset-poc-next')?.addEventListener('click', () => stepAssetPocPoint(1));
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -3690,6 +6119,7 @@ function bindAnnotatedViewerControls() {
   viewport.classList.add('pan-on');
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !ANNO_VIEW.pan) return;
+    if (viewport.classList.contains('is-measuring')) return;
     if (e.target.closest('button, a, input, select, .asset-poc-defect-callout')) return;
     ANNO_VIEW.dragging = true;
     ANNO_VIEW.userZoom = true;
@@ -3715,7 +6145,10 @@ function bindAnnotatedViewerControls() {
   viewport.addEventListener('pointerup', endPan);
   viewport.addEventListener('pointercancel', endPan);
 
-  img.addEventListener('dblclick', () => openBladeLightbox(img.src));
+  img.addEventListener('dblclick', () => {
+    if (viewport.classList.contains('is-measuring')) return;
+    openBladeLightbox(img.src);
+  });
 
   viewport.dataset.bound = '1';
   if (typeof ResizeObserver !== 'undefined') {
@@ -3753,18 +6186,27 @@ function fitAnnotatedImage() {
 // ══════════════════════════════════════════════════
 function initApp() {
   STATE.db = loadDB();
+  initFleetToolbar();
   initBgCanvas();
   setupNav();
+  document.getElementById('asset-back-overview')?.addEventListener('click', () => openAssetOverview());
   renderMetrics();
   renderFleetGrid();
   renderAssetList();
   renderNotifications();
   loadBladePocAnnotations();
   initSidebarCollapse();
+  initProfileMenu();
+  initAssetSheet();
   initDefectReview();
+  bindReportViewerControls();
+  bindMeasureAndShare();
 
   // Start MQTT simulation
-  loadBladeFindings().then(() => initReportPicker());
+  loadBladeFindings().then(() => {
+    initReportPicker();
+    applyShareHash();
+  });
   setInterval(() => {
     // Randomly fluctuate wind speeds
     STATE.db.turbines.forEach(t => {
@@ -3779,6 +6221,8 @@ function initApp() {
 window.addEventListener('DOMContentLoaded', () => {
   checkAuth();
   initTheme();
+  bindSeverityAction('ig-sev', 'ig-action');
+  bindSeverityAction('md-sev', 'md-action');
 });
 
 // ── CSV / EXCEL BULK UPLOAD ────────────────────
@@ -3805,7 +6249,11 @@ function handleCSVUpload(input, context) {
         const match = STATE.db?.turbines?.find(t => t.assetId.toLowerCase() === (first.turbine_id||first.turbine||'').toLowerCase());
         if (match && sel) sel.value = match.id;
       }
-      if (first.defect_type || first.type) document.getElementById('ig-defect') && (document.getElementById('ig-defect').value = first.defect_type||first.type||'');
+      if (first.defect_type || first.type) {
+        const defectSel = document.getElementById('ig-defect');
+        const rawType = first.defect_type || first.type || '';
+        if (defectSel) defectSel.value = matchDefectClass(rawType)?.name || rawType;
+      }
       if (first.severity) document.getElementById('ig-sev') && (document.getElementById('ig-sev').value = first.severity||3);
       if (first.confidence) document.getElementById('ig-conf') && (document.getElementById('ig-conf').value = parseInt(first.confidence)||85);
       if (first.dist || first.distance) document.getElementById('ig-dist') && (document.getElementById('ig-dist').value = first.dist||first.distance||34);
@@ -3823,6 +6271,16 @@ function handleCSVUpload(input, context) {
         document.getElementById('mt-gps') && (document.getElementById('mt-gps').value = row.gps||`${gps[0]},${gps[1]}`||'');
         document.getElementById('mt-rotor') && (document.getElementById('mt-rotor').value = row.rotor_dia||row.rotor||126);
         document.getElementById('mt-hub') && (document.getElementById('mt-hub').value = row.hub_height||row.hub||90);
+        if (document.getElementById('mt-blade-count')) {
+          document.getElementById('mt-blade-count').value = row.blade_count || row.blades_count || row.number_of_blades || 3;
+          syncBladeNumberFields();
+          const listed = String(row.blade_numbers || row.blades || '').split(/[|;]/).map(part => part.trim()).filter(Boolean);
+          ['a', 'b', 'c', 'd', 'e', 'f'].forEach((letter, index) => {
+            const input = document.getElementById(`mt-blade-${index + 1}`);
+            if (!input) return;
+            input.value = row[`blade_${letter}`] || row[`blade_${letter}_number`] || listed[index] || '';
+          });
+        }
         document.getElementById('mt-power') && (document.getElementById('mt-power').value = row.rated_power||row.power||2.5);
         document.getElementById('mt-mfr') && (document.getElementById('mt-mfr').value = row.manufacturer||row.mfr||'Vestas');
         document.getElementById('mt-model') && (document.getElementById('mt-model').value = row.model||'');
@@ -3850,7 +6308,7 @@ function initTheme() {
 
   const btn = document.getElementById('theme-toggle-dash');
   if (btn) {
-    btn.textContent = saved === 'light' ? '🌙' : '☀️';
+    btn.textContent = saved === 'light' ? 'Dark mode' : 'Light mode';
     btn.setAttribute('aria-label', saved === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
     btn.title = saved === 'light' ? 'Dark mode' : 'Light mode';
     btn.addEventListener('click', () => {
@@ -3858,7 +6316,7 @@ function initTheme() {
       const next = current === 'light' ? 'dark' : 'light';
       localStorage.setItem('site_theme', next);
       applyDashTheme(next);
-      btn.textContent = next === 'light' ? '🌙' : '☀️';
+      btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
       btn.setAttribute('aria-label', next === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
       btn.title = next === 'light' ? 'Dark mode' : 'Light mode';
     });
@@ -3870,6 +6328,7 @@ function initTheme() {
     resizeTimer = setTimeout(() => {
       const analytics = document.getElementById('view-analytics');
       if (analytics?.classList.contains('active')) renderCharts();
+      invalidateFleetMap();
     }, 180);
   });
 }
@@ -3883,6 +6342,7 @@ function applyDashTheme(theme) {
   if (analytics?.classList.contains('active') || (CHARTS.health || CHARTS.defects)) {
     renderCharts();
   }
+  syncFleetMapTheme();
 }
 
 function goHome() {
