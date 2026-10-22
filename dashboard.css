@@ -2234,11 +2234,15 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   top: 10px;
   right: 12px;
   z-index: 6;
-  border: 1px solid rgba(15, 164, 175, 0.35);
-  background: rgba(7, 20, 26, 0.88);
-  color: #e8f4f6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(15, 164, 175, 0.45);
+  background: #fff;
+  color: #0A7A84;
   border-radius: 8px;
   padding: 12px 18px;
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.2;
@@ -2247,7 +2251,8 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 }
 .asset-back-overview:hover {
   background: #0FA4AF;
-  color: #04181c;
+  border-color: #0FA4AF;
+  color: #003135;
 }
 .asset-back-overview[hidden] {
   display: none !important;
@@ -2257,8 +2262,8 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
 }
 [data-theme="light"] .asset-back-overview {
   background: #fff;
-  color: #063235;
-  border-color: rgba(2, 73, 80, 0.16);
+  color: #0A7A84;
+  border-color: rgba(15, 164, 175, 0.45);
 }
 #view-asset.view.active.poc-layout {
   display: flex;
@@ -2703,9 +2708,9 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   z-index: 3;
 }
 .measure-readout {
-  background: rgba(7, 20, 26, 0.88);
-  color: #e8f4f6;
-  border: 1px solid rgba(175, 221, 229, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+  color: #063235;
+  border: 1px solid rgba(2, 73, 80, 0.14);
   border-radius: 10px;
   padding: 7px 10px;
   font-size: 0.78rem;
@@ -2714,6 +2719,10 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   line-height: 1.3;
   pointer-events: none;
   z-index: 7;
+  box-shadow: 0 4px 14px rgba(2, 73, 80, 0.12);
+}
+.measure-readout[hidden] {
+  display: none !important;
 }
 .report-stage {
   position: absolute;
@@ -3085,6 +3094,12 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   stroke: var(--finding, #0FA4AF);
   stroke-width: 8;
 }
+.asset-poc-viewport.is-measuring .asset-poc-bbox-overlay,
+.asset-poc-viewport.is-measuring .bbox-hit,
+.asset-poc-viewport.is-measuring .bbox-all {
+  pointer-events: none !important;
+  cursor: inherit;
+}
 .asset-poc-bbox-overlay.isolating {
   pointer-events: none;
 }
@@ -3269,9 +3284,16 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   stroke: var(--bp-outline);
   stroke-width: 0.12;
   cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .asset-bp-svg .asset-bp-hotspot:hover {
   stroke: #7fd4db;
+}
+.asset-bp-svg .asset-bp-hotspot:focus,
+.asset-bp-svg .asset-bp-hotspot:focus-visible,
+.asset-bp-svg .asset-bp-hotspot.active {
+  outline: none;
 }
 .asset-bp-svg .asset-bp-hotspot.has-finding {
   fill: var(--finding, #3b82f6);

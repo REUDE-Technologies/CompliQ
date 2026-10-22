@@ -3468,7 +3468,11 @@ function measurePolygonM2(which, pts) {
 
 function setMeasureReadout(which, text) {
   const el = document.getElementById(measureIds(which).readout);
-  if (el) el.textContent = text || 'mm';
+  if (!el) return;
+  const t = String(text || '').trim();
+  const idle = !t || t === 'mm' || t === 'px';
+  el.hidden = idle;
+  el.textContent = idle ? '' : t;
 }
 
 function measureImagePoint(which, event) {
@@ -3526,6 +3530,7 @@ function setMeasureMode(which, mode) {
   if (st.mode === 'dist') setMeasureReadout(which, 'Dist · click two points');
   else if (st.mode === 'area') setMeasureReadout(which, 'Area · click polygon, double-click to close');
   else setMeasureReadout(which, 'mm');
+  if (which === 'asset' && st.mode) hideDefectPopup();
   redrawMeasure(which);
 }
 
@@ -6216,7 +6221,7 @@ function bladeProfileSvgMarkup(span, points, turbine) {
     const title = `${p.surface} ${p.point} · ${formatRadial(p, turbine)}${p.defectLabel ? ' · ' + p.defectLabel : ''}`;
     return `<circle class="asset-bp-hotspot${p.flagged ? ' has-finding' : ''}${on ? ' active' : ''}"
       data-surface="${p.surface}" data-point="${p.pointIndex}"
-      cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r="${p.flagged ? '0.78' : '0.58'}"
+      cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r="${on ? '0.68' : '0.58'}"
       style="${p.flagged ? '--finding:' + p.color : ''}"
       role="button" tabindex="0" aria-label="${escHtml(title)}">
       <title>${escHtml(title)}</title>
@@ -6239,7 +6244,7 @@ function bladeProfileSvgMarkup(span, points, turbine) {
 function bladeRulerCursorMarkup(pt) {
   const s = pocToSvg(BLADE_PROFILE_DRAW.rulerX, pt.metres);
   const lab = pocToSvg(BLADE_PROFILE_DRAW.rulerX - 0.7, pt.metres);
-  const r = pt.flagged ? 0.78 : 0.58;
+  const r = 0.58;
   const len = Number(pt.metres).toFixed(1);
   return `<g class="bp-ruler-cursor-g">
     <circle class="bp-ruler-cursor" cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r="${r}"/>
@@ -6262,7 +6267,7 @@ function syncBladeRulerCursor(pt) {
   if (circle) {
     circle.setAttribute('cx', s.x.toFixed(2));
     circle.setAttribute('cy', s.y.toFixed(2));
-    circle.setAttribute('r', pt.flagged ? '0.78' : '0.58');
+    circle.setAttribute('r', '0.58');
   }
   if (text) {
     text.setAttribute('x', lab.x.toFixed(2));
@@ -6389,7 +6394,10 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
   const pt = getSelectedPocPoint(turbine);
 
   document.querySelectorAll('.asset-bp-hotspot').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.surface === pt.surface && Number(btn.dataset.point) === pt.pointIndex);
+    const on = btn.dataset.surface === pt.surface && Number(btn.dataset.point) === pt.pointIndex;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('r', on ? '0.68' : '0.58');
+    if (on && document.activeElement === btn) btn.blur();
   });
   syncBladeRulerCursor(pt);
 
@@ -6532,6 +6540,7 @@ function bindPocBboxClicks() {
   if (!svg || svg.dataset.hitBound) return;
   svg.dataset.hitBound = '1';
   svg.addEventListener('pointerdown', (e) => {
+    if (document.getElementById('asset-poc-viewport')?.classList.contains('is-measuring')) return;
     if (e.target.closest('.bbox-hit')) e.stopPropagation();
   });
   svg.addEventListener('click', (e) => {

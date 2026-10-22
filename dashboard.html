@@ -23,7 +23,7 @@
   }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-  <link rel="stylesheet" href="dashboard.css?v=avatarR1">
+  <link rel="stylesheet" href="dashboard.css?v=hotspot2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -282,7 +282,7 @@
                   <button type="button" class="asset-zoom-btn" id="asset-measure-area" title="Area (mm²)" hidden>Area</button>
                 </div>
                 <span class="asset-zoom-level" id="asset-zoom-level" hidden>100%</span>
-                <span class="measure-readout" id="asset-measure-readout">mm</span>
+                <span class="measure-readout" id="asset-measure-readout" hidden></span>
               </div>
             </div>
           </div>
@@ -437,12 +437,12 @@
                     <button type="button" class="asset-zoom-btn" id="report-zoom-fit" title="Fit to view">Fit</button>
                     <button type="button" class="asset-zoom-btn" id="report-image-full" title="Full screen">Full</button>
                     <button type="button" class="asset-zoom-btn" id="report-measure-dist" title="Distance (mm)">Dist</button>
-                    <button type="button" class="asset-zoom-btn" id="report-measure-area" title="Area (mm²)">Area</button>
+                    <button type="button" class="asset-zoom-btn" id="report-measure-area" title="Area (mm²)" hidden>Area</button>
                     <button type="button" class="asset-zoom-btn" id="report-measure-clear" title="Clear measurements">Clr</button>
                   </div>
                 </div>
                 <span class="asset-zoom-level" id="report-zoom-level">100%</span>
-                <span class="measure-readout" id="report-measure-readout">px</span>
+                <span class="measure-readout" id="report-measure-readout" hidden></span>
               </div>
             </div>
           </div>
@@ -771,7 +771,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="dashboard.js?v=avatarR1"></script>
+<script src="dashboard.js?v=hotspot2"></script>
 </body>
 </html>
 
