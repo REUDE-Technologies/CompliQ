@@ -23,7 +23,7 @@
   }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-  <link rel="stylesheet" href="dashboard.css?v=fleetCap3">
+  <link rel="stylesheet" href="dashboard.css?v=fleetClear1">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -58,8 +58,8 @@
         <img src="images/reude-logo.png" alt="Reude Technologies">
       </a>
       <div id="page-heading" hidden>
-        <h2 id="page-title">Fleet Overview</h2>
-        <p id="page-sub">Real-time monitoring of all turbine assets</p>
+        <h2 id="page-title">Analytics</h2>
+        <p id="page-sub">Fleet performance trends & defect analysis charts</p>
       </div>
     </div>
     <div class="topbar-right">
@@ -101,8 +101,8 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <nav class="sidebar-nav">
-      <button class="nav-item" data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
-      <button class="nav-item active" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet</span></button>
+      <button class="nav-item active" data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
+      <button class="nav-item" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet</span></button>
       <button class="nav-item" data-tab="asset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Asset</span></button>
       <button class="nav-item" data-tab="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Report</span></button>
       <button class="nav-item is-unavailable" data-tab="ingest" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
@@ -116,7 +116,7 @@
     <!-- ==========================================
          VIEW: FLEET OVERVIEW
     =========================================== -->
-    <section class="view active" id="view-fleet">
+    <section class="view" id="view-fleet">
       <div class="metrics-row" hidden>
         <div class="metric-card" id="metric-coverage" hidden>
           <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
@@ -255,7 +255,6 @@
                 <svg class="asset-poc-bbox-overlay" id="asset-poc-bbox-overlay" aria-hidden="true"></svg>
                 <svg class="measure-overlay" id="asset-measure-svg" aria-hidden="true"></svg>
               </div>
-              <div class="asset-poc-defect-callout" id="asset-poc-defect-callout" hidden></div>
               <div class="asset-poc-slide-row">
                 <button type="button" class="asset-poc-slide" id="asset-poc-prev" aria-label="Previous station image">&lt;</button>
                 <button type="button" class="asset-poc-slide" id="asset-poc-next" aria-label="Next station image">&gt;</button>
@@ -358,51 +357,54 @@
          VIEW: REPORT VIEWER
     =========================================== -->
     <section class="view" id="view-report">
-      <div class="report-picker" id="report-picker">
-        <label>Turbine
-          <select id="report-turbine" class="styled-select"></select>
-        </label>
-        <label>Blade
-          <select id="report-blade" class="styled-select">
-            <option value="A">Blade A</option>
-            <option value="B">Blade B</option>
-            <option value="C">Blade C</option>
-          </select>
-        </label>
-        <div class="side-tabs" role="group" aria-label="Blade side">
-          <span class="side-tabs-label">Side</span>
-          <div class="side-tabs-row">
-            <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
-            <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
-            <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
-            <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
+      <div class="report-workspace">
+        <aside class="panel report-settings" id="report-picker">
+          <div class="panel-header"><h3>Inspection settings</h3></div>
+          <div class="panel-body report-settings-body">
+            <label>Turbine
+              <select id="report-turbine" class="styled-select"></select>
+            </label>
+            <label>Blade
+              <select id="report-blade" class="styled-select">
+                <option value="A">Blade A</option>
+                <option value="B">Blade B</option>
+                <option value="C">Blade C</option>
+              </select>
+            </label>
+            <div class="side-tabs" role="group" aria-label="Blade side">
+              <span class="side-tabs-label">Side</span>
+              <div class="side-tabs-row">
+                <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
+                <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
+                <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
+                <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
+              </div>
+            </div>
+            <div class="report-override-field" id="report-override-field">
+              <label>Category
+                <select id="report-review-cat" class="styled-select">
+                  <option value="1">CAT 1 – Cosmetic</option>
+                  <option value="2">CAT 2 – Minor</option>
+                  <option value="3">CAT 3 – Moderate</option>
+                  <option value="4">CAT 4 – Serious</option>
+                  <option value="5">CAT 5 – Critical</option>
+                </select>
+              </label>
+              <label>Defect class
+                <select id="report-review-name" class="styled-select"></select>
+              </label>
+            </div>
+            <div class="report-override-actions">
+              <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
+              <button type="button" class="ghost-btn report-reset-btn" onclick="resetDefectOverride()">Reset</button>
+              <button type="button" class="teal-btn report-download-btn" onclick="generatePDFReport()">Download report</button>
+            </div>
           </div>
-        </div>
-        <div class="report-override-field" id="report-override-field">
-          <label>Category
-            <select id="report-review-cat" class="styled-select">
-              <option value="1">CAT 1 – Cosmetic</option>
-              <option value="2">CAT 2 – Minor</option>
-              <option value="3">CAT 3 – Moderate</option>
-              <option value="4">CAT 4 – Serious</option>
-              <option value="5">CAT 5 – Critical</option>
-            </select>
-          </label>
-          <label>Defect class
-            <select id="report-review-name" class="styled-select"></select>
-          </label>
-          <div class="report-override-actions">
-            <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-            <button type="button" class="ghost-btn report-reset-btn" onclick="resetDefectOverride()">Reset</button>
-          </div>
-        </div>
-      </div>
-      <div class="report-layout">
-        <div class="panel flex-3" id="report-viewer-panel">
+        </aside>
+        <div class="panel report-photo-panel" id="report-viewer-panel">
           <div class="panel-header report-viewer-header">
             <h3 id="report-viewer-title">Inspection photo</h3>
             <button type="button" class="ghost-btn" id="report-share-link" title="Copy a link to this station photo" hidden>Copy image link</button>
-            <button type="button" class="teal-btn" onclick="generatePDFReport()">Download report</button>
           </div>
           <div class="panel-body viewer-body">
             <div class="report-viewport" id="report-viewport">
@@ -641,7 +643,7 @@
     <!-- ==========================================
          VIEW: ANALYTICS
     =========================================== -->
-    <section class="view" id="view-analytics">
+    <section class="view active" id="view-analytics">
       <div class="metrics-row analytics-metrics">
         <div class="metric-card">
           <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
@@ -669,9 +671,13 @@
         </div>
       </div>
       <div class="analytics-summary" id="analytics-summary" hidden></div>
+      <div class="analytics-filter-bar" id="analytics-filter-bar" hidden>
+        <span class="analytics-filter-text">Showing linked data for <strong id="analytics-filter-name"></strong></span>
+        <button type="button" class="analytics-filter-clear" id="analytics-clear-filter">Show all turbines</button>
+      </div>
       <div class="analytics-grid">
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3>Fleet Health by Turbine</h3></div>
+          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-hint">Click a turbine to link the other charts</span></div>
           <div class="panel-body chart-body">
             <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
           </div>
@@ -702,12 +708,8 @@
 
   <footer class="dashboard-footer">
     <div class="footer-content">
-      <div class="footer-brand">
-        <span class="footer-tagline">Powered by <span class="footer-reude">REUDE</span></span>
-      </div>
-      <div class="footer-contact">
-        <a href="mailto:cmo_ira@reude.tech" class="footer-link">Contact support: cmo_ira@reude.tech</a>
-      </div>
+      <p class="footer-copy">© 2026 Reude Technologies</p>
+      <a href="mailto:cmo_ira@reude.tech" class="footer-link">Contact support: cmo_ira@reude.tech</a>
     </div>
   </footer>
 </div><!-- /#app-wrap -->
@@ -757,7 +759,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="dashboard.js?v=fleetCap3"></script>
+<script src="dashboard.js?v=fleetClear1"></script>
 </body>
 </html>
 

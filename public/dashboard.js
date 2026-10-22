@@ -115,7 +115,7 @@ const DEFAULT_TURBINES = [
   {
     id: 1, assetId: 'WTG-001', name: 'WTG-001-Tamil Nadu - Kayathar - Gamesa G97',
     site: 'Kayathar', state: 'Tamil Nadu',
-    gps: { lat: 8.3833, lng: 77.3292 }, location: 'Kayathar, Tamil Nadu',
+    gps: { lat: 8.945, lng: 77.723 }, location: 'Kayathar, Tamil Nadu',
     status: 'warning', health: 78, rotorDia: 97, bladeLength: 48.5, hubHeight: 90, power: 2.0,
     manufacturer: 'Siemens Gamesa', model: 'Gamesa G97 2 MW', commYear: 2018,
     windSpeed: 11.2, rpm: 14.5, inspCoverage: 100,
@@ -125,7 +125,7 @@ const DEFAULT_TURBINES = [
   {
     id: 2, assetId: 'WTG-002', name: 'Rajasthan Zephyr',
     site: 'Jaisalmer Wind Park', state: 'Rajasthan',
-    gps: { lat: 26.9157, lng: 70.9083 }, location: 'Jaisalmer, Rajasthan',
+    gps: { lat: 26.9456, lng: 70.8926 }, location: 'Jaisalmer, Rajasthan',
     status: 'warning', health: 71, rotorDia: 140, hubHeight: 110, power: 3.6,
     manufacturer: 'Siemens Gamesa', model: 'SG 3.4-132', commYear: 2020,
     windSpeed: 9.8, rpm: 12.3, inspCoverage: 87,
@@ -135,7 +135,7 @@ const DEFAULT_TURBINES = [
   {
     id: 3, assetId: 'WTG-003', name: 'Gujarat Cyclone',
     site: 'Kutch Wind Energy Zone', state: 'Gujarat',
-    gps: { lat: 23.2420, lng: 69.6669 }, location: 'Kutch District, Gujarat',
+    gps: { lat: 23.334, lng: 70.637 }, location: 'Kutch District, Gujarat',
     status: 'critical', health: 48, rotorDia: 150, hubHeight: 120, power: 4.2,
     manufacturer: 'GE Renewable Energy', model: 'GE 4.0-150', commYear: 2019,
     windSpeed: 14.6, rpm: 10.9, inspCoverage: 94,
@@ -145,7 +145,7 @@ const DEFAULT_TURBINES = [
   {
     id: 4, assetId: 'WTG-004', name: 'Karnataka Sierra',
     site: 'Chitradurga Wind Power Project', state: 'Karnataka',
-    gps: { lat: 14.2251, lng: 76.3981 }, location: 'Chitradurga, Karnataka',
+    gps: { lat: 14.216, lng: 76.428 }, location: 'Chitradurga, Karnataka',
     status: 'normal', health: 89, rotorDia: 120, hubHeight: 85, power: 2.1,
     manufacturer: 'Suzlon', model: 'S111-2.1 MW', commYear: 2022,
     windSpeed: 8.7, rpm: 16.2, inspCoverage: 100,
@@ -155,7 +155,7 @@ const DEFAULT_TURBINES = [
   {
     id: 5, assetId: 'WTG-005', name: 'Andhra Coast',
     site: 'Ramayapatnam Offshore Wind', state: 'Andhra Pradesh',
-    gps: { lat: 15.5200, lng: 80.0860 }, location: 'Bay of Bengal, Prakasam Dist, AP',
+    gps: { lat: 15.0192, lng: 80.08 }, location: 'Bay of Bengal, Prakasam Dist, AP',
     status: 'warning', health: 74, rotorDia: 164, hubHeight: 130, power: 5.0,
     manufacturer: 'Vestas', model: 'V164-5.0 MW', commYear: 2023,
     windSpeed: 16.3, rpm: 9.2, inspCoverage: 92,
@@ -165,7 +165,7 @@ const DEFAULT_TURBINES = [
   {
     id: 6, assetId: 'WTG-006', name: 'Maharashtra Ridge',
     site: 'Satara Wind Energy Project', state: 'Maharashtra',
-    gps: { lat: 17.6805, lng: 73.9285 }, location: 'Satara District, Maharashtra',
+    gps: { lat: 17.4498, lng: 73.8322 }, location: 'Satara District, Maharashtra',
     status: 'normal', health: 96, rotorDia: 115, hubHeight: 80, power: 2.0,
     manufacturer: 'Inox Wind', model: 'DF100-2.0 MW', commYear: 2023,
     windSpeed: 10.1, rpm: 17.0, inspCoverage: 100,
@@ -175,18 +175,18 @@ const DEFAULT_TURBINES = [
 ];
 
 const DEFAULT_DEFECTS = [
-  { id: 'DEF-001', assetId: 1, blade: 'A', dist: 11.2, type: 'Corrosion', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Close-up confirmation of collar / hub interface staining', status: 'Pending', method: 'Drone RGB', gps: '8.3833, 77.3294', campaign: 'REU_WT_IR_003_2026', inspDate: '2026-04-12', notes: 'PS root/hub corrosion banding on Blade 5297.', radialPos: '11.2 m (23%)', intensity: 'S4 Major', location: 'PS · Root / Hub', size: '14×42% frame' },
-  { id: 'DEF-002', assetId: 2, blade: 'B', dist: 52, type: 'Delamination', confidence: 0.94, severity: 4, priority: 'HIGH', action: 'Dispatch maintenance crew within 14 days', status: 'Dispatched', method: 'Thermal Imaging', gps: '26.9157, 70.9085', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Subsurface delamination confirmed via thermal. ~420cm² affected area.' },
-  { id: 'DEF-003', assetId: 2, blade: 'A', dist: 18, type: 'Erosion', confidence: 0.88, severity: 2, priority: 'LOW', action: 'Apply leading edge protection coating at next maintenance window', status: 'Pending', method: 'Drone RGB', gps: '26.9160, 70.9080', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Stage 2 leading edge erosion. Standard wear for age.' },
-  { id: 'DEF-004', assetId: 2, blade: 'C', dist: 67, type: 'Crack', confidence: 0.79, severity: 3, priority: 'MEDIUM', action: 'Acoustic NDT validation within 21 days', status: 'Pending', method: 'Drone RGB', gps: '26.9155, 70.9090', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Possible crack detected near tip. Low confidence — acoustic NDT recommended.' },
-  { id: 'DEF-005', assetId: 3, blade: 'A', dist: 72, type: 'Lightning', confidence: 0.98, severity: 5, priority: 'CRITICAL', action: 'IMMEDIATE HALT — emergency structural assessment required', status: 'Pending', method: 'Drone RGB + Thermal', gps: '23.2420, 69.6671', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Lightning strike at tip — carbon fibre breach. Catastrophic failure risk if unattended.' },
-  { id: 'DEF-006', assetId: 3, blade: 'B', dist: 45, type: 'Delamination', confidence: 0.96, severity: 5, priority: 'CRITICAL', action: 'Immediate maintenance dispatch and turbine shutdown', status: 'Pending', method: 'Thermal Imaging', gps: '23.2422, 69.6669', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Severe leading edge delamination. 1.2m span affected. Shutdown strongly advised.' },
-  { id: 'DEF-007', assetId: 3, blade: 'C', dist: 30, type: 'Crack', confidence: 0.93, severity: 4, priority: 'HIGH', action: 'Dispatch repair team within 7 days', status: 'Dispatched', method: 'Acoustic NDT', gps: '23.2418, 69.6668', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Transverse crack at 30m. Penetration ~4mm confirmed by acoustic NDT.' },
-  { id: 'DEF-008', assetId: 3, blade: 'A', dist: 15, type: 'Erosion', confidence: 0.87, severity: 3, priority: 'MEDIUM', action: 'Apply protective coating at next scheduled access', status: 'Resolved', method: 'Drone RGB', gps: '23.2421, 69.6670', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Root section erosion. Protective coating applied 2026-05-18.' },
-  { id: 'DEF-009', assetId: 3, blade: 'B', dist: 60, type: 'Crack', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Fibre-reinforced patch repair — schedule within 5 days', status: 'Pending', method: 'Drone RGB', gps: '23.2419, 69.6672', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Secondary crack on pressure side. Requires composite patch repair.' },
-  { id: 'DEF-010', assetId: 4, blade: 'B', dist: 25, type: 'Erosion', confidence: 0.82, severity: 2, priority: 'LOW', action: 'Add to next scheduled maintenance', status: 'Pending', method: 'Drone RGB', gps: '14.2253, 76.3983', campaign: 'INSP-2026-Q2', inspDate: '2026-05-20', notes: 'Minor erosion at 25m mark. Monitor only at this stage.' },
-  { id: 'DEF-011', assetId: 5, blade: 'A', dist: 88, type: 'Delamination', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Dispatch offshore crew — weather window dependent', status: 'Dispatched', method: 'Thermal Imaging', gps: '15.5202, 80.0862', campaign: 'INSP-2026-Q2', inspDate: '2026-06-01', notes: 'Trailing edge delamination near tip. 680cm² area. Offshore access required.' },
-  { id: 'DEF-012', assetId: 5, blade: 'C', dist: 55, type: 'Crack', confidence: 0.85, severity: 3, priority: 'MEDIUM', action: 'UAV re-inspection and 3D photogrammetry within 21 days', status: 'Pending', method: 'Drone RGB', gps: '15.5200, 80.0860', campaign: 'INSP-2026-Q2', inspDate: '2026-06-01', notes: 'Surface crack. Photogrammetric survey recommended to assess depth.' }
+  { id: 'DEF-001', assetId: 1, blade: 'A', dist: 11.2, type: 'Corrosion', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Close-up confirmation of collar / hub interface staining', status: 'Pending', method: 'Drone RGB', gps: '8.945, 77.723', campaign: 'REU_WT_IR_003_2026', inspDate: '2026-04-12', notes: 'PS root/hub corrosion banding on Blade 5297.', radialPos: '11.2 m (23%)', intensity: 'S4 Major', location: 'PS · Root / Hub', size: '14×42% frame' },
+  { id: 'DEF-002', assetId: 2, blade: 'B', dist: 52, type: 'Delamination', confidence: 0.94, severity: 4, priority: 'HIGH', action: 'Dispatch maintenance crew within 14 days', status: 'Dispatched', method: 'Thermal Imaging', gps: '26.9456, 70.8926', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Subsurface delamination confirmed via thermal. ~420cm² affected area.' },
+  { id: 'DEF-003', assetId: 2, blade: 'A', dist: 18, type: 'Erosion', confidence: 0.88, severity: 2, priority: 'LOW', action: 'Apply leading edge protection coating at next maintenance window', status: 'Pending', method: 'Drone RGB', gps: '26.9457, 70.8925', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Stage 2 leading edge erosion. Standard wear for age.' },
+  { id: 'DEF-004', assetId: 2, blade: 'C', dist: 67, type: 'Crack', confidence: 0.79, severity: 3, priority: 'MEDIUM', action: 'Acoustic NDT validation within 21 days', status: 'Pending', method: 'Drone RGB', gps: '26.9455, 70.8927', campaign: 'INSP-2026-Q1', inspDate: '2026-03-28', notes: 'Possible crack detected near tip. Low confidence — acoustic NDT recommended.' },
+  { id: 'DEF-005', assetId: 3, blade: 'A', dist: 72, type: 'Lightning', confidence: 0.98, severity: 5, priority: 'CRITICAL', action: 'IMMEDIATE HALT — emergency structural assessment required', status: 'Pending', method: 'Drone RGB + Thermal', gps: '23.334, 70.6372', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Lightning strike at tip — carbon fibre breach. Catastrophic failure risk if unattended.' },
+  { id: 'DEF-006', assetId: 3, blade: 'B', dist: 45, type: 'Delamination', confidence: 0.96, severity: 5, priority: 'CRITICAL', action: 'Immediate maintenance dispatch and turbine shutdown', status: 'Pending', method: 'Thermal Imaging', gps: '23.3341, 70.637', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Severe leading edge delamination. 1.2m span affected. Shutdown strongly advised.' },
+  { id: 'DEF-007', assetId: 3, blade: 'C', dist: 30, type: 'Crack', confidence: 0.93, severity: 4, priority: 'HIGH', action: 'Dispatch repair team within 7 days', status: 'Dispatched', method: 'Acoustic NDT', gps: '23.3339, 70.6369', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Transverse crack at 30m. Penetration ~4mm confirmed by acoustic NDT.' },
+  { id: 'DEF-008', assetId: 3, blade: 'A', dist: 15, type: 'Erosion', confidence: 0.87, severity: 3, priority: 'MEDIUM', action: 'Apply protective coating at next scheduled access', status: 'Resolved', method: 'Drone RGB', gps: '23.334, 70.6371', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Root section erosion. Protective coating applied 2026-05-18.' },
+  { id: 'DEF-009', assetId: 3, blade: 'B', dist: 60, type: 'Crack', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Fibre-reinforced patch repair — schedule within 5 days', status: 'Pending', method: 'Drone RGB', gps: '23.3338, 70.6373', campaign: 'INSP-2026-Q2', inspDate: '2026-05-01', notes: 'Secondary crack on pressure side. Requires composite patch repair.' },
+  { id: 'DEF-010', assetId: 4, blade: 'B', dist: 25, type: 'Erosion', confidence: 0.82, severity: 2, priority: 'LOW', action: 'Add to next scheduled maintenance', status: 'Pending', method: 'Drone RGB', gps: '14.216, 76.428', campaign: 'INSP-2026-Q2', inspDate: '2026-05-20', notes: 'Minor erosion at 25m mark. Monitor only at this stage.' },
+  { id: 'DEF-011', assetId: 5, blade: 'A', dist: 88, type: 'Delamination', confidence: 0.91, severity: 4, priority: 'HIGH', action: 'Dispatch offshore crew — weather window dependent', status: 'Dispatched', method: 'Thermal Imaging', gps: '15.0193, 80.0802', campaign: 'INSP-2026-Q2', inspDate: '2026-06-01', notes: 'Trailing edge delamination near tip. 680cm² area. Offshore access required.' },
+  { id: 'DEF-012', assetId: 5, blade: 'C', dist: 55, type: 'Crack', confidence: 0.85, severity: 3, priority: 'MEDIUM', action: 'UAV re-inspection and 3D photogrammetry within 21 days', status: 'Pending', method: 'Drone RGB', gps: '15.0192, 80.08', campaign: 'INSP-2026-Q2', inspDate: '2026-06-01', notes: 'Surface crack. Photogrammetric survey recommended to assess depth.' }
 ];
 
 // Load from localStorage or use defaults
@@ -237,7 +237,16 @@ function migrateFleetDb(db) {
     });
   }
   db.turbines.forEach(t => {
+    const src = DEFAULT_TURBINES.find(d => d.id === t.id || d.assetId === t.assetId);
+    if (src?.gps) {
+      t.gps = { lat: src.gps.lat, lng: src.gps.lng };
+      if (src.location) t.location = src.location;
+    }
     if (t.bladeLength == null && t.rotorDia) t.bladeLength = +(t.rotorDia / 2).toFixed(1);
+  });
+  db.defects?.forEach(d => {
+    const src = DEFAULT_DEFECTS.find(x => x.id === d.id);
+    if (src?.gps) d.gps = src.gps;
   });
 }
 
@@ -256,7 +265,8 @@ let STATE = {
   pocPointIndex: 5,
   pocSelectedDefectId: null,
   assetEpoch: 0,
-  activeTab: 'fleet'
+  activeTab: 'analytics',
+  analyticsTurbineId: null
 };
 
 let _profileFitRO = null;
@@ -310,7 +320,7 @@ const PAGE_TITLES = {
 };
 
 function activateTab(tab) {
-  const next = tab || 'fleet';
+  const next = tab || 'analytics';
   const blocked = document.querySelector(`.nav-item[data-tab="${next}"]`);
   if (blocked && blocked.classList.contains('is-unavailable')) return;
   const leavingAsset = STATE.activeTab === 'asset' && next !== 'asset';
@@ -673,6 +683,7 @@ let fleetLeafletMap = null;
 let fleetMarkerLayer = null;
 let fleetOsmLayer = null;
 let fleetSatLayer = null;
+let fleetMapNeedsFit = true;
 const fleetMapMarkers = new Map();
 
 function fleetStatusColor(t) {
@@ -698,6 +709,11 @@ function invalidateFleetMap() {
   if (!fleetLeafletMap) return;
   requestAnimationFrame(() => {
     fleetLeafletMap.invalidateSize();
+    const size = fleetLeafletMap.getSize();
+    if (fleetMapNeedsFit && size.x > 0 && size.y > 0) {
+      fleetLeafletMap.fitBounds(INDIA_BOUNDS, { padding: [18, 18], maxZoom: 5.3 });
+      fleetMapNeedsFit = false;
+    }
     syncFleetMapTheme();
   });
 }
@@ -1818,7 +1834,8 @@ async function mountTurbine3D(host, turbine, onPick) {
         mat.polygonOffsetUnits = -1;
       });
     }
-    const towerSources = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2', 'farm-scale-wind-turbine_3']
+    if (named['farm-scale-wind-turbine_3']) named['farm-scale-wind-turbine_3'].visible = false;
+    const towerSources = ['farm-scale-wind-turbine_0', 'farm-scale-wind-turbine_1', 'farm-scale-wind-turbine_2']
       .map(name => named[name]).filter(Boolean);
     const worldPoint = new THREE.Vector3();
     let axisX = 0;
@@ -2808,7 +2825,7 @@ function renderDefectsTable(turbine) {
           <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${pct}%</span></td>
           <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
           <td data-col="intensity"><span class="sev-pill" style="background:${d.color}22;color:${d.color};border:1px solid ${d.color}">CAT ${d.cat}${d.verify ? ' · Verify' : ''}</span></td>
-          <td data-col="size" style="font-size:0.72rem">${d.count} mark${d.count === 1 ? '' : 's'}</td>
+          <td data-col="size" style="font-size:0.72rem">—</td>
           <td data-col="priority"><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
           <td data-col="status"><span class="stat-dot-pill pending">Open</span></td>
           <td data-col="review"><button type="button" class="review-btn">Review</button></td>
@@ -2952,8 +2969,57 @@ function openReport(defectId) {
   renderReport();
 }
 
-const REPORT_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
+const REPORT_VIEW = { scale: 1, min: 0.05, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
 const REPORT_SLIDES = { items: [], index: 0 };
+
+function sizeImageStage(stage, img) {
+  if (!stage || !img?.naturalWidth) return;
+  const w = img.naturalWidth + 'px';
+  const h = img.naturalHeight + 'px';
+  if (stage.style.width !== w) stage.style.width = w;
+  if (stage.style.height !== h) stage.style.height = h;
+}
+
+function centerImageInView(view, viewport, img, scale) {
+  const s = scale ?? view.scale;
+  view.scale = s;
+  if (!viewport || !img?.naturalWidth) {
+    view.tx = 0;
+    view.ty = 0;
+    return;
+  }
+  view.tx = (viewport.clientWidth - img.naturalWidth * s) / 2;
+  view.ty = (viewport.clientHeight - img.naturalHeight * s) / 2;
+}
+
+function fitImageInView(view, viewport, img) {
+  if (!viewport || !img?.naturalWidth) {
+    view.scale = 1;
+    view.tx = 0;
+    view.ty = 0;
+    view.userZoom = false;
+    return;
+  }
+  if (viewport.clientWidth < 40 || viewport.clientHeight < 40) return;
+  const pad = 8;
+  const availW = Math.max(40, viewport.clientWidth - pad);
+  const availH = Math.max(40, viewport.clientHeight - pad);
+  const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+  centerImageInView(view, viewport, img, Math.max(view.min, Math.min(view.max, fit)));
+  view.userZoom = false;
+}
+
+function zoomImageInView(view, viewport, factor, cx, cy) {
+  const old = view.scale || 1;
+  const next = Math.min(view.max, Math.max(view.min, old * factor));
+  if (next === old) return;
+  const x = Number.isFinite(cx) ? cx : (viewport?.clientWidth || 0) / 2;
+  const y = Number.isFinite(cy) ? cy : (viewport?.clientHeight || 0) / 2;
+  view.scale = next;
+  view.tx = x - ((x - view.tx) / old) * next;
+  view.ty = y - ((y - view.ty) / old) * next;
+  view.userZoom = true;
+}
 
 function renderReport() {
   const d = STATE.activeDefect;
@@ -2992,6 +3058,7 @@ function syncReportOverride(d) {
 function applyReportZoom() {
   const stage = document.getElementById('report-stage');
   const img = document.getElementById('img-rgb');
+  sizeImageStage(stage, img);
   const target = stage || img;
   if (!target) return;
   target.style.transform = `translate(${REPORT_VIEW.tx}px, ${REPORT_VIEW.ty}px) scale(${REPORT_VIEW.scale})`;
@@ -3002,6 +3069,8 @@ function applyReportZoom() {
 function fitReportImage() {
   const viewport = document.getElementById('report-viewport');
   const img = document.getElementById('img-rgb');
+  const stage = document.getElementById('report-stage');
+  sizeImageStage(stage, img);
   if (!viewport || !img || !img.naturalWidth || img.hidden) {
     REPORT_VIEW.scale = 1;
     REPORT_VIEW.tx = 0;
@@ -3009,25 +3078,16 @@ function fitReportImage() {
     applyReportZoom();
     return;
   }
-  const pad = 2;
-  const availW = Math.max(40, viewport.clientWidth - pad);
-  const availH = Math.max(40, viewport.clientHeight - pad);
-  const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
-  REPORT_VIEW.userZoom = false;
-  REPORT_VIEW.scale = fit;
-  REPORT_VIEW.tx = 0;
-  REPORT_VIEW.ty = 0;
+  fitImageInView(REPORT_VIEW, viewport, img);
   applyReportZoom();
 }
 
 function zoomIn() {
-  REPORT_VIEW.userZoom = true;
-  REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, REPORT_VIEW.scale * 1.25);
+  zoomImageInView(REPORT_VIEW, document.getElementById('report-viewport'), 1.25);
   applyReportZoom();
 }
 function zoomOut() {
-  REPORT_VIEW.userZoom = true;
-  REPORT_VIEW.scale = Math.max(REPORT_VIEW.min, REPORT_VIEW.scale / 1.25);
+  zoomImageInView(REPORT_VIEW, document.getElementById('report-viewport'), 1 / 1.25);
   applyReportZoom();
 }
 function resetZoom() {
@@ -3208,9 +3268,7 @@ function bindReportViewerControls() {
   document.getElementById('report-zoom-fit')?.addEventListener('click', () => fitReportImage());
   document.getElementById('report-zoom-100')?.addEventListener('click', () => {
     REPORT_VIEW.userZoom = true;
-    REPORT_VIEW.scale = 1;
-    REPORT_VIEW.tx = 0;
-    REPORT_VIEW.ty = 0;
+    centerImageInView(REPORT_VIEW, viewport, img, 1);
     applyReportZoom();
   });
   document.getElementById('report-image-full')?.addEventListener('click', () => {
@@ -3236,9 +3294,9 @@ function bindReportViewerControls() {
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
-    REPORT_VIEW.userZoom = true;
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    REPORT_VIEW.scale = Math.min(REPORT_VIEW.max, Math.max(REPORT_VIEW.min, REPORT_VIEW.scale * factor));
+    const rect = viewport.getBoundingClientRect();
+    zoomImageInView(REPORT_VIEW, viewport, factor, e.clientX - rect.left, e.clientY - rect.top);
     applyReportZoom();
   }, { passive: false });
 
@@ -4237,6 +4295,63 @@ function getAnalyticsDefects() {
   return base.concat(extra);
 }
 
+function analyticsSelectedTurbine() {
+  const id = STATE.analyticsTurbineId;
+  if (id == null) return null;
+  return (STATE.db?.turbines || []).find(t => Number(t.id) === Number(id)) || null;
+}
+
+function getLinkedAnalyticsDefects() {
+  const all = getAnalyticsDefects();
+  const turbine = analyticsSelectedTurbine();
+  if (!turbine) return all;
+  return all.filter(d => Number(d.assetId) === Number(turbine.id));
+}
+
+function healthBarColor(turbine, selectedId) {
+  if (selectedId == null || Number(turbine.id) === Number(selectedId)) return '#0FA4AF';
+  return 'rgba(15, 164, 175, 0.22)';
+}
+
+function syncAnalyticsFilterUi() {
+  const bar = document.getElementById('analytics-filter-bar');
+  const nameEl = document.getElementById('analytics-filter-name');
+  const turbine = analyticsSelectedTurbine();
+  if (!bar) return;
+  if (!turbine) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+  if (nameEl) nameEl.textContent = `${turbine.assetId} · ${turbine.site || turbine.location || ''}`.trim();
+}
+
+function applyAnalyticsFilter() {
+  syncAnalyticsFilterUi();
+  if (CHARTS.health) {
+    const turbines = STATE.db?.turbines || [];
+    const sel = STATE.analyticsTurbineId;
+    CHARTS.health.data.datasets[0].backgroundColor = turbines.map(t => healthBarColor(t, sel));
+    CHARTS.health.update();
+  }
+  renderDefectPieChart();
+  renderSeverityChart();
+  renderTimelineChart();
+}
+
+function bindAnalyticsFilterBar() {
+  document.getElementById('analytics-clear-filter')?.addEventListener('click', () => {
+    if (STATE.analyticsTurbineId == null) return;
+    STATE.analyticsTurbineId = null;
+    applyAnalyticsFilter();
+  });
+}
+
+function setAnalyticsTurbineFilter(id) {
+  STATE.analyticsTurbineId = STATE.analyticsTurbineId === id ? null : id;
+  applyAnalyticsFilter();
+}
+
 function chartTooltipOpts(theme) {
   return {
     backgroundColor: theme.tipBg,
@@ -4254,6 +4369,7 @@ async function renderCharts() {
   if (!STATE.db) return;
   try { await loadBladePocAnnotations(); } catch (e) { /* optional POC layer */ }
   renderAnalyticsSummary();
+  syncAnalyticsFilterUi();
   renderHealthChart();
   renderDefectPieChart();
   renderSeverityChart();
@@ -4286,6 +4402,7 @@ function renderHealthChart() {
 
   const theme = getChartTheme();
   const turbines = STATE.db.turbines || [];
+  const selectedId = STATE.analyticsTurbineId;
   const labels = turbines.map(t => t.assetId);
   const data = turbines.map(t => Number(t.health) || 0);
 
@@ -4296,7 +4413,7 @@ function renderHealthChart() {
       datasets: [{
         label: 'Health Index (%)',
         data,
-        backgroundColor: '#0FA4AF',
+        backgroundColor: turbines.map(t => healthBarColor(t, selectedId)),
         borderWidth: 0,
         borderRadius: 5,
         barPercentage: 0.62
@@ -4305,6 +4422,10 @@ function renderHealthChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onHover: (evt, els) => {
+        const target = evt?.native?.target;
+        if (target) target.style.cursor = els?.length ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -4312,7 +4433,11 @@ function renderHealthChart() {
           callbacks: {
             afterLabel: (ctx) => {
               const t = turbines[ctx.dataIndex];
-              return t ? `${t.site || ''} · ${t.status || ''}`.trim() : '';
+              if (!t) return '';
+              const hint = selectedId == null || Number(selectedId) !== Number(t.id)
+                ? 'Click to link the other charts'
+                : 'Click again to show all turbines';
+              return [`${t.site || ''} · ${t.status || ''}`.trim(), hint];
             }
           }
         }
@@ -4338,15 +4463,16 @@ function renderHealthChart() {
           }
         }
       },
-      onClick: (e, activeEl) => {
-        if (activeEl?.length) {
-          const turbine = turbines[activeEl[0].index];
-          if (turbine) {
-            STATE.selectedTurbineId = turbine.id;
-            navigateTo('asset');
-            showToast(`Navigated to ${turbine.assetId} Detail`, 'info');
+      onClick: (_e, activeEl) => {
+        if (!activeEl?.length) {
+          if (STATE.analyticsTurbineId != null) {
+            STATE.analyticsTurbineId = null;
+            applyAnalyticsFilter();
           }
+          return;
         }
+        const turbine = turbines[activeEl[0].index];
+        if (turbine) setAnalyticsTurbineFilter(turbine.id);
       }
     }
   });
@@ -4359,16 +4485,21 @@ function renderDefectPieChart() {
 
   const theme = getChartTheme();
   const types = {};
-  getAnalyticsDefects().forEach(d => {
+  getLinkedAnalyticsDefects().forEach(d => {
     const key = d.type || 'Other';
     types[key] = (types[key] || 0) + 1;
   });
 
   const tealRamp = ['#226876', '#348088', '#12A0AA', '#4EC4CC', '#7ED3DA'];
   const shadeOrder = [0, 3, 1, 4, 2];
-  const labels = Object.keys(types).sort((a, b) => types[b] - types[a]);
-  const data = labels.map(t => types[t]);
-  const backgroundColors = labels.map((_, i) => tealRamp[shadeOrder[i % shadeOrder.length]]);
+  let labels = Object.keys(types).sort((a, b) => types[b] - types[a]);
+  let data = labels.map(t => types[t]);
+  let backgroundColors = labels.map((_, i) => tealRamp[shadeOrder[i % shadeOrder.length]]);
+  if (!labels.length) {
+    labels = ['No findings'];
+    data = [1];
+    backgroundColors = [theme.light ? 'rgba(6,50,53,0.12)' : 'rgba(175,221,229,0.16)'];
+  }
 
   CHARTS.defects = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
@@ -4433,7 +4564,7 @@ function renderSeverityChart() {
 
   const theme = getChartTheme();
   const sevCounts = [0, 0, 0, 0, 0];
-  getAnalyticsDefects().forEach(d => {
+  getLinkedAnalyticsDefects().forEach(d => {
     const s = Number(d.severity);
     if (s >= 1 && s <= 5) sevCounts[s - 1]++;
   });
@@ -4512,8 +4643,12 @@ function renderTimelineChart() {
     if (b) b.count += 1;
   };
 
-  getAnalyticsDefects().forEach(d => bump(d.inspDate));
-  (STATE.db.turbines || []).forEach(t => bump(t.lastInspection));
+  getLinkedAnalyticsDefects().forEach(d => bump(d.inspDate));
+  const turbines = STATE.db.turbines || [];
+  const scoped = STATE.analyticsTurbineId == null
+    ? turbines
+    : turbines.filter(t => Number(t.id) === Number(STATE.analyticsTurbineId));
+  scoped.forEach(t => bump(t.lastInspection));
 
   // If sparse, keep zeros — still live. Avoid fabricating fake trends.
   const data = buckets.map(b => b.count);
@@ -5871,20 +6006,14 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
 
 function clearPocBboxOverlay() {
   const svg = document.getElementById('asset-poc-bbox-overlay');
-  const callout = document.getElementById('asset-poc-defect-callout');
   if (svg) {
     svg.innerHTML = '';
     svg.classList.remove('isolating');
-  }
-  if (callout) {
-    callout.hidden = true;
-    callout.innerHTML = '';
   }
 }
 
 function renderPocBboxOverlay(pt, turbine) {
   const svg = document.getElementById('asset-poc-bbox-overlay');
-  const callout = document.getElementById('asset-poc-defect-callout');
   const img = document.getElementById('asset-poc-annotated');
   const stage = document.getElementById('asset-poc-stage');
   if (!svg || !img || !img.naturalWidth) return;
@@ -5923,7 +6052,6 @@ function renderPocBboxOverlay(pt, turbine) {
             fill="${col}" stroke="#041018" stroke-width="1.5"/>
         </g>`;
     }).join('');
-    if (callout) { callout.hidden = true; callout.innerHTML = ''; }
     return;
   }
 
@@ -5956,18 +6084,6 @@ function renderPocBboxOverlay(pt, turbine) {
     <text x="${X}" y="${Math.max(16, Y - 10)}" fill="${col}" font-family="JetBrains Mono,monospace"
       font-size="${Math.max(12, w * 0.018)}" font-weight="700">${pt.point}-${d.id} · ${geo.distRoot}</text>
   `;
-
-  if (callout) {
-    callout.hidden = false;
-    callout.innerHTML = `
-      <strong>${pt.point}-${d.id}</strong>
-      <span>${d.defect_class}</span>
-      <span>S${d.severity} · ${d.severity_label || priorityFromSeverity(d.severity)}</span>
-      <span>${geo.radial}</span>
-      <span>${geo.location}</span>
-      <button type="button" class="callout-clear" onclick="selectPocDefect('${d.id}')">Show all</button>
-    `;
-  }
 }
 
 function focusPocDefectInView(pt, turbine) {
@@ -5988,11 +6104,9 @@ function focusPocDefectInView(pt, turbine) {
     ANNO_VIEW.max
   );
   ANNO_VIEW.scale = Math.max(ANNO_VIEW.min, Math.min(ANNO_VIEW.max, fit));
-  // Stage is centered; translate so defect center moves toward viewport center
-  const dx = (0.5 - geo.pin.cx) * img.naturalWidth * ANNO_VIEW.scale;
-  const dy = (0.5 - geo.pin.cy) * img.naturalHeight * ANNO_VIEW.scale;
-  ANNO_VIEW.tx = dx;
-  ANNO_VIEW.ty = dy;
+  ANNO_VIEW.userZoom = true;
+  ANNO_VIEW.tx = viewport.clientWidth / 2 - geo.pin.cx * img.naturalWidth * ANNO_VIEW.scale;
+  ANNO_VIEW.ty = viewport.clientHeight / 2 - geo.pin.cy * img.naturalHeight * ANNO_VIEW.scale;
   if (window._applyAnnoZoom) window._applyAnnoZoom();
   renderPocBboxOverlay(pt, turbine);
 }
@@ -6035,7 +6149,7 @@ function openBladeLightbox(src) {
   }
 }
 
-const ANNO_VIEW = { scale: 1, min: 0.25, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
+const ANNO_VIEW = { scale: 1, min: 0.05, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
 
 function stepAssetPocPoint(delta) {
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
@@ -6055,6 +6169,7 @@ function bindAnnotatedViewerControls() {
   if (!viewport || !img || viewport.dataset.bound) return;
 
   const apply = () => {
+    sizeImageStage(stage, img);
     const target = stage || img;
     target.style.transform = `translate(${ANNO_VIEW.tx}px, ${ANNO_VIEW.ty}px) scale(${ANNO_VIEW.scale})`;
     const lvl = document.getElementById('asset-zoom-level');
@@ -6064,21 +6179,17 @@ function bindAnnotatedViewerControls() {
   window._applyAnnoZoom = apply;
 
   document.getElementById('asset-zoom-in')?.addEventListener('click', () => {
-    ANNO_VIEW.userZoom = true;
-    ANNO_VIEW.scale = Math.min(ANNO_VIEW.max, ANNO_VIEW.scale * 1.25);
+    zoomImageInView(ANNO_VIEW, viewport, 1.25);
     apply();
   });
   document.getElementById('asset-zoom-out')?.addEventListener('click', () => {
-    ANNO_VIEW.userZoom = true;
-    ANNO_VIEW.scale = Math.max(ANNO_VIEW.min, ANNO_VIEW.scale / 1.25);
+    zoomImageInView(ANNO_VIEW, viewport, 1 / 1.25);
     apply();
   });
   document.getElementById('asset-zoom-fit')?.addEventListener('click', () => fitAnnotatedImage());
   document.getElementById('asset-zoom-100')?.addEventListener('click', () => {
     ANNO_VIEW.userZoom = true;
-    ANNO_VIEW.scale = 1;
-    ANNO_VIEW.tx = 0;
-    ANNO_VIEW.ty = 0;
+    centerImageInView(ANNO_VIEW, viewport, img, 1);
     apply();
   });
   document.getElementById('asset-image-full')?.addEventListener('click', () => {
@@ -6104,9 +6215,9 @@ function bindAnnotatedViewerControls() {
 
   viewport.addEventListener('wheel', (e) => {
     e.preventDefault();
-    ANNO_VIEW.userZoom = true;
     const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    ANNO_VIEW.scale = Math.min(ANNO_VIEW.max, Math.max(ANNO_VIEW.min, ANNO_VIEW.scale * factor));
+    const rect = viewport.getBoundingClientRect();
+    zoomImageInView(ANNO_VIEW, viewport, factor, e.clientX - rect.left, e.clientY - rect.top);
     apply();
   }, { passive: false });
 
@@ -6114,7 +6225,7 @@ function bindAnnotatedViewerControls() {
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !ANNO_VIEW.pan) return;
     if (viewport.classList.contains('is-measuring')) return;
-    if (e.target.closest('button, a, input, select, .asset-poc-defect-callout')) return;
+    if (e.target.closest('button, a, input, select')) return;
     ANNO_VIEW.dragging = true;
     ANNO_VIEW.userZoom = true;
     ANNO_VIEW.lx = e.clientX;
@@ -6157,6 +6268,8 @@ function bindAnnotatedViewerControls() {
 function fitAnnotatedImage() {
   const viewport = document.getElementById('asset-poc-viewport');
   const img = document.getElementById('asset-poc-annotated');
+  const stage = document.getElementById('asset-poc-stage');
+  sizeImageStage(stage, img);
   if (!viewport || !img || !img.naturalWidth) {
     ANNO_VIEW.scale = 1;
     ANNO_VIEW.tx = 0;
@@ -6164,14 +6277,7 @@ function fitAnnotatedImage() {
     if (window._applyAnnoZoom) window._applyAnnoZoom();
     return;
   }
-  const pad = 2;
-  const availW = Math.max(40, viewport.clientWidth - pad);
-  const availH = Math.max(40, viewport.clientHeight - pad);
-  const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
-  ANNO_VIEW.userZoom = false;
-  ANNO_VIEW.scale = fit;
-  ANNO_VIEW.tx = 0;
-  ANNO_VIEW.ty = 0;
+  fitImageInView(ANNO_VIEW, viewport, img);
   if (window._applyAnnoZoom) window._applyAnnoZoom();
 }
 
@@ -6195,6 +6301,8 @@ function initApp() {
   initDefectReview();
   bindReportViewerControls();
   bindMeasureAndShare();
+  bindAnalyticsFilterBar();
+  activateTab('analytics');
 
   // Start MQTT simulation
   loadBladeFindings().then(() => {
