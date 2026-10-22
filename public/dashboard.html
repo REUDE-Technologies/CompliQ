@@ -23,7 +23,7 @@
   }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-  <link rel="stylesheet" href="dashboard.css?v=fleetClear1">
+  <link rel="stylesheet" href="dashboard.css?v=assetLeft2">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -265,14 +265,15 @@
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-in" title="Zoom in">+</button>
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-out" title="Zoom out">−</button>
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-fit" title="Fit to view">Fit</button>
-                  <button type="button" class="asset-zoom-btn" id="asset-zoom-100" title="Actual size">100%</button>
                   <button type="button" class="asset-zoom-btn" id="asset-image-full" title="Full screen">Full</button>
-                  <button type="button" class="asset-zoom-btn" id="asset-measure-dist" title="Distance">Dist</button>
-                  <button type="button" class="asset-zoom-btn" id="asset-measure-area" title="Area">Area</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-measure-dist" title="Distance (mm)">Dist</button>
                   <button type="button" class="asset-zoom-btn" id="asset-measure-clear" title="Clear measurements">Clr</button>
                   <button type="button" class="asset-zoom-btn" id="asset-share-link" title="Copy shareable image link">Share</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-zoom-100" title="Actual size" hidden>100%</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-measure-area" title="Area (mm²)" hidden>Area</button>
                 </div>
-                <span class="asset-zoom-level" id="asset-zoom-level">100%</span>
+                <span class="asset-zoom-level" id="asset-zoom-level" hidden>100%</span>
+                <span class="measure-readout" id="asset-measure-readout">mm</span>
               </div>
             </div>
           </div>
@@ -396,7 +397,7 @@
             </div>
             <div class="report-override-actions">
               <button type="button" class="teal-btn" onclick="saveReportFindingOverride()">Save override</button>
-              <button type="button" class="ghost-btn report-reset-btn" onclick="resetDefectOverride()">Reset</button>
+              <button type="button" class="teal-btn report-reset-btn" onclick="resetDefectOverride()">Reset</button>
               <button type="button" class="teal-btn report-download-btn" onclick="generatePDFReport()">Download report</button>
             </div>
           </div>
@@ -419,15 +420,16 @@
               </div>
               <div class="asset-poc-viewer-bar report-viewer-bar" role="toolbar" aria-label="Image controls">
                 <span class="asset-poc-pane-label" id="report-station-label">Station image</span>
-                <div class="asset-poc-zoom-controls">
-                  <button type="button" class="asset-zoom-btn" id="report-zoom-in" title="Zoom in">+</button>
-                  <button type="button" class="asset-zoom-btn" id="report-zoom-out" title="Zoom out">−</button>
-                  <button type="button" class="asset-zoom-btn" id="report-zoom-fit" title="Fit to view">Fit</button>
-                  <button type="button" class="asset-zoom-btn" id="report-zoom-100" title="Actual size">100%</button>
-                  <button type="button" class="asset-zoom-btn" id="report-image-full" title="Full screen">Full</button>
-                  <button type="button" class="asset-zoom-btn" id="report-measure-dist" title="Distance (pixels)">Dist</button>
-                  <button type="button" class="asset-zoom-btn" id="report-measure-area" title="Area (pixels)">Area</button>
-                  <button type="button" class="asset-zoom-btn" id="report-measure-clear" title="Clear measurements">Clr</button>
+                <div class="report-image-rail">
+                  <div class="asset-poc-zoom-controls">
+                    <button type="button" class="asset-zoom-btn" id="report-zoom-in" title="Zoom in">+</button>
+                    <button type="button" class="asset-zoom-btn" id="report-zoom-out" title="Zoom out">−</button>
+                    <button type="button" class="asset-zoom-btn" id="report-zoom-fit" title="Fit to view">Fit</button>
+                    <button type="button" class="asset-zoom-btn" id="report-image-full" title="Full screen">Full</button>
+                    <button type="button" class="asset-zoom-btn" id="report-measure-dist" title="Distance (mm)">Dist</button>
+                    <button type="button" class="asset-zoom-btn" id="report-measure-area" title="Area (mm²)">Area</button>
+                    <button type="button" class="asset-zoom-btn" id="report-measure-clear" title="Clear measurements">Clr</button>
+                  </div>
                 </div>
                 <span class="asset-zoom-level" id="report-zoom-level">100%</span>
                 <span class="measure-readout" id="report-measure-readout">px</span>
@@ -759,7 +761,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="dashboard.js?v=fleetClear1"></script>
+<script src="dashboard.js?v=assetLeft2"></script>
 </body>
 </html>
 

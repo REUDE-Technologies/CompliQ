@@ -970,11 +970,16 @@ function selectedTurbine() {
   return STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0] || null;
 }
 
-function bladeDisplayName(letter, turbine) {
+function bladeSerial(letter, turbine) {
   const current = turbine || selectedTurbine();
   const index = { A: 0, B: 1, C: 2 }[letter];
   const number = index == null ? '' : (current?.blades || [])[index];
-  return number ? `Blade ${number}` : `Blade ${letter}`;
+  return number || letter;
+}
+
+function bladeDisplayName(letter, turbine) {
+  const serial = bladeSerial(letter, turbine);
+  return serial && serial !== letter ? `Blade ${serial}` : `Blade ${letter}`;
 }
 
 function refreshBladeMenus(turbine) {
@@ -2742,6 +2747,36 @@ const STATION_RADIAL_PCT = {
   20: [92, 100]
 };
 
+/** Typical Gamesa G97 chord (m) vs radial %. */
+const G97_CHORD_M = [
+  [0, 3.94], [10, 3.72], [20, 3.45], [30, 2.98], [40, 2.52],
+  [50, 2.12], [60, 1.78], [70, 1.46], [80, 1.16], [90, 0.82], [100, 0.48]
+];
+
+function lerpKnots(table, t) {
+  const x = Math.min(100, Math.max(0, Number(t) || 0));
+  for (let i = 1; i < table.length; i += 1) {
+    if (x <= table[i][0]) {
+      const [x0, y0] = table[i - 1];
+      const [x1, y1] = table[i];
+      const u = (x - x0) / Math.max(1e-6, x1 - x0);
+      return y0 + (y1 - y0) * u;
+    }
+  }
+  return table[table.length - 1][1];
+}
+
+function stationRadialBand(pointIndex, turbine) {
+  const span = bladeSpanM(turbine);
+  const metres = pointMetres(pointIndex, span);
+  const pct = (metres / span) * 100;
+  const band = STATION_RADIAL_PCT[pointIndex] || [
+    Math.max(0, pct - 8),
+    Math.min(100, pct + 8)
+  ];
+  return { span, metres, pct, band, bandM: span * (band[1] - band[0]) / 100 };
+}
+
 const DEFECT_SEV_COLOR = {
   1: '#B9D896',
   2: '#FACD96',
@@ -3064,6 +3099,7 @@ function applyReportZoom() {
   target.style.transform = `translate(${REPORT_VIEW.tx}px, ${REPORT_VIEW.ty}px) scale(${REPORT_VIEW.scale})`;
   const lvl = document.getElementById('report-zoom-level');
   if (lvl) lvl.textContent = `${Math.round(REPORT_VIEW.scale * 100)}%`;
+  if (MEASURE.report.mode || MEASURE.report.shapes.length) redrawMeasure('report');
 }
 
 function fitReportImage() {
@@ -3204,7 +3240,12 @@ function showReportSlide(index, opts = {}) {
   const slide = items[REPORT_SLIDES.index];
   clearMeasure('report');
   const pointLabel = 'P' + String(slide.index).padStart(2, '0');
-  if (label) label.textContent = `${slide.side} · ${pointLabel} · ${REPORT_SLIDES.index + 1}/${items.length}`;
+  if (label) {
+    const span = bladeSpanM(turbine);
+    const metres = pointMetres(slide.index, span);
+    const pct = Math.round((metres / span) * 100);
+    label.textContent = `${bladeSerial(slide.blade, turbine)} · ${slide.side} ${pointLabel} · ${metres.toFixed(1)} m / ${span} m (${pct}%)`;
+  }
 
   STATE.pocSurface = slide.side;
   STATE.pocPointIndex = slide.index;
@@ -3266,11 +3307,6 @@ function bindReportViewerControls() {
   document.getElementById('report-zoom-in')?.addEventListener('click', () => zoomIn());
   document.getElementById('report-zoom-out')?.addEventListener('click', () => zoomOut());
   document.getElementById('report-zoom-fit')?.addEventListener('click', () => fitReportImage());
-  document.getElementById('report-zoom-100')?.addEventListener('click', () => {
-    REPORT_VIEW.userZoom = true;
-    centerImageInView(REPORT_VIEW, viewport, img, 1);
-    applyReportZoom();
-  });
   document.getElementById('report-image-full')?.addEventListener('click', () => {
     const panel = document.getElementById('report-viewer-panel');
     const btn = document.getElementById('report-image-full');
@@ -3345,24 +3381,126 @@ function bindReportViewerControls() {
 }
 
 const MEASURE = {
-  report: { mode: null, draft: [], shapes: [] },
-  asset: { mode: null, draft: [], shapes: [] }
+  report: { mode: null, draft: [], shapes: [], hover: null },
+  asset: { mode: null, draft: [], shapes: [], hover: null }
 };
 const MEASURE_NS = 'http://www.w3.org/2000/svg';
 
 function measureIds(which) {
   return which === 'asset'
-    ? { viewport: 'asset-poc-viewport', svg: 'asset-measure-svg', img: 'asset-poc-annotated', readout: 'asset-zoom-level' }
+    ? { viewport: 'asset-poc-viewport', svg: 'asset-measure-svg', img: 'asset-poc-annotated', readout: 'asset-measure-readout' }
     : { viewport: 'report-viewport', svg: 'report-measure-svg', img: 'img-rgb', readout: 'report-measure-readout' };
 }
 
-function measureSvgPoint(svg, event) {
-  const ctm = svg.getScreenCTM();
-  if (!ctm) return null;
-  const pt = svg.createSVGPoint();
-  pt.x = event.clientX;
-  pt.y = event.clientY;
-  return pt.matrixTransform(ctm.inverse());
+function measureViewState(which) {
+  return which === 'asset' ? ANNO_VIEW : REPORT_VIEW;
+}
+
+function measureTurbine(which) {
+  if (which === 'report') {
+    return STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || selectedTurbine();
+  }
+  return selectedTurbine();
+}
+
+function measureStationIndex(which) {
+  if (which === 'report') {
+    return REPORT_SLIDES.items[REPORT_SLIDES.index]?.index || STATE.pocPointIndex || 1;
+  }
+  return STATE.pocPointIndex || 1;
+}
+
+function measureSurface(which) {
+  if (which === 'report') {
+    return REPORT_SLIDES.items[REPORT_SLIDES.index]?.side || STATE.pocSurface || 'PS';
+  }
+  return STATE.pocSurface || 'PS';
+}
+
+function measureScale(which) {
+  const img = document.getElementById(measureIds(which).img);
+  if (!img?.naturalWidth || !img.naturalHeight) return null;
+  const turbine = measureTurbine(which);
+  const radial = stationRadialBand(measureStationIndex(which), turbine);
+  const chordM = lerpKnots(G97_CHORD_M, radial.pct);
+  const surface = measureSurface(which);
+  const acrossM = (surface === 'LE' || surface === 'TE') ? chordM * 0.24 : chordM;
+  return {
+    imgW: img.naturalWidth,
+    imgH: img.naturalHeight,
+    mPerPxX: acrossM / img.naturalWidth,
+    mPerPxY: radial.bandM / img.naturalHeight,
+    chordM,
+    acrossM,
+    bandM: radial.bandM
+  };
+}
+
+function quantizeMm(metres) {
+  return Math.round((Number(metres) || 0) * 1000);
+}
+
+function formatDistQuantized(metres) {
+  const mm = quantizeMm(metres);
+  if (Math.abs(mm) >= 1000) return `${(mm / 1000).toFixed(2)} m`;
+  return `${mm} mm`;
+}
+
+function formatAreaQuantized(m2) {
+  const mm2 = Math.round((Number(m2) || 0) * 1e6);
+  if (mm2 >= 1e5) return `${(mm2 / 1e6).toFixed(3)} m²`;
+  if (mm2 >= 100) return `${Math.round(mm2 / 100)} cm²`;
+  return `${mm2} mm²`;
+}
+
+function measureSegmentM(which, a, b) {
+  const scale = measureScale(which);
+  if (!scale || !a || !b) return 0;
+  return Math.hypot((b.x - a.x) * scale.mPerPxX, (b.y - a.y) * scale.mPerPxY);
+}
+
+function measurePolygonM2(which, pts) {
+  const scale = measureScale(which);
+  if (!scale || !pts || pts.length < 3) return 0;
+  let areaPx = 0;
+  for (let i = 0; i < pts.length; i += 1) {
+    const j = (i + 1) % pts.length;
+    areaPx += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  return Math.abs(areaPx) / 2 * scale.mPerPxX * scale.mPerPxY;
+}
+
+function setMeasureReadout(which, text) {
+  const el = document.getElementById(measureIds(which).readout);
+  if (el) el.textContent = text || 'mm';
+}
+
+function measureImagePoint(which, event) {
+  const view = measureViewState(which);
+  const ids = measureIds(which);
+  const viewport = document.getElementById(ids.viewport);
+  const img = document.getElementById(ids.img);
+  if (!viewport || !img?.naturalWidth) return null;
+  const rect = viewport.getBoundingClientRect();
+  const s = view.scale || 1;
+  const x = (event.clientX - rect.left - view.tx) / s;
+  const y = (event.clientY - rect.top - view.ty) / s;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (x < -12 || y < -12 || x > img.naturalWidth + 12 || y > img.naturalHeight + 12) return null;
+  return {
+    x: Math.round(Math.min(img.naturalWidth, Math.max(0, x))),
+    y: Math.round(Math.min(img.naturalHeight, Math.max(0, y)))
+  };
+}
+
+function measureScreenStyle(which) {
+  const s = measureViewState(which).scale || 1;
+  return {
+    stroke: Math.max(2, 2.4 / s),
+    radius: Math.max(5, 7 / s),
+    font: Math.max(16, 18 / s),
+    pad: Math.max(10, 14 / s)
+  };
 }
 
 function syncMeasureLayer(which) {
@@ -3382,25 +3520,25 @@ function setMeasureMode(which, mode) {
   const st = MEASURE[which];
   st.mode = st.mode === mode ? null : mode;
   st.draft = [];
+  st.hover = null;
   const ids = measureIds(which);
   document.getElementById(ids.viewport)?.classList.toggle('is-measuring', !!st.mode);
   const distBtn = document.getElementById(which === 'asset' ? 'asset-measure-dist' : 'report-measure-dist');
   const areaBtn = document.getElementById(which === 'asset' ? 'asset-measure-area' : 'report-measure-area');
   distBtn?.classList.toggle('is-on', st.mode === 'dist');
   areaBtn?.classList.toggle('is-on', st.mode === 'area');
-  const readout = document.getElementById(ids.readout);
-  if (which === 'report' && readout && st.mode) {
-    readout.textContent = st.mode === 'dist' ? 'Click two points' : 'Click polygon, double-click to close';
-  }
+  if (st.mode === 'dist') setMeasureReadout(which, 'Dist · click two points');
+  else if (st.mode === 'area') setMeasureReadout(which, 'Area · click polygon, double-click to close');
+  else setMeasureReadout(which, 'mm');
   redrawMeasure(which);
 }
 
 function clearMeasure(which) {
   MEASURE[which].draft = [];
   MEASURE[which].shapes = [];
+  MEASURE[which].hover = null;
   redrawMeasure(which);
-  const readout = document.getElementById(measureIds(which).readout);
-  if (which === 'report' && readout) readout.textContent = 'px';
+  setMeasureReadout(which, MEASURE[which].mode ? (MEASURE[which].mode === 'dist' ? 'Dist · click two points' : 'Area · click polygon, double-click to close') : 'mm');
 }
 
 function redrawMeasure(which) {
@@ -3408,82 +3546,130 @@ function redrawMeasure(which) {
   if (!svg) return;
   svg.replaceChildren();
   const st = MEASURE[which];
+  const style = measureScreenStyle(which);
   const drawShape = (shape, isDraft) => {
-    if (shape.kind === 'dist' && shape.points.length >= 2) {
-      const [a, b] = shape.points;
+    const pts = shape.points.slice();
+    if (isDraft && st.hover) pts.push(st.hover);
+    if (shape.kind === 'dist' && pts.length >= 2) {
+      const [a, b] = pts;
       const line = document.createElementNS(MEASURE_NS, 'line');
       line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
       line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
       line.setAttribute('stroke', '#0FA4AF');
-      line.setAttribute('stroke-width', '3');
+      line.setAttribute('stroke-width', String(style.stroke));
       line.setAttribute('vector-effect', 'non-scaling-stroke');
       svg.appendChild(line);
       const label = document.createElementNS(MEASURE_NS, 'text');
       label.setAttribute('x', (a.x + b.x) / 2);
-      label.setAttribute('y', (a.y + b.y) / 2 - 8);
+      label.setAttribute('y', (a.y + b.y) / 2 - style.pad);
       label.setAttribute('fill', '#E8F4F6');
-      label.setAttribute('font-size', '22');
+      label.setAttribute('stroke', 'rgba(4,18,22,0.75)');
+      label.setAttribute('stroke-width', String(style.font * 0.18));
+      label.setAttribute('paint-order', 'stroke');
+      label.setAttribute('font-size', String(style.font));
       label.setAttribute('font-weight', '700');
-      label.textContent = `${Math.round(Math.hypot(b.x - a.x, b.y - a.y))} px`;
+      label.setAttribute('text-anchor', 'middle');
+      label.textContent = formatDistQuantized(measureSegmentM(which, a, b));
       svg.appendChild(label);
     }
-    if (shape.kind === 'area' && shape.points.length >= 2) {
+    if (shape.kind === 'area' && pts.length >= 2) {
       const poly = document.createElementNS(MEASURE_NS, 'polygon');
-      poly.setAttribute('points', shape.points.map(p => `${p.x},${p.y}`).join(' '));
+      poly.setAttribute('points', pts.map(p => `${p.x},${p.y}`).join(' '));
       poly.setAttribute('fill', 'rgba(15,164,175,0.22)');
       poly.setAttribute('stroke', '#0FA4AF');
-      poly.setAttribute('stroke-width', '3');
+      poly.setAttribute('stroke-width', String(style.stroke));
       poly.setAttribute('vector-effect', 'non-scaling-stroke');
       svg.appendChild(poly);
-      if (!isDraft && shape.points.length >= 3) {
-        let area = 0;
-        const pts = shape.points;
-        for (let i = 0; i < pts.length; i += 1) {
-          const j = (i + 1) % pts.length;
-          area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
-        }
-        area = Math.abs(area) / 2;
+      if (pts.length >= 3) {
         const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
         const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
         const label = document.createElementNS(MEASURE_NS, 'text');
         label.setAttribute('x', cx);
         label.setAttribute('y', cy);
         label.setAttribute('fill', '#E8F4F6');
-        label.setAttribute('font-size', '22');
+        label.setAttribute('stroke', 'rgba(4,18,22,0.75)');
+        label.setAttribute('stroke-width', String(style.font * 0.18));
+        label.setAttribute('paint-order', 'stroke');
+        label.setAttribute('font-size', String(style.font));
         label.setAttribute('font-weight', '700');
         label.setAttribute('text-anchor', 'middle');
-        label.textContent = `${Math.round(area)} px²`;
+        label.textContent = formatAreaQuantized(measurePolygonM2(which, pts));
         svg.appendChild(label);
       }
     }
-    shape.points.forEach(p => {
+    pts.forEach(p => {
       const dot = document.createElementNS(MEASURE_NS, 'circle');
       dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
-      dot.setAttribute('r', '4');
+      dot.setAttribute('r', String(style.radius));
       dot.setAttribute('fill', '#AFDDE5');
+      dot.setAttribute('stroke', '#042428');
+      dot.setAttribute('stroke-width', String(Math.max(1, style.stroke * 0.4)));
       svg.appendChild(dot);
     });
   };
   st.shapes.forEach(shape => drawShape(shape, false));
-  if (st.draft.length) drawShape({ kind: st.mode, points: st.draft }, true);
+  if (st.draft.length || (st.mode && st.hover)) {
+    drawShape({ kind: st.mode, points: st.draft }, true);
+  }
+}
+
+function closeMeasureArea(which) {
+  const st = MEASURE[which];
+  if (st.mode !== 'area' || st.draft.length < 3) return false;
+  const points = st.draft.slice();
+  st.shapes.push({ kind: 'area', points });
+  st.draft = [];
+  st.hover = null;
+  setMeasureReadout(which, `Area ${formatAreaQuantized(measurePolygonM2(which, points))}`);
+  redrawMeasure(which);
+  return true;
 }
 
 function onMeasureClick(which, event) {
   const st = MEASURE[which];
-  if (!st.mode) return;
+  if (!st.mode) return false;
+  if (event.target?.closest?.('button, a, input, select, .asset-poc-slide, .report-image-rail')) return false;
+  const p = measureImagePoint(which, event);
+  if (!p) return false;
   event.preventDefault();
   event.stopPropagation();
-  const svg = document.getElementById(measureIds(which).svg);
-  const p = svg && measureSvgPoint(svg, event);
-  if (!p) return;
-  st.draft.push({ x: p.x, y: p.y });
+  if (st.draft.length) {
+    const last = st.draft[st.draft.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) < 2) return true;
+  }
+  if (st.mode === 'area' && st.draft.length >= 3) {
+    const first = st.draft[0];
+    const closeTol = Math.max(10, 14 / (measureViewState(which).scale || 1));
+    if (Math.hypot(p.x - first.x, p.y - first.y) <= closeTol) {
+      return closeMeasureArea(which);
+    }
+  }
+  st.draft.push(p);
   if (st.mode === 'dist' && st.draft.length >= 2) {
-    st.shapes.push({ kind: 'dist', points: st.draft.slice(0, 2) });
+    const points = st.draft.slice(0, 2);
+    st.shapes.push({ kind: 'dist', points });
     st.draft = [];
-    const last = st.shapes[st.shapes.length - 1];
-    const len = Math.hypot(last.points[1].x - last.points[0].x, last.points[1].y - last.points[0].y);
-    const readout = document.getElementById(measureIds(which).readout);
-    if (which === 'report' && readout) readout.textContent = `${Math.round(len)} px · uncalibrated`;
+    st.hover = null;
+    setMeasureReadout(which, `Dist ${formatDistQuantized(measureSegmentM(which, points[0], points[1]))}`);
+  } else if (st.mode === 'dist') {
+    setMeasureReadout(which, 'Dist · click end point');
+  } else {
+    setMeasureReadout(which, `Area · ${st.draft.length} point${st.draft.length === 1 ? '' : 's'} · double-click to close`);
+  }
+  redrawMeasure(which);
+  return true;
+}
+
+function onMeasureMove(which, event) {
+  const st = MEASURE[which];
+  if (!st.mode || !st.draft.length) return;
+  const p = measureImagePoint(which, event);
+  if (!p) return;
+  st.hover = p;
+  if (st.mode === 'dist' && st.draft.length === 1) {
+    setMeasureReadout(which, `Dist ${formatDistQuantized(measureSegmentM(which, st.draft[0], p))}`);
+  } else if (st.mode === 'area' && st.draft.length >= 2) {
+    setMeasureReadout(which, `Area ${formatAreaQuantized(measurePolygonM2(which, st.draft.concat([p])))}`);
   }
   redrawMeasure(which);
 }
@@ -3493,13 +3679,7 @@ function onMeasureDblClick(which, event) {
   if (st.mode !== 'area') return;
   event.preventDefault();
   event.stopPropagation();
-  if (st.draft.length >= 3) {
-    st.shapes.push({ kind: 'area', points: st.draft.slice() });
-    st.draft = [];
-    const readout = document.getElementById(measureIds(which).readout);
-    if (which === 'report' && readout) readout.textContent = 'Area · uncalibrated px²';
-  }
-  redrawMeasure(which);
+  closeMeasureArea(which);
 }
 
 function reportShareHash() {
@@ -3555,29 +3735,37 @@ function applyShareHash() {
   return true;
 }
 
+function bindMeasureViewport(which) {
+  const viewport = document.getElementById(measureIds(which).viewport);
+  if (!viewport || viewport.dataset.measureBound) return;
+  viewport.dataset.measureBound = '1';
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !MEASURE[which].mode) return;
+    onMeasureClick(which, e);
+  });
+  viewport.addEventListener('pointermove', (e) => onMeasureMove(which, e));
+  viewport.addEventListener('dblclick', (e) => onMeasureDblClick(which, e));
+}
+
 function bindMeasureAndShare() {
   const reportVp = document.getElementById('report-viewport');
-  if (reportVp && !reportVp.dataset.measureBound) {
-    reportVp.dataset.measureBound = '1';
+  if (reportVp && !reportVp.dataset.measureBtns) {
+    reportVp.dataset.measureBtns = '1';
     document.getElementById('report-measure-dist')?.addEventListener('click', () => setMeasureMode('report', 'dist'));
     document.getElementById('report-measure-area')?.addEventListener('click', () => setMeasureMode('report', 'area'));
     document.getElementById('report-measure-clear')?.addEventListener('click', () => clearMeasure('report'));
     document.getElementById('report-share-link')?.addEventListener('click', () => copyReportShareLink());
-    const svg = document.getElementById('report-measure-svg');
-    svg?.addEventListener('click', e => onMeasureClick('report', e));
-    svg?.addEventListener('dblclick', e => onMeasureDblClick('report', e));
   }
+  bindMeasureViewport('report');
   const assetVp = document.getElementById('asset-poc-viewport');
-  if (assetVp && !assetVp.dataset.measureBound) {
-    assetVp.dataset.measureBound = '1';
+  if (assetVp && !assetVp.dataset.measureBtns) {
+    assetVp.dataset.measureBtns = '1';
     document.getElementById('asset-measure-dist')?.addEventListener('click', () => setMeasureMode('asset', 'dist'));
     document.getElementById('asset-measure-area')?.addEventListener('click', () => setMeasureMode('asset', 'area'));
     document.getElementById('asset-measure-clear')?.addEventListener('click', () => clearMeasure('asset'));
     document.getElementById('asset-share-link')?.addEventListener('click', () => copyReportShareLink());
-    const svg = document.getElementById('asset-measure-svg');
-    svg?.addEventListener('click', e => onMeasureClick('asset', e));
-    svg?.addEventListener('dblclick', e => onMeasureDblClick('asset', e));
   }
+  bindMeasureViewport('asset');
   window.addEventListener('hashchange', () => applyShareHash());
 }
 
@@ -5961,6 +6149,7 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
         fitAnnotatedImage();
         renderPocBboxOverlay(pt, turbine);
         clearMeasure('asset');
+        if (MEASURE.asset.mode) setMeasureMode('asset', MEASURE.asset.mode);
         syncMeasureLayer('asset');
       };
       const candidates = (pt.stationCandidates && pt.stationCandidates.length)
@@ -5990,7 +6179,7 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
         renderPocBboxOverlay(pt, turbine);
       }
     }
-    if (label) label.textContent = pt.blade + ' · ' + pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine);
+    if (label) label.textContent = bladeSerial(pt.blade, turbine) + ' · ' + pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine);
   } else {
     if (annotated) {
       annotated.removeAttribute('src');
@@ -6174,6 +6363,7 @@ function bindAnnotatedViewerControls() {
     target.style.transform = `translate(${ANNO_VIEW.tx}px, ${ANNO_VIEW.ty}px) scale(${ANNO_VIEW.scale})`;
     const lvl = document.getElementById('asset-zoom-level');
     if (lvl) lvl.textContent = `${Math.round(ANNO_VIEW.scale * 100)}%`;
+    if (MEASURE.asset.mode || MEASURE.asset.shapes.length) redrawMeasure('asset');
   };
 
   window._applyAnnoZoom = apply;
