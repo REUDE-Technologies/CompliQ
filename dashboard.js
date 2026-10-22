@@ -264,6 +264,7 @@ let STATE = {
   pocSurface: 'PS',
   pocPointIndex: 5,
   pocSelectedDefectId: null,
+  pocPopupBoxIndex: null,
   assetEpoch: 0,
   activeTab: 'analytics',
   analyticsTurbineId: null
@@ -5218,6 +5219,7 @@ const BLADE_POC = {
   profileSrc: 'blade_profile_after.png?v=g97scale',
   pdfHref: 'reports/REU_WT_IR_003_2026_Blade5297_PS_Defect_Register.pdf'
 };
+const STATION_BOXES = { ready: false, loading: null, byKey: {} };
 
 function bladeSpanM(turbine) {
   if (!turbine) return 48.5;
@@ -5869,6 +5871,75 @@ function initProfileMenu() {
   });
 }
 
+const SHEET_HEIGHT_KEY = 'compliq_findings_sheet_h';
+
+function sheetHeightBounds(sheet) {
+  const parentH = sheet.parentElement?.clientHeight || window.innerHeight;
+  return { min: 140, max: Math.max(180, Math.round(parentH * 0.92)) };
+}
+
+function applyFindingsSheetHeight(sheet, px) {
+  const { min, max } = sheetHeightBounds(sheet);
+  const h = Math.max(min, Math.min(max, Math.round(px)));
+  sheet.style.height = h + 'px';
+  sheet.style.maxHeight = h + 'px';
+  try { localStorage.setItem(SHEET_HEIGHT_KEY, String(h)); } catch (_) {}
+  return h;
+}
+
+function restoreFindingsSheetHeight(sheet) {
+  if (!sheet?.classList.contains('is-open')) return;
+  let saved = 0;
+  try { saved = Number(localStorage.getItem(SHEET_HEIGHT_KEY)) || 0; } catch (_) {}
+  if (saved) applyFindingsSheetHeight(sheet, saved);
+}
+
+function clearFindingsSheetHeight(sheet) {
+  if (!sheet) return;
+  sheet.style.height = '';
+  sheet.style.maxHeight = '';
+}
+
+function bindAssetSheetResize(sheet) {
+  const resizer = document.getElementById('asset-sheet-resizer');
+  if (!sheet || !resizer || resizer.dataset.bound) return;
+  resizer.dataset.bound = '1';
+  let startY = 0;
+  let startH = 0;
+  resizer.addEventListener('pointerdown', (e) => {
+    if (!sheet.classList.contains('is-open')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startY = e.clientY;
+    startH = sheet.getBoundingClientRect().height;
+    sheet.classList.add('is-resizing');
+    try { resizer.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  resizer.addEventListener('pointermove', (e) => {
+    if (!sheet.classList.contains('is-resizing')) return;
+    applyFindingsSheetHeight(sheet, startH + (startY - e.clientY));
+  });
+  const endResize = (e) => {
+    if (!sheet.classList.contains('is-resizing')) return;
+    sheet.classList.remove('is-resizing');
+    try { resizer.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  resizer.addEventListener('pointerup', endResize);
+  resizer.addEventListener('pointercancel', endResize);
+  resizer.addEventListener('keydown', (e) => {
+    if (!sheet.classList.contains('is-open')) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const now = sheet.getBoundingClientRect().height;
+    applyFindingsSheetHeight(sheet, now + (e.key === 'ArrowUp' ? 36 : -36));
+  });
+  window.addEventListener('resize', () => {
+    if (!sheet.classList.contains('is-open') || !sheet.style.height) return;
+    applyFindingsSheetHeight(sheet, parseFloat(sheet.style.height));
+  });
+}
+
 function initAssetSheet() {
   const sheet = document.getElementById('asset-bottom-sheet');
   const btn = document.getElementById('asset-sheet-toggle');
@@ -5876,8 +5947,11 @@ function initAssetSheet() {
   btn.addEventListener('click', () => {
     const open = sheet.classList.toggle('is-open');
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) restoreFindingsSheetHeight(sheet);
+    else clearFindingsSheetHeight(sheet);
     updateFindingsSheetMeta();
   });
+  bindAssetSheetResize(sheet);
   updateFindingsSheetMeta();
 }
 
@@ -6002,14 +6076,210 @@ async function loadBladePocAnnotations() {
   return BLADE_POC.annotations;
 }
 
+async function loadStationBoxes() {
+  if (STATION_BOXES.ready) return STATION_BOXES.byKey;
+  if (STATION_BOXES.loading) return STATION_BOXES.loading;
+  STATION_BOXES.loading = (async () => {
+    try {
+      const res = await fetch('station_boxes.json?v=defectHit1');
+      STATION_BOXES.byKey = res.ok ? await res.json() : {};
+    } catch (err) {
+      console.warn('Station boxes unavailable:', err);
+      STATION_BOXES.byKey = {};
+    }
+    STATION_BOXES.ready = true;
+    return STATION_BOXES.byKey;
+  })();
+  return STATION_BOXES.loading;
+}
+
+function boxesForPocPoint(pt) {
+  if (!pt) return [];
+  const blade = pt.blade || activeBladeLetter();
+  return STATION_BOXES.byKey[`${blade}-${pt.surface}-${pt.pointIndex}`] || [];
+}
+
+function findingCode(row) {
+  return (String(row?.finding || '').match(/^(C\d+|H\d+|D\d+)/i) || [])[0]?.toUpperCase() || '';
+}
+
+function matchFindingForBox(findings, box) {
+  const rows = findings || [];
+  const code = String(box?.code || '').toUpperCase();
+  if (code) {
+    const hit = rows.find(row => findingCode(row) === code || String(row.finding || '').toUpperCase().startsWith(code));
+    if (hit) return hit;
+  }
+  const label = String(box?.label || '').toLowerCase();
+  if (label) {
+    const hit = rows.find(row => {
+      const name = String(row.finding || '').toLowerCase();
+      return name.includes(label.slice(0, 18)) || label.includes(name.slice(0, 18));
+    });
+    if (hit) return hit;
+  }
+  return rows[0] || null;
+}
+
 function defectsForPocPoint(pt) {
   if (!pt?.annotationImage) return [];
   return BLADE_POC.annotations.filter(d => d.image === pt.annotationImage);
 }
 
+/** Editable blade-profile schematic (data units match POC_X/Y box). */
+const BLADE_PROFILE_DRAW = {
+  bladeW: 4.55,
+  edgeW: 0.72,
+  chordT: [0, 0.05, 0.14, 0.22, 0.4, 0.58, 0.75, 0.88, 1],
+  chordC: [0.46, 0.78, 1, 0.86, 0.62, 0.4, 0.24, 0.13, 0.045],
+  rulerX: -3.15
+};
+
+function pocToSvg(x, y) {
+  return { x: x - POC_X_MIN, y: POC_Y_MAX - y };
+}
+
+function bladeChordFrac(t) {
+  const xs = BLADE_PROFILE_DRAW.chordT;
+  const ys = BLADE_PROFILE_DRAW.chordC;
+  const v = Math.min(1, Math.max(0, t));
+  for (let i = 1; i < xs.length; i += 1) {
+    if (v <= xs[i]) {
+      const u = (v - xs[i - 1]) / Math.max(1e-6, xs[i] - xs[i - 1]);
+      return ys[i - 1] + (ys[i] - ys[i - 1]) * u;
+    }
+  }
+  return ys[ys.length - 1];
+}
+
+function bladePlanformPath(cx, kind, span) {
+  const wide = kind === 'SS' || kind === 'PS';
+  const w = wide ? BLADE_PROFILE_DRAW.bladeW : BLADE_PROFILE_DRAW.edgeW;
+  const half0 = bladeChordFrac(0) * w;
+  const pts = [
+    [cx - half0 * 0.72, 0],
+    [cx - half0 * 0.55, -1.15],
+    [cx, -1.55],
+    [cx + half0 * 0.55, -1.15],
+    [cx + half0 * 0.72, 0]
+  ];
+  const n = 48;
+  for (let i = 0; i <= n; i += 1) {
+    const t = i / n;
+    pts.push([cx - bladeChordFrac(t) * w, t * span]);
+  }
+  pts.push([cx, span + 0.55]);
+  for (let i = n; i >= 0; i -= 1) {
+    const t = i / n;
+    pts.push([cx + bladeChordFrac(t) * w, t * span]);
+  }
+  return pts.map((p, i) => {
+    const s = pocToSvg(p[0], p[1]);
+    return `${i ? 'L' : 'M'}${s.x.toFixed(2)} ${s.y.toFixed(2)}`;
+  }).join(' ') + ' Z';
+}
+
+function bladeProfileSvgMarkup(span, points, turbine) {
+  const vbW = POC_X_MAX - POC_X_MIN;
+  const vbH = POC_Y_MAX - POC_Y_MIN;
+  const ruler = pocToSvg(BLADE_PROFILE_DRAW.rulerX, 0);
+  const rulerTop = pocToSvg(BLADE_PROFILE_DRAW.rulerX, span);
+  const ticks = [];
+  for (let m = 0; m <= Math.ceil(span); m += 5) {
+    if (m > span) break;
+    const major = m % 10 === 0;
+    const a = pocToSvg(BLADE_PROFILE_DRAW.rulerX, m);
+    const b = pocToSvg(BLADE_PROFILE_DRAW.rulerX + (major ? 1.85 : 1.05), m);
+    ticks.push(`<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" class="${major ? 'bp-tick-major' : 'bp-tick'}"/>`);
+    if (major) {
+      ticks.push(`<text x="${(a.x - 0.7).toFixed(2)}" y="${a.y.toFixed(2)}" class="bp-ruler-label" text-anchor="end" dominant-baseline="middle">${m}</text>`);
+    }
+  }
+  const spanLab = pocToSvg(BLADE_PROFILE_DRAW.rulerX - 0.7, span);
+  ticks.push(`<text x="${spanLab.x.toFixed(2)}" y="${spanLab.y.toFixed(2)}" class="bp-ruler-span" text-anchor="end" dominant-baseline="middle">${span}</text>`);
+  const unit = pocToSvg(BLADE_PROFILE_DRAW.rulerX, -2.55);
+  ticks.push(`<text x="${unit.x.toFixed(2)}" y="${unit.y.toFixed(2)}" class="bp-ruler-unit" text-anchor="middle">${escHtml('m')}</text>`);
+
+  const blades = POC_SURFACES.map(kind => {
+    const cx = POC_SURFACE_CX[kind];
+    const tabW = 4.9;
+    const tabH = 3.2;
+    const tab = pocToSvg(cx - tabW / 2, span + 1.05 + tabH);
+    const label = pocToSvg(cx, span + 2.65);
+    const spineA = pocToSvg(cx, 0);
+    const spineB = pocToSvg(cx, span);
+    return `
+      <path class="bp-blade" data-surface="${kind}" d="${bladePlanformPath(cx, kind, span)}"/>
+      <line class="bp-spine" x1="${spineA.x.toFixed(2)}" y1="${spineA.y.toFixed(2)}" x2="${spineB.x.toFixed(2)}" y2="${spineB.y.toFixed(2)}"/>
+      <rect class="bp-tab" x="${tab.x.toFixed(2)}" y="${tab.y.toFixed(2)}" width="${tabW}" height="${tabH}" rx="0.4"/>
+      <text class="bp-tab-label" x="${label.x.toFixed(2)}" y="${label.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle">${kind}</text>`;
+  }).join('');
+
+  const dots = points.map(p => {
+    const s = pocToSvg(POC_SURFACE_CX[p.surface], p.metres);
+    const on = p.surface === STATE.pocSurface && p.pointIndex === STATE.pocPointIndex;
+    const title = `${p.surface} ${p.point} · ${formatRadial(p, turbine)}${p.defectLabel ? ' · ' + p.defectLabel : ''}`;
+    return `<circle class="asset-bp-hotspot${p.flagged ? ' has-finding' : ''}${on ? ' active' : ''}"
+      data-surface="${p.surface}" data-point="${p.pointIndex}"
+      cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r="${p.flagged ? '0.78' : '0.58'}"
+      style="${p.flagged ? '--finding:' + p.color : ''}"
+      role="button" tabindex="0" aria-label="${escHtml(title)}">
+      <title>${escHtml(title)}</title>
+    </circle>`;
+  }).join('');
+
+  const selected = points.find(p => p.surface === STATE.pocSurface && p.pointIndex === STATE.pocPointIndex) || points[0];
+  const cursor = selected ? bladeRulerCursorMarkup(selected) : '';
+
+  return `<svg class="asset-bp-svg" viewBox="0 0 ${vbW} ${vbH}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Blade surface profile">
+    <rect class="bp-panel" x="0" y="0" width="${vbW}" height="${vbH}"/>
+    ${blades}
+    <line class="bp-ruler" x1="${ruler.x.toFixed(2)}" y1="${ruler.y.toFixed(2)}" x2="${rulerTop.x.toFixed(2)}" y2="${rulerTop.y.toFixed(2)}"/>
+    ${ticks.join('')}
+    ${dots}
+    ${cursor}
+  </svg>`;
+}
+
+function bladeRulerCursorMarkup(pt) {
+  const s = pocToSvg(BLADE_PROFILE_DRAW.rulerX, pt.metres);
+  const lab = pocToSvg(BLADE_PROFILE_DRAW.rulerX - 0.7, pt.metres);
+  const r = pt.flagged ? 0.78 : 0.58;
+  const len = Number(pt.metres).toFixed(1);
+  return `<g class="bp-ruler-cursor-g">
+    <circle class="bp-ruler-cursor" cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r="${r}"/>
+    <text class="bp-ruler-cursor-len" x="${lab.x.toFixed(2)}" y="${s.y.toFixed(2)}" text-anchor="end" dominant-baseline="middle">${len}</text>
+  </g>`;
+}
+
+function syncBladeRulerCursor(pt) {
+  const svg = document.querySelector('#asset-bp-profile .asset-bp-svg');
+  if (!svg || !pt) return;
+  let g = svg.querySelector('.bp-ruler-cursor-g');
+  if (!g) {
+    svg.insertAdjacentHTML('beforeend', bladeRulerCursorMarkup(pt));
+    return;
+  }
+  const s = pocToSvg(BLADE_PROFILE_DRAW.rulerX, pt.metres);
+  const lab = pocToSvg(BLADE_PROFILE_DRAW.rulerX - 0.7, pt.metres);
+  const circle = g.querySelector('.bp-ruler-cursor');
+  const text = g.querySelector('.bp-ruler-cursor-len');
+  if (circle) {
+    circle.setAttribute('cx', s.x.toFixed(2));
+    circle.setAttribute('cy', s.y.toFixed(2));
+    circle.setAttribute('r', pt.flagged ? '0.78' : '0.58');
+  }
+  if (text) {
+    text.setAttribute('x', lab.x.toFixed(2));
+    text.setAttribute('y', s.y.toFixed(2));
+    text.textContent = Number(pt.metres).toFixed(1);
+  }
+}
+
 async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
   await loadBladePocAnnotations();
   await loadBladeFindings();
+  await loadStationBoxes();
   if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch) return;
   const container = document.getElementById('blade-schematic');
   if (!container) return;
@@ -6024,16 +6294,7 @@ async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
       <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · ${escHtml(bladeDisplayName(activeBladeLetter()))} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
       <div class="asset-bp-profile" id="asset-bp-profile">
         <div class="asset-bp-stage">
-          <img src="${BLADE_POC.profileSrc}" alt="Blade profile ${span} m after annotation">
-          <div class="asset-bp-hotspots">
-            ${points.map(p => `
-              <button type="button" class="asset-bp-hotspot ${p.flagged ? 'has-finding' : ''} ${p.critical ? 'critical' : ''} ${p.surface === STATE.pocSurface && p.pointIndex === STATE.pocPointIndex ? 'active' : ''}"
-                data-surface="${p.surface}" data-point="${p.pointIndex}"
-                aria-label="${p.surface} ${p.point}${p.defectLabel ? ' ' + p.defectLabel : ''}"
-                title="${p.surface} ${p.point} · ${formatRadial(p, turbine)}${p.defectLabel ? ' · ' + p.defectLabel : ''}"
-                style="left:${p.x}%;top:${p.y}%;${p.flagged ? '--finding:' + p.color + ';' : ''}"></button>
-            `).join('')}
-          </div>
+          ${bladeProfileSvgMarkup(span, points, turbine)}
         </div>
         ${showLegend ? `
           <div class="finding-legend">
@@ -6061,16 +6322,15 @@ function bindProfileStageFit(root) {
   disconnectProfileFit();
   const box = root.querySelector('.asset-bp-profile');
   const stage = root.querySelector('.asset-bp-stage');
-  const img = stage?.querySelector('img');
+  const drawing = stage?.querySelector('.asset-bp-svg, img');
   const panel = box?.closest('.asset-poc-profile-panel');
   const workspace = panel?.closest('.asset-poc-workspace');
-  if (!box || !stage || !img) return;
+  if (!box || !stage || !drawing) return;
+  const ar = (POC_X_MAX - POC_X_MIN) / (POC_Y_MAX - POC_Y_MIN);
 
   const fit = () => {
-    if (STATE.activeTab !== 'asset' || !img.isConnected) return;
-    if (!img.naturalWidth || !img.naturalHeight) return;
-    const ar = img.naturalWidth / img.naturalHeight;
-    stage.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+    if (STATE.activeTab !== 'asset' || !drawing.isConnected) return;
+    stage.style.aspectRatio = `${POC_X_MAX - POC_X_MIN} / ${POC_Y_MAX - POC_Y_MIN}`;
 
     if (panel) {
       const view = document.getElementById('view-asset');
@@ -6109,8 +6369,8 @@ function bindProfileStageFit(root) {
     });
   };
 
-  if (img.complete && img.naturalWidth) scheduleFit();
-  else img.addEventListener('load', scheduleFit, { once: true });
+  scheduleFit();
+  drawing.addEventListener('load', scheduleFit, { once: true });
 
   if (typeof ResizeObserver !== 'undefined') {
     // Observe only the profile box — observing view/workspace while fit()
@@ -6123,10 +6383,12 @@ function bindProfileStageFit(root) {
 }
 
 function selectAssetPocPoint(surface, pointIndex, findingId) {
+  const stationChanged = STATE.pocSurface !== (surface || 'PS') || STATE.pocPointIndex !== (pointIndex || 5);
   STATE.pocSurface = surface || 'PS';
   STATE.pocPointIndex = pointIndex || 5;
   STATE.pocMode = true;
   STATE.pocSelectedDefectId = findingId || null;
+  if (stationChanged) hideDefectPopup();
 
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const pt = getSelectedPocPoint(turbine);
@@ -6134,6 +6396,7 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
   document.querySelectorAll('.asset-bp-hotspot').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.surface === pt.surface && Number(btn.dataset.point) === pt.pointIndex);
   });
+  syncBladeRulerCursor(pt);
 
   const annotated = document.getElementById('asset-poc-annotated');
   const label = document.getElementById('asset-poc-station-label');
@@ -6206,10 +6469,6 @@ function renderPocBboxOverlay(pt, turbine) {
   const img = document.getElementById('asset-poc-annotated');
   const stage = document.getElementById('asset-poc-stage');
   if (!svg || !img || !img.naturalWidth) return;
-  if (!/Annotated(?:%20|\s)Images/i.test(img.src || '')) {
-    clearPocBboxOverlay();
-    return;
-  }
 
   const w = img.naturalWidth;
   const h = img.naturalHeight;
@@ -6222,57 +6481,162 @@ function renderPocBboxOverlay(pt, turbine) {
   }
 
   const selectedId = STATE.pocSelectedDefectId;
-  const defects = defectsForPocPoint(pt);
+  const boxes = boxesForPocPoint(pt);
+  const findings = findingsForStation(pt.blade || activeBladeLetter(), pt.surface, pt.pointIndex);
+  svg.classList.remove('isolating');
 
-  if (!selectedId) {
-    // Overview: light outlines for all defects (pinpoint without hiding baked boxes)
-    svg.classList.remove('isolating');
-    svg.innerHTML = defects.map(d => {
-      if (!Array.isArray(d.bbox_norm) || d.bbox_norm.length < 4) return '';
-      const [x1, y1, x2, y2] = d.bbox_norm.map(Number);
-      const X = x1 * w, Y = y1 * h, WW = (x2 - x1) * w, HH = (y2 - y1) * h;
-      const col = DEFECT_SEV_COLOR[d.severity] || '#0FA4AF';
-      const geo = defectRadialMetrics(pt, d, turbine);
-      return `
-        <g class="bbox-all" data-id="${d.id}" style="cursor:pointer" onclick="selectPocDefect('${d.id}')">
-          <rect x="${X}" y="${Y}" width="${WW}" height="${HH}" fill="transparent"
-            stroke="${col}" stroke-width="${Math.max(2, w * 0.0025)}" opacity="0.85"/>
-          <circle cx="${geo.pin.cx * w}" cy="${geo.pin.cy * h}" r="${Math.max(4, w * 0.006)}"
-            fill="${col}" stroke="#041018" stroke-width="1.5"/>
-        </g>`;
+  if (boxes.length) {
+    const painted = boxes.map((box, i) => ({
+      box,
+      i,
+      area: Math.abs((box.bbox_norm[2] - box.bbox_norm[0]) * (box.bbox_norm[3] - box.bbox_norm[1]))
+    })).sort((a, b) => b.area - a.area);
+    svg.innerHTML = painted.map(({ box, i }) => {
+      const finding = matchFindingForBox(findings, box);
+      const col = finding?.color || FINDING_COLOR[box.cat] || '#0FA4AF';
+      const fid = finding?.id || '';
+      const on = !!(fid && selectedId === fid && (STATE.pocPopupBoxIndex == null || STATE.pocPopupBoxIndex === i));
+      const pts = (box.poly || []).map(([x, y]) => `${(x * w).toFixed(1)},${(y * h).toFixed(1)}`).join(' ');
+      const title = `${box.code || ''} ${finding?.finding || box.label || ''}`.trim();
+      return `<g class="bbox-hit${on ? ' is-on' : ''}" data-box="${i}" data-finding-id="${escHtml(fid)}" data-code="${escHtml(box.code || '')}" style="--finding:${col}">
+        <polygon points="${pts}"><title>${escHtml(title)}</title></polygon>
+      </g>`;
     }).join('');
+    bindPocBboxClicks();
+    const popup = document.getElementById('asset-defect-popup');
+    if (popup && !popup.hidden && STATE.pocPopupBoxIndex != null && boxes[STATE.pocPopupBoxIndex]) {
+      placeDefectPopup(boxes[STATE.pocPopupBoxIndex]);
+    }
     return;
   }
 
-  const d = defects.find(x => x.id === selectedId);
-  if (!d || !Array.isArray(d.bbox_norm)) {
-    clearPocBboxOverlay();
+  const defects = defectsForPocPoint(pt);
+  if (!defects.length) {
+    svg.innerHTML = '';
     return;
   }
+  svg.innerHTML = defects.map(d => {
+    if (!Array.isArray(d.bbox_norm) || d.bbox_norm.length < 4) return '';
+    const [x1, y1, x2, y2] = d.bbox_norm.map(Number);
+    const X = x1 * w, Y = y1 * h, WW = (x2 - x1) * w, HH = (y2 - y1) * h;
+    const col = DEFECT_SEV_COLOR[d.severity] || '#0FA4AF';
+    const geo = defectRadialMetrics(pt, d, turbine);
+    const on = selectedId === d.id;
+    return `
+      <g class="bbox-all${on ? ' is-on' : ''}" data-id="${d.id}" onclick="selectPocDefect('${d.id}')">
+        <rect x="${X}" y="${Y}" width="${WW}" height="${HH}" fill="transparent"
+          stroke="${col}" stroke-width="${Math.max(2, w * 0.0025)}" opacity="${on ? 1 : 0.85}"/>
+        <circle cx="${geo.pin.cx * w}" cy="${geo.pin.cy * h}" r="${Math.max(4, w * 0.006)}"
+          fill="${col}" stroke="#041018" stroke-width="1.5"/>
+      </g>`;
+  }).join('');
+}
 
-  const [x1, y1, x2, y2] = d.bbox_norm.map(Number);
-  const X = x1 * w, Y = y1 * h, X2 = x2 * w, Y2 = y2 * h;
-  const pad = Math.max(6, w * 0.008);
-  const col = DEFECT_SEV_COLOR[d.severity] || '#0FA4AF';
-  const geo = defectRadialMetrics(pt, d, turbine);
-  const stroke = Math.max(3, w * 0.0035);
+function bindPocBboxClicks() {
+  const svg = document.getElementById('asset-poc-bbox-overlay');
+  if (!svg || svg.dataset.hitBound) return;
+  svg.dataset.hitBound = '1';
+  svg.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.bbox-hit')) e.stopPropagation();
+  });
+  svg.addEventListener('click', (e) => {
+    if (document.getElementById('asset-poc-viewport')?.classList.contains('is-measuring')) return;
+    const hit = e.target.closest('.bbox-hit');
+    if (!hit) return;
+    e.stopPropagation();
+    pickPocDefectBox(hit.dataset.findingId, Number(hit.dataset.box));
+  });
+}
 
-  svg.classList.add('isolating');
-  // Dim whole frame except selected cutout — hides other baked boxes
-  svg.innerHTML = `
-    <path class="bbox-dim" fill="rgba(4,12,16,0.78)" fill-rule="evenodd"
-      d="M0 0 H${w} V${h} H0 Z
-         M${X - pad} ${Y - pad} H${X2 + pad} V${Y2 + pad} H${X - pad} Z"/>
-    <rect x="${X}" y="${Y}" width="${X2 - X}" height="${Y2 - Y}"
-      fill="none" stroke="${col}" stroke-width="${stroke}" class="bbox-focus"/>
-    <circle cx="${geo.pin.cx * w}" cy="${geo.pin.cy * h}" r="${Math.max(6, w * 0.008)}"
-      fill="${col}" stroke="#fff" stroke-width="2">
-      <animate attributeName="r" values="${Math.max(5, w * 0.007)};${Math.max(9, w * 0.012)};${Math.max(5, w * 0.007)}"
-        dur="1.4s" repeatCount="indefinite"/>
-    </circle>
-    <text x="${X}" y="${Math.max(16, Y - 10)}" fill="${col}" font-family="JetBrains Mono,monospace"
-      font-size="${Math.max(12, w * 0.018)}" font-weight="700">${pt.point}-${d.id} · ${geo.distRoot}</text>
-  `;
+function pickPocDefectBox(findingId, boxIndex) {
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const pt = getSelectedPocPoint(turbine);
+  const boxes = boxesForPocPoint(pt);
+  const box = boxes[boxIndex];
+  const findings = findingsForStation(pt.blade || activeBladeLetter(), pt.surface, pt.pointIndex);
+  const finding = (findingId && findings.find(row => row.id === findingId)) || (box ? matchFindingForBox(findings, box) : null);
+  STATE.pocSelectedDefectId = finding?.id || findingId || null;
+  STATE.pocPopupBoxIndex = Number.isFinite(boxIndex) ? boxIndex : null;
+  STATE.reviewFindingId = finding?.id || null;
+  renderDefectsTable(turbine);
+  showDefectPopup(finding, box, pt, turbine);
+}
+
+function openFindingsSheet() {
+  const sheet = document.getElementById('asset-bottom-sheet');
+  const btn = document.getElementById('asset-sheet-toggle');
+  if (!sheet) return;
+  sheet.classList.add('is-open');
+  btn?.setAttribute('aria-expanded', 'true');
+  restoreFindingsSheetHeight(sheet);
+  updateFindingsSheetMeta();
+}
+
+function hideDefectPopup() {
+  const popup = document.getElementById('asset-defect-popup');
+  if (popup) popup.hidden = true;
+  STATE.pocPopupBoxIndex = null;
+}
+
+function placeDefectPopup(box) {
+  const popup = document.getElementById('asset-defect-popup');
+  const viewport = document.getElementById('asset-poc-viewport');
+  const img = document.getElementById('asset-poc-annotated');
+  if (!popup || popup.hidden || !viewport || !img?.naturalWidth || !box?.bbox_norm) return;
+  const [x1, y1, x2, y2] = box.bbox_norm.map(Number);
+  const cx = (x1 + x2) / 2 * img.naturalWidth;
+  const cy = (y1 + y2) / 2 * img.naturalHeight;
+  const left0 = ANNO_VIEW.tx + cx * ANNO_VIEW.scale;
+  const top0 = ANNO_VIEW.ty + cy * ANNO_VIEW.scale;
+  popup.style.left = `${left0}px`;
+  popup.style.top = `${top0}px`;
+  const pw = popup.offsetWidth;
+  const ph = popup.offsetHeight;
+  const vw = viewport.clientWidth;
+  const vh = viewport.clientHeight;
+  const left = Math.min(Math.max(8, left0 + 14), Math.max(8, vw - pw - 8));
+  const top = Math.min(Math.max(8, top0 - ph - 10), Math.max(8, vh - ph - 8));
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+}
+
+function showDefectPopup(finding, box, pt, turbine) {
+  const popup = document.getElementById('asset-defect-popup');
+  if (!popup) return;
+  const span = bladeSpanM(turbine);
+  const metres = pt?.metres ?? pointMetres(finding?.index || pt?.pointIndex || 1, span);
+  const code = findingCode(finding) || box?.code || '';
+  const typeName = String(finding?.finding || box?.label || 'Finding').replace(/^(C\d+|H\d+|D\d+)\s+/, '');
+  const kicker = document.getElementById('asset-defect-popup-kicker');
+  const title = document.getElementById('asset-defect-popup-title');
+  const meta = document.getElementById('asset-defect-popup-meta');
+  if (kicker) kicker.textContent = `${pt?.surface || ''} ${pt?.point || ''} · CAT ${finding?.cat || box?.cat || '—'}`.trim();
+  if (title) title.textContent = typeName;
+  if (meta) {
+    const marks = finding?.count ? `${finding.count} mark${finding.count === 1 ? '' : 's'}` : '';
+    meta.textContent = [code, `${Number(metres).toFixed(1)} m from root`, marks].filter(Boolean).join(' · ');
+  }
+  popup.hidden = false;
+  placeDefectPopup(box);
+}
+
+function initDefectPopup() {
+  const popup = document.getElementById('asset-defect-popup');
+  if (!popup || popup.dataset.bound) return;
+  popup.dataset.bound = '1';
+  document.getElementById('asset-defect-popup-close')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideDefectPopup();
+  });
+  document.getElementById('asset-defect-popup-review')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (STATE.reviewFindingId) openDefectReview(STATE.reviewFindingId);
+    openFindingsSheet();
+  });
+  popup.addEventListener('pointerdown', (e) => e.stopPropagation());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideDefectPopup();
+  });
 }
 
 function focusPocDefectInView(pt, turbine) {
@@ -6364,6 +6728,12 @@ function bindAnnotatedViewerControls() {
     const lvl = document.getElementById('asset-zoom-level');
     if (lvl) lvl.textContent = `${Math.round(ANNO_VIEW.scale * 100)}%`;
     if (MEASURE.asset.mode || MEASURE.asset.shapes.length) redrawMeasure('asset');
+    const popup = document.getElementById('asset-defect-popup');
+    if (popup && !popup.hidden && STATE.pocPopupBoxIndex != null) {
+      const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+      const box = boxesForPocPoint(getSelectedPocPoint(turbine))[STATE.pocPopupBoxIndex];
+      if (box) placeDefectPopup(box);
+    }
   };
 
   window._applyAnnoZoom = apply;
@@ -6415,8 +6785,9 @@ function bindAnnotatedViewerControls() {
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || !ANNO_VIEW.pan) return;
     if (viewport.classList.contains('is-measuring')) return;
-    if (e.target.closest('button, a, input, select')) return;
+    if (e.target.closest('button, a, input, select, .bbox-hit, .asset-defect-popup')) return;
     ANNO_VIEW.dragging = true;
+    ANNO_VIEW.moved = false;
     ANNO_VIEW.userZoom = true;
     ANNO_VIEW.lx = e.clientX;
     ANNO_VIEW.ly = e.clientY;
@@ -6426,6 +6797,7 @@ function bindAnnotatedViewerControls() {
   });
   viewport.addEventListener('pointermove', (e) => {
     if (!ANNO_VIEW.dragging) return;
+    if (Math.abs(e.clientX - ANNO_VIEW.lx) > 3 || Math.abs(e.clientY - ANNO_VIEW.ly) > 3) ANNO_VIEW.moved = true;
     ANNO_VIEW.tx += e.clientX - ANNO_VIEW.lx;
     ANNO_VIEW.ty += e.clientY - ANNO_VIEW.ly;
     ANNO_VIEW.lx = e.clientX;
@@ -6433,9 +6805,13 @@ function bindAnnotatedViewerControls() {
     apply();
   });
   const endPan = (e) => {
+    const wasDrag = ANNO_VIEW.dragging;
+    const moved = ANNO_VIEW.moved;
     ANNO_VIEW.dragging = false;
+    ANNO_VIEW.moved = false;
     viewport.classList.remove('panning');
     try { viewport.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (wasDrag && !moved && !e.target.closest('.bbox-hit, .asset-defect-popup, button')) hideDefectPopup();
   };
   viewport.addEventListener('pointerup', endPan);
   viewport.addEventListener('pointercancel', endPan);
@@ -6485,6 +6861,8 @@ function initApp() {
   renderAssetList();
   renderNotifications();
   loadBladePocAnnotations();
+  loadStationBoxes();
+  initDefectPopup();
   initSidebarCollapse();
   initProfileMenu();
   initAssetSheet();

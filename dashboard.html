@@ -23,7 +23,7 @@
   }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-  <link rel="stylesheet" href="dashboard.css?v=assetLeft2">
+  <link rel="stylesheet" href="dashboard.css?v=profileZ1">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -255,6 +255,15 @@
                 <svg class="asset-poc-bbox-overlay" id="asset-poc-bbox-overlay" aria-hidden="true"></svg>
                 <svg class="measure-overlay" id="asset-measure-svg" aria-hidden="true"></svg>
               </div>
+              <div class="asset-defect-popup" id="asset-defect-popup" hidden>
+                <button type="button" class="asset-defect-popup-close" id="asset-defect-popup-close" aria-label="Close finding">✕</button>
+                <p class="asset-defect-popup-kicker" id="asset-defect-popup-kicker"></p>
+                <h4 class="asset-defect-popup-title" id="asset-defect-popup-title"></h4>
+                <p class="asset-defect-popup-meta" id="asset-defect-popup-meta"></p>
+                <div class="asset-defect-popup-actions">
+                  <button type="button" class="teal-btn" id="asset-defect-popup-review">Review</button>
+                </div>
+              </div>
               <div class="asset-poc-slide-row">
                 <button type="button" class="asset-poc-slide" id="asset-poc-prev" aria-label="Previous station image">&lt;</button>
                 <button type="button" class="asset-poc-slide" id="asset-poc-next" aria-label="Next station image">&gt;</button>
@@ -268,7 +277,7 @@
                   <button type="button" class="asset-zoom-btn" id="asset-image-full" title="Full screen">Full</button>
                   <button type="button" class="asset-zoom-btn" id="asset-measure-dist" title="Distance (mm)">Dist</button>
                   <button type="button" class="asset-zoom-btn" id="asset-measure-clear" title="Clear measurements">Clr</button>
-                  <button type="button" class="asset-zoom-btn" id="asset-share-link" title="Copy shareable image link">Share</button>
+                  <button type="button" class="asset-zoom-btn" id="asset-share-link" title="Copy shareable image link" hidden>Share</button>
                   <button type="button" class="asset-zoom-btn" id="asset-zoom-100" title="Actual size" hidden>100%</button>
                   <button type="button" class="asset-zoom-btn" id="asset-measure-area" title="Area (mm²)" hidden>Area</button>
                 </div>
@@ -281,6 +290,7 @@
       </div>
 
       <aside class="asset-bottom-sheet" id="asset-bottom-sheet">
+        <div class="asset-sheet-resizer" id="asset-sheet-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize findings" tabindex="0"></div>
         <button type="button" class="asset-sheet-handle" id="asset-sheet-toggle" aria-expanded="false" aria-controls="asset-sheet-body">
           <svg class="asset-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>
           <span class="asset-sheet-title">Findings</span>
@@ -761,7 +771,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="dashboard.js?v=assetLeft2"></script>
+<script src="dashboard.js?v=findingsResize2"></script>
 </body>
 </html>
 
