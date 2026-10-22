@@ -489,6 +489,8 @@ body {
 .user-av.has-photo {
   color: transparent;
   border: 2px solid var(--c-teal);
+  background-color: #141414;
+  background-size: cover;
 }
 .user-info { flex-grow: 1; }
 .user-info span { font-size: 0.82rem; font-weight: 700; color: var(--c-white,#fff); display: block; }

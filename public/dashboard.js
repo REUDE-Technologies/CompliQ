@@ -35,20 +35,15 @@ function getStoredAvatar(email) {
   return '';
 }
 
+const DEFAULT_AVATAR = 'images/reude%20R%20logo.png';
+
 function applyUserAvatar(el, user) {
-  if (!el || !user) return;
-  const url = getStoredAvatar(user.email) || user.avatarUrl || '';
-  const initials = `${user.firstName?.[0] || 'O'}${user.lastName?.[0] || 'P'}`;
-  if (url) {
-    el.textContent = '';
-    el.classList.add('has-photo');
-    el.style.backgroundImage = `url("${url}")`;
-    el.setAttribute('aria-label', 'Profile photo');
-  } else {
-    el.classList.remove('has-photo');
-    el.style.backgroundImage = '';
-    el.textContent = initials;
-  }
+  if (!el) return;
+  const url = (user && (getStoredAvatar(user.email) || user.avatarUrl)) || DEFAULT_AVATAR;
+  el.textContent = '';
+  el.classList.add('has-photo');
+  el.style.backgroundImage = `url("${url}")`;
+  el.setAttribute('aria-label', 'REUDE');
 }
 
 function checkAuth() {
