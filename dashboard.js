@@ -5148,6 +5148,24 @@ const POC_X_MIN = -8;
 const POC_X_MAX = 39;
 const POC_Y_MIN = -4;
 const POC_Y_MAX = 54;
+const BLADE_PROFILE_Y_PAD_ROOT = 4.6;
+const BLADE_PROFILE_Y_PAD_TIP = 7.4;
+let BLADE_PROFILE_BOX = { xMin: POC_X_MIN, xMax: POC_X_MAX, yMin: POC_Y_MIN, yMax: POC_Y_MAX };
+
+function bladeProfileBoxForSpan(span) {
+  const s = Math.max(Number(span) || 48.5, 1);
+  return {
+    xMin: POC_X_MIN,
+    xMax: POC_X_MAX,
+    yMin: -BLADE_PROFILE_Y_PAD_ROOT,
+    yMax: s + BLADE_PROFILE_Y_PAD_TIP
+  };
+}
+
+function setBladeProfileBox(span) {
+  BLADE_PROFILE_BOX = bladeProfileBoxForSpan(span);
+  return BLADE_PROFILE_BOX;
+}
 const POC_SURFACE_CX = { SS: 6.6, LE: 16, PS: 25.6, TE: 35.2 };
 const G97_REMOTE = 'https://pub-8e9091debbe04bb3a5c42871ef2e7bc8.r2.dev/Kayathar_Gamesa_G97';
 const G97_ROOT = 'INPUT/Kayathar_Gamesa_G97';
@@ -5238,7 +5256,8 @@ function surfaceXPct(surface) {
 
 function pointYPct(i, span) {
   const m = pointMetres(i, span);
-  return ((POC_Y_MAX - m) / (POC_Y_MAX - POC_Y_MIN)) * 100;
+  const box = bladeProfileBoxForSpan(span);
+  return ((box.yMax - m) / (box.yMax - box.yMin)) * 100;
 }
 
 function activeBladeLetter() {
@@ -6136,7 +6155,7 @@ const BLADE_PROFILE_DRAW = {
 };
 
 function pocToSvg(x, y) {
-  return { x: x - POC_X_MIN, y: POC_Y_MAX - y };
+  return { x: x - BLADE_PROFILE_BOX.xMin, y: BLADE_PROFILE_BOX.yMax - y };
 }
 
 function bladeChordFrac(t) {
@@ -6180,8 +6199,9 @@ function bladePlanformPath(cx, kind, span) {
 }
 
 function bladeProfileSvgMarkup(span, points, turbine) {
-  const vbW = POC_X_MAX - POC_X_MIN;
-  const vbH = POC_Y_MAX - POC_Y_MIN;
+  const box = setBladeProfileBox(span);
+  const vbW = box.xMax - box.xMin;
+  const vbH = box.yMax - box.yMin;
   const ruler = pocToSvg(BLADE_PROFILE_DRAW.rulerX, 0);
   const rulerTop = pocToSvg(BLADE_PROFILE_DRAW.rulerX, span);
   const ticks = [];
@@ -6326,39 +6346,35 @@ function bindProfileStageFit(root) {
   const panel = box?.closest('.asset-poc-profile-panel');
   const workspace = panel?.closest('.asset-poc-workspace');
   if (!box || !stage || !drawing) return;
-  const ar = (POC_X_MAX - POC_X_MIN) / (POC_Y_MAX - POC_Y_MIN);
 
   const fit = () => {
     if (STATE.activeTab !== 'asset' || !drawing.isConnected) return;
-    stage.style.aspectRatio = `${POC_X_MAX - POC_X_MIN} / ${POC_Y_MAX - POC_Y_MIN}`;
+    const pb = BLADE_PROFILE_BOX;
+    const vbW = pb.xMax - pb.xMin;
+    const vbH = Math.max(pb.yMax - pb.yMin, 1);
+    const ar = vbW / vbH;
+    stage.style.removeProperty('width');
+    stage.style.removeProperty('height');
+    stage.style.aspectRatio = 'auto';
+    stage.style.setProperty('--bp-ar', String(ar));
+    if (drawing instanceof SVGElement) {
+      drawing.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+      drawing.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
 
     if (panel) {
       const view = document.getElementById('view-asset');
       const hostW = view?.clientWidth || workspace?.clientWidth || 0;
-      const imageH = Math.max(140, box.clientHeight - 8);
-      let colW = Math.round(imageH * ar) + 8;
+      const cs = getComputedStyle(box);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const imageH = Math.max(140, box.clientHeight - padY);
+      let colW = Math.round(imageH * ar) + 16;
       const share = hostW < 760 ? 0.46 : 0.38;
-      const maxW = Math.max(120, Math.floor(hostW * share));
+      const maxW = Math.max(160, Math.floor(hostW * share));
       if (colW > maxW) colW = maxW;
       const next = colW + 'px';
       if (panel.style.width !== next) panel.style.width = next;
     }
-
-    const bw = box.clientWidth;
-    const bh = box.clientHeight;
-    if (!bw || !bh) return;
-    let w = bw;
-    let h = Math.round(w / ar);
-    if (h > bh) {
-      h = bh;
-      w = Math.round(h * ar);
-    }
-    if (w > bw) w = bw;
-    if (h > bh) h = bh;
-    const nextW = w + 'px';
-    const nextH = h + 'px';
-    if (stage.style.width !== nextW) stage.style.width = nextW;
-    if (stage.style.height !== nextH) stage.style.height = nextH;
   };
 
   const scheduleFit = () => {

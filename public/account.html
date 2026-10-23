@@ -98,6 +98,14 @@
       padding: 8px 10px; border-radius: 8px; cursor: pointer; text-decoration: none;
     }
     .profile-panel a:hover, .profile-panel button:hover { background: rgba(15,164,175,0.12); }
+    .btn-back-dash {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1.5px solid rgba(15,164,175,0.45); background: #fff; color: #0A7A84;
+      border-radius: 8px; padding: 10px 16px; text-decoration: none;
+      font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 700;
+      white-space: nowrap; line-height: 1.2;
+    }
+    .btn-back-dash:hover { background: #0FA4AF; border-color: #0FA4AF; color: #003135; }
 
     /* ── Dashboard footer ── */
     .dashboard-footer {
@@ -348,6 +356,7 @@
       .form-grid-2 { grid-template-columns: 1fr; }
       .topbar { padding: 8px 10px; }
       .nl-search-wrap { width: min(300px, 42vw); }
+      .btn-back-dash { padding: 8px 10px; font-size: 0.78rem; }
     }
   </style>
 </head>
@@ -362,6 +371,7 @@
       </a>
     </div>
     <div class="topbar-right">
+      <a href="dashboard.html" class="btn-back-dash" onclick="goBack(); return false;">← Back to Dashboard</a>
       <div class="nl-search-wrap">
         <input type="text" id="nl-input" placeholder="Search" aria-label="Search">
       </div>
@@ -630,6 +640,7 @@
   <script>
     const SESSION_KEY = 'compliq_session';
     const USERS_KEY   = 'compliq_users';
+    const DEFAULT_AVATAR = 'images/reude%20R%20logo.png';
 
     function avatarStoreKey(email) {
       return 'compliq_avatar:' + String(email || '').trim().toLowerCase();
@@ -725,12 +736,8 @@
       const initials = `${user.firstName?.[0]||'O'}${user.lastName?.[0]||'P'}`;
       document.getElementById('acc-avatar').textContent = initials;
       const storedPhoto = getStoredAvatar(user.email) || user.avatarUrl || '';
-      if (storedPhoto) {
-        persistAvatar(user.email, storedPhoto);
-        setAvatarUI(storedPhoto);
-      } else {
-        setAvatarUI(null);
-      }
+      if (storedPhoto) persistAvatar(user.email, storedPhoto);
+      setAvatarUI(storedPhoto || DEFAULT_AVATAR);
       document.getElementById('acc-fullname').textContent = `${user.firstName||''} ${user.lastName||''}`.trim();
       const fullName = `${user.firstName||''} ${user.lastName||''}`.trim() || 'Operator';
       document.getElementById('acc-fullname').textContent = fullName;
@@ -742,7 +749,7 @@
       if (headerRoleEl) headerRoleEl.textContent = user.role || 'Fleet Operator';
       const headerAv = document.getElementById('user-av');
       if (headerAv) {
-        headerAv.style.backgroundImage = `url("${storedPhoto || 'images/reude%20R%20logo.png'}")`;
+        headerAv.style.backgroundImage = `url("${storedPhoto || DEFAULT_AVATAR}")`;
         headerAv.classList.add('has-photo');
       }
       loadDocuments();
@@ -928,10 +935,24 @@
 
     // ── Navigation ────────────────────────────────
     function switchPanel(id, btn) {
+      const panel = document.getElementById('panel-' + id);
+      if (!panel) return;
       document.querySelectorAll('.acc-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.acc-nav-item').forEach(b => b.classList.remove('active'));
-      document.getElementById('panel-' + id).classList.add('active');
-      btn.classList.add('active');
+      document.querySelectorAll('.acc-nav-item').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-current', 'false');
+      });
+      panel.classList.add('active');
+      const navBtn = btn || document.querySelector('.acc-nav-item[data-panel="' + id + '"]');
+      if (navBtn) {
+        navBtn.classList.add('active');
+        navBtn.setAttribute('aria-current', 'page');
+      }
+      if (id === 'documents') loadDocuments();
+      try {
+        const next = id && id !== 'profile' ? '#' + id : location.pathname + location.search;
+        history.replaceState(null, '', next);
+      } catch (e) { /* ignore */ }
     }
 
     function goBack() {
@@ -1050,8 +1071,11 @@
 
     // Init
     window.addEventListener('DOMContentLoaded', () => {
-      loadProfile();
+      try { loadProfile(); } catch (e) { console.warn('Account profile load failed', e); }
       initAccountChrome();
+      const hash = (location.hash || '').replace(/^#/, '');
+      if (hash) switchPanel(hash);
     });
+  </script>
 </body>
 </html>
