@@ -1097,9 +1097,9 @@ function updateFindingsSheetMeta() {
   if (STATE.pocMode) {
     n = document.querySelectorAll('#defects-tbody tr.defect-row').length;
   } else {
-    try { n = overviewAnomalyRows().length; } catch (_) { n = 0; }
+    try { n = overviewFindingRows().length; } catch (_) { n = 0; }
   }
-  countEl.textContent = n ? `${n} anomal${n === 1 ? 'y' : 'ies'}` : '';
+  countEl.textContent = n ? `${n} finding${n === 1 ? '' : 's'}` : '';
   const open = sheet?.classList.contains('is-open');
   hintEl.textContent = open
     ? (STATE.pocMode ? 'Hide defect table' : 'Hide comparison & table')
@@ -1317,7 +1317,7 @@ function anomalyLabel(row) {
   return code ? `${row.blade}-${row.surface}-${point}-${code}` : `${row.blade}-${row.surface}-${point}`;
 }
 
-function overviewAnomalyRows() {
+function overviewFindingRows() {
   const saved = pruneEmptyAnomalyDrafts(STATE.overviewAnomalyId);
   const byId = new Map();
   ['A', 'B', 'C'].forEach(blade => {
@@ -1352,8 +1352,13 @@ function overviewAnomalyRows() {
       verify: false
     });
   });
+  return [...byId.values()];
+}
+
+function overviewAnomalyRows() {
+  const byId = overviewFindingRows();
   const rank = { critical: 3, repair: 2, cleaning: 1, healthy: 0 };
-  const ranked = [...byId.values()]
+  const ranked = byId
     .filter(row => !isMinorAnomaly(row))
     .sort((a, b) => (rank[findingDuty(b)] - rank[findingDuty(a)]) || (b.cat - a.cat) || (a.index - b.index));
   const seen = new Set();
@@ -1436,12 +1441,14 @@ async function mountTurbine3D(host, turbine, onPick) {
   if (!host.isConnected || epoch !== STATE.assetEpoch || STATE.activeTab !== 'asset') return;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xffffff);
+  const viewerBackground = isLightTheme() ? 0xffffff : 0x1b2528;
+  scene.background = new THREE.Color(viewerBackground);
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   host.replaceChildren(renderer.domElement);
+  host.style.backgroundColor = isLightTheme() ? '#FFFFFF' : '#1B2528';
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.9));
   const key = new THREE.DirectionalLight(0xffffff, 1.45);
@@ -2281,6 +2288,9 @@ async function mountTurbine3D(host, turbine, onPick) {
     spin.frame = requestAnimationFrame(loop);
   };
   TURBINE_3D = spin;
+  TURBINE_3D.scene = scene;
+  TURBINE_3D.camera = camera;
+  TURBINE_3D.host = host;
   TURBINE_3D.renderer = renderer;
   TURBINE_3D.ro = ro;
   TURBINE_3D.frame = requestAnimationFrame(loop);
@@ -2932,17 +2942,17 @@ function renderDefectsTable(turbine) {
 function setStandaloneColumns(full) {
   const head = document.querySelector('#asset-defects-standalone thead tr');
   const title = document.querySelector('#asset-defects-standalone .panel-header h3');
-  if (title) title.textContent = full ? 'Blade summary' : 'Detected Defects & Decisions';
+  if (title) title.textContent = full ? 'Blade findings' : 'Detected Defects & Decisions';
   if (!head) return;
   head.innerHTML = full
-    ? '<th>Anomaly ID</th><th>Anomaly Type</th><th>Blade</th><th>Blade Side</th><th>Radius</th><th>Severity</th><th></th>'
+    ? '<th>Finding ID</th><th>Finding Type</th><th>Blade</th><th>Blade Side</th><th>Radius</th><th>Severity</th><th></th>'
     : '<th>Defect ID</th><th>Surface</th><th>Location</th><th>Defect Type</th><th>Radial Pos.</th><th>Dist. from Root</th><th>Intensity</th><th>Length / Size</th><th>Priority</th><th>Status</th><th>Review</th>';
 }
 
 function renderOverviewDefectTable(turbine, tbodyAlt) {
   setStandaloneColumns(true);
   if (!BLADE_FINDINGS.ready) {
-    if (tbodyAlt) tbodyAlt.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">Loading anomalies…</td></tr>';
+    if (tbodyAlt) tbodyAlt.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">Loading findings…</td></tr>';
     loadBladeFindings().then(() => {
       if (STATE.selectedPart === 'full') renderDefectsTable(turbine);
     });
@@ -2950,7 +2960,7 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
   }
   const span = bladeSpanM(turbine);
   const selected = ensureOverviewAnomaly();
-  const rows = overviewAnomalyRows();
+  const rows = overviewFindingRows();
   const html = rows.map(row => {
     const metres = pointMetres(row.index, span);
     const duty = findingDuty(row);
@@ -2964,7 +2974,7 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
       <td><span class="sev-pill" style="background:${DUTY_COLOR[duty]}22;color:${DUTY_COLOR[duty]};border:1px solid ${DUTY_COLOR[duty]}">${DUTY_LABEL[duty]} · ${row.cat}</span></td>
       <td><button type="button" class="review-btn">Open</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">No anomalies on this turbine.</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">No findings are recorded for this turbine.</td></tr>';
   if (tbodyAlt) tbodyAlt.innerHTML = html;
   if (tbodyAlt && !tbodyAlt.dataset.overviewBound) {
     tbodyAlt.dataset.overviewBound = '1';
@@ -4636,16 +4646,16 @@ function getChartTheme() {
   const scale = chartUiScale();
   return {
     light,
-    tick: light ? '#28666E' : 'rgba(175, 221, 229, 0.75)',
-    legend: light ? '#063235' : 'rgba(232, 244, 245, 0.9)',
-    grid: light ? 'rgba(6, 50, 53, 0.1)' : 'rgba(15, 164, 175, 0.14)',
-    tipBg: light ? '#ffffff' : '#024950',
-    tipTitle: light ? '#063235' : '#AFDDE5',
-    tipBody: light ? '#28666E' : '#AFDDE5',
-    tipBorder: '#0FA4AF',
-    pieBorder: light ? '#ffffff' : '#003135',
-    line: '#0FA4AF',
-    fill: light ? 'rgba(15, 164, 175, 0.12)' : 'rgba(15, 164, 175, 0.18)',
+    tick: light ? '#28666E' : '#B7C5C7',
+    legend: light ? '#063235' : '#E1E9EA',
+    grid: light ? 'rgba(6, 50, 53, 0.1)' : 'rgba(190, 211, 214, 0.12)',
+    tipBg: light ? '#ffffff' : '#263336',
+    tipTitle: light ? '#063235' : '#F0F4F4',
+    tipBody: light ? '#28666E' : '#CAD5D7',
+    tipBorder: light ? '#0FA4AF' : '#39B7BE',
+    pieBorder: light ? '#ffffff' : '#1B2528',
+    line: light ? '#0FA4AF' : '#39B7BE',
+    fill: light ? 'rgba(15, 164, 175, 0.12)' : 'rgba(57, 183, 190, 0.12)',
     font: scale
   };
 }
@@ -4923,6 +4933,7 @@ function renderDefectPieChart() {
                 text: `${label}  ${ds.data[i]} (${Math.round(ds.data[i] / total * 100)}%)`,
                 fillStyle: ds.backgroundColor[i],
                 strokeStyle: ds.backgroundColor[i],
+                fontColor: theme.legend,
                 lineWidth: 0,
                 hidden: false,
                 index: i
@@ -7226,6 +7237,11 @@ function applyDashTheme(theme) {
   if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
   else document.documentElement.removeAttribute('data-theme');
   document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+  if (TURBINE_3D?.scene?.background?.set) {
+    TURBINE_3D.scene.background.set(theme === 'light' ? 0xffffff : 0x1b2528);
+    if (TURBINE_3D.host) TURBINE_3D.host.style.backgroundColor = theme === 'light' ? '#FFFFFF' : '#1B2528';
+    TURBINE_3D.renderer?.render?.(TURBINE_3D.scene, TURBINE_3D.camera);
+  }
   // Refresh charts so tick/legend colours match the active theme
   const analytics = document.getElementById('view-analytics');
   if (analytics?.classList.contains('active') || (CHARTS.health || CHARTS.defects)) {
