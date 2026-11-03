@@ -3884,35 +3884,233 @@ async function loadSideImages(rows, limit, seen) {
 // ══════════════════════════════════════════════════
 // 9. PDF REPORT GENERATION
 // ══════════════════════════════════════════════════
-const STATIC_INSPECTION_REPORT_URL = 'reports/Gamesa_2MW_Wind_Turbine_Inspection_Report.pdf';
-
 function inspectionReportDownloadName() {
   const turbine = STATE.db?.turbines?.find(t => t.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const site = String(turbine?.site || 'Kayathar').replace(/[^\w\-]+/g, '_');
   const asset = String(turbine?.assetId || 'Gamesa_G97').replace(/[^\w\-]+/g, '_');
+  const blade = String(document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A');
+  const bladeTag = String(bladeDisplayName(blade)).replace(/[^\w\-]+/g, '_');
+  const sideTag = selectedReportSides().join('-') || 'PS';
   const date = new Date().toISOString().slice(0, 10);
-  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${date}.pdf`;
+  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${bladeTag}_${sideTag}_${date}.pdf`;
+}
+
+function reportImageData(url, maxWidth = 1100) {
+  return fetch(encodeURI(url)).then(res => {
+    if (!res.ok) throw new Error(`Image HTTP ${res.status}`);
+    return res.blob();
+  }).then(blob => createImageBitmap(blob)).then(bitmap => {
+    const scale = Math.min(1, maxWidth / bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return canvas.toDataURL('image/jpeg', 0.82);
+  });
+}
+
+function pdfText(doc, text, x, y, width, size = 9, options = {}) {
+  doc.setFontSize(size);
+  const lines = doc.splitTextToSize(String(text ?? '—'), width);
+  doc.text(lines, x, y, options);
+  return y + lines.length * size * 0.44;
+}
+
+function pdfPageFrame(doc, page, total, reportNo, date) {
+  const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(15, 164, 175);
+  doc.setLineWidth(0.6);
+  doc.line(15, 18, w - 15, 18);
+  doc.setTextColor(0, 49, 53);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('COMPLIQ  |  WIND TURBINE INSPECTION', 15, 14);
+  doc.setTextColor(120, 120, 120);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${reportNo}  ·  ${date}`, w - 15, 14, { align: 'right' });
+  doc.setDrawColor(210, 225, 226);
+  doc.line(15, h - 15, w - 15, h - 15);
+  doc.setFontSize(7);
+  doc.setTextColor(180, 40, 40);
+  doc.text('RESTRICTED', w / 2, h - 9, { align: 'center' });
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Page ${page} of ${total}`, w - 15, h - 9, { align: 'right' });
+}
+
+function addPdfFindingTable(doc, rows, y, margin, contentWidth) {
+  const columns = [
+    { label: 'BLADE / POINT', width: 34, value: r => `${bladeDisplayName(r.blade || 'A')}${r.index ? ` / P${String(r.index).padStart(2, '0')}` : ''}` },
+    { label: 'FINDING', width: 57, value: r => r.finding || r.type || '—' },
+    { label: 'CATEGORY', width: 27, value: r => `CAT ${r.cat || r.severity || '—'}` },
+    { label: 'MARKS', width: 17, value: r => String(r.count || 1) },
+    { label: 'ACTION / NOTES', width: contentWidth - 135, value: r => r.action || r.notes || 'Review during scheduled maintenance.' }
+  ];
+  const rowHeight = 17;
+  const headerHeight = 9;
+  const drawHeader = () => {
+    doc.setFillColor(0, 49, 53);
+    doc.rect(margin, y - 5.5, contentWidth, headerHeight, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(255, 255, 255);
+    let x = margin + 2;
+    columns.forEach(c => { doc.text(c.label, x, y); x += c.width; });
+    y += 8;
+  };
+  drawHeader();
+  rows.forEach((row, i) => {
+    if (y > 266) { doc.addPage(); y = 29; drawHeader(); }
+    doc.setFillColor(i % 2 ? 245 : 235, i % 2 ? 249 : 245, i % 2 ? 249 : 246);
+    doc.rect(margin, y - 5.5, contentWidth, rowHeight, 'F');
+    let x = margin + 2;
+    columns.forEach((c, idx) => {
+      const text = String(c.value(row));
+      doc.setFont('helvetica', idx === 2 ? 'bold' : 'normal');
+      doc.setFontSize(7); doc.setTextColor(idx === 2 ? 0 : 45, idx === 2 ? 110 : 55, idx === 2 ? 115 : 58);
+      const lines = doc.splitTextToSize(text, c.width - 3).slice(0, 2);
+      doc.text(lines, x, y);
+      x += c.width;
+    });
+    y += rowHeight;
+  });
+  return y;
 }
 
 async function generatePDFReport() {
   const filename = inspectionReportDownloadName();
-  showToast('Preparing Gamesa G97 inspection report…', 'success');
+  const sides = selectedReportSides();
+  if (!sides.length) {
+    showToast('Select at least one blade side before downloading.', 'error');
+    return;
+  }
+  showToast('Generating the selected-side inspection report…', 'success');
   try {
-    const res = await fetch(encodeURI(STATIC_INSPECTION_REPORT_URL));
-    if (!res.ok) throw new Error(`Report HTTP ${res.status}`);
-    const blob = await res.blob();
-    const href = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = href;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(href), 2500);
+    const jsPDF = window.jspdf?.jsPDF;
+    if (!jsPDF) throw new Error('jsPDF did not load');
+    const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
+    const blade = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
+    STATE.selectedTurbineId = turbine?.id || STATE.selectedTurbineId;
+    STATE.selectedBlade = blade;
+    await loadBladeFindings();
+    const sideLabels = Object.fromEntries(REPORT_SIDES);
+    const sourceRows = reportFindings();
+    const selectedRows = sourceRows.filter(row =>
+      String(row.blade ?? blade) === String(blade) && sides.some(side => {
+        const surface = String(row.surface || '').toUpperCase();
+        return surface === side || surface.startsWith(side + ' ') || surface.startsWith(side + '·');
+      })
+    );
+    const reportDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const reportNo = `${String(turbine?.assetId || 'WTG-001').replace(/[^\w-]/g, '')}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const w = doc.internal.pageSize.getWidth();
+    const h = doc.internal.pageSize.getHeight();
+    const margin = 18;
+    const contentWidth = w - margin * 2;
+
+    let logo = null, cover = null;
+    try { logo = await reportImageData('images/reude-technologies-logo.png', 600); } catch (_) {}
+    try { cover = await reportImageData('images/wind_farm_hero.png', 1200); } catch (_) {}
+
+    // Cover page follows the supplied report: restricted header, report identity, then a full-width site image.
+    if (logo) doc.addImage(logo, 'JPEG', margin, 23, 39, 13);
+    doc.setTextColor(180, 40, 40); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('Restricted', w / 2, 27, { align: 'center' });
+    doc.setTextColor(25, 25, 25); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('INSPECTION REPORT', w / 2, 33, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(reportNo, w / 2, 38, { align: 'center' });
+    doc.setFontSize(7); doc.text(`Page 1  ·  ${reportDate}`, w - margin, 27, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('WIND TURBINE INSPECTION REPORT', margin, 72);
+    doc.setDrawColor(0, 49, 53); doc.setLineWidth(0.8); doc.line(margin, 77, w - margin, 77);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 30, 30);
+    doc.text(`Report Number: ${reportNo}`, margin, 88);
+    doc.text(`Report Date: ${reportDate}`, margin, 95);
+    doc.text(`Turbine: ${turbine?.assetId || '—'} · ${turbine?.model || 'Gamesa G97 2MW'}`, margin, 102);
+    doc.text(`Site: ${turbine?.site || turbine?.location || 'Kayathar'}`, margin, 109);
+    doc.text(`Blade: ${bladeDisplayName(blade)}  |  Included sides: ${sides.map(s => sideLabels[s] || s).join(', ')}`, margin, 116, { maxWidth: contentWidth });
+    if (cover) doc.addImage(cover, 'JPEG', 0, 132, w, 104, undefined, 'FAST');
+    doc.setTextColor(180, 40, 40); doc.setFontSize(9); doc.text('RESTRICTED', w / 2, 283, { align: 'center' });
+
+    // Summary page mirrors the source report's metadata-first inspection overview.
+    doc.addPage();
+    doc.setTextColor(0, 49, 53); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('INSPECTION SUMMARY', margin, 31);
+    doc.setDrawColor(15, 164, 175); doc.line(margin, 35, w - margin, 35);
+    const sideCounts = sides.map(side => ({ side, count: selectedRows.filter(r => String(r.surface || '').toUpperCase().startsWith(side)).length }));
+    let y = 47;
+    y = pdfText(doc, `This report covers ${sides.map(s => sideLabels[s] || s).join(', ')} for ${bladeDisplayName(blade)} on ${turbine?.assetId || 'the selected turbine'}. Unselected blade sides are excluded.`, margin, y, contentWidth, 9) + 5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 49, 53); doc.text('Finding count by selected side', margin, y); y += 8;
+    sideCounts.forEach(item => {
+      doc.setFillColor(231, 244, 245); doc.roundedRect(margin, y - 5, contentWidth, 10, 2, 2, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35, 50, 52);
+      doc.text(sideLabels[item.side] || item.side, margin + 3, y + 1);
+      doc.setFont('helvetica', 'bold'); doc.text(String(item.count), w - margin - 3, y + 1, { align: 'right' });
+      y += 13;
+    });
+    y += 7;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 49, 53); doc.text('Inspection details', margin, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(45, 55, 58);
+    [
+      ['Manufacturer / model', (() => {
+        const manufacturer = turbine?.manufacturer || 'Gamesa';
+        const model = turbine?.model || 'G97 2MW';
+        const brandToken = manufacturer.split(/\s+/).pop();
+        const modelName = brandToken ? model.replace(new RegExp(`\\b${brandToken}\\b`, 'i'), '').trim() : model;
+        return `${manufacturer} ${modelName}`.trim();
+      })()],
+      ['Inspection campaign', turbine?.campaign || 'Kayathar inspection'],
+      ['Inspection coverage', turbine?.inspCoverage != null ? `${turbine.inspCoverage}%` : 'As recorded in source data'],
+      ['Selected sides', sides.map(s => sideLabels[s] || s).join(', ')],
+      ['Findings in this report', String(selectedRows.length)]
+    ].forEach(([label, value]) => {
+      doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, margin, y);
+      doc.setFont('helvetica', 'normal'); doc.text(String(value), margin + 46, y, { maxWidth: contentWidth - 46 });
+      y += 7;
+    });
+
+    for (const side of sides) {
+      const rows = selectedRows.filter(row => {
+        const surface = String(row.surface || '').toUpperCase();
+        return surface === side || surface.startsWith(side + ' ') || surface.startsWith(side + '·');
+      });
+      doc.addPage();
+      doc.setTextColor(0, 49, 53); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(sideLabels[side] || side, margin, 31);
+      doc.setDrawColor(15, 164, 175); doc.line(margin, 35, w - margin, 35);
+      doc.setTextColor(50, 60, 62); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text(`${bladeDisplayName(blade)}  ·  ${rows.length} finding${rows.length === 1 ? '' : 's'}  ·  ${reportDate}`, margin, 43);
+      let tableY = 55;
+      if (rows.length) tableY = addPdfFindingTable(doc, rows, tableY, margin, contentWidth);
+      else {
+        doc.setFillColor(239, 247, 247); doc.roundedRect(margin, tableY - 4, contentWidth, 18, 2, 2, 'F');
+        pdfText(doc, 'No findings are recorded for this selected blade side.', margin + 4, tableY + 3, contentWidth - 8, 9);
+        tableY += 24;
+      }
+      const photos = await loadSideImages(rows, 2, new Set());
+      for (const shot of photos) {
+        if (tableY > 205) { doc.addPage(); tableY = 29; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(0, 49, 53);
+        tableY += 3;
+        tableY = pdfText(doc, shot.caption, margin, tableY, contentWidth, 8) + 2;
+        const maxImgW = contentWidth;
+        const ratio = shot.height / shot.width;
+        const imgH = Math.min(69, maxImgW * ratio);
+        if (tableY + imgH > 267) { doc.addPage(); tableY = 29; }
+        doc.addImage(shot.data, 'JPEG', margin, tableY, maxImgW, imgH, undefined, 'FAST');
+        tableY += imgH + 7;
+      }
+      if (rows.length && tableY < 254) {
+        doc.setFontSize(7); doc.setTextColor(95, 95, 95);
+        doc.text('Finding locations and classifications are based on the inspection data available in CompliQ at report generation time.', margin, Math.min(268, tableY + 5), { maxWidth: contentWidth });
+      }
+    }
+
+    const totalPages = doc.getNumberOfPages();
+    for (let page = 2; page <= totalPages; page++) {
+      doc.setPage(page);
+      pdfPageFrame(doc, page, totalPages, reportNo, reportDate);
+    }
+    doc.save(filename);
     showToast(`Report downloaded: ${filename}`, 'success');
   } catch (err) {
     console.error(err);
-    showToast('Could not download the inspection report PDF.', 'error');
+    showToast('Could not generate the selected-side inspection report PDF.', 'error');
   }
 }
 
