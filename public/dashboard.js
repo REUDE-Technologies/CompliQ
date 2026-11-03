@@ -2794,9 +2794,11 @@ const DEFECT_SEV_COLOR = {
 
 function bboxCenterNorm(bbox) {
   if (!Array.isArray(bbox) || bbox.length < 4) return { cx: 0.5, cy: 0.5 };
+  const [x1, y1, x2, y2] = bbox.map(Number);
+  if (![x1, y1, x2, y2].every(Number.isFinite)) return { cx: 0.5, cy: 0.5 };
   return {
-    cx: (Number(bbox[0]) + Number(bbox[2])) / 2,
-    cy: (Number(bbox[1]) + Number(bbox[3])) / 2
+    cx: Math.min(1, Math.max(0, (x1 + x2) / 2)),
+    cy: Math.min(1, Math.max(0, (y1 + y2) / 2))
   };
 }
 
@@ -2805,15 +2807,9 @@ function bboxCenterNorm(bbox) {
  * station’s radial band. Frame Y increases tipward on Blade 5297 PS captures.
  */
 function defectRadialMetrics(pt, defect, turbine) {
-  const span = bladeSpanM(turbine);
-  const stationPct = Math.round((pt.metres / span) * 100);
-  const band = STATION_RADIAL_PCT[pt.pointIndex] || [
-    Math.max(0, stationPct - 8),
-    Math.min(100, stationPct + 8)
-  ];
+  const { span, band } = stationRadialBand(pt.pointIndex, turbine);
   const { cx, cy } = bboxCenterNorm(defect.bbox_norm);
-  const t = Math.min(1, Math.max(0, cy));
-  const pct = band[0] + (band[1] - band[0]) * t;
+  const pct = band[0] + (band[1] - band[0]) * cy;
   const metres = +(span * pct / 100).toFixed(2);
   const chord =
     cx < 0.33 ? 'TE side' :
@@ -2826,6 +2822,26 @@ function defectRadialMetrics(pt, defect, turbine) {
     location: `${pt.surface} · ${Math.round(pct)}% · ${chord}`,
     pin: { cx, cy },
     band
+  };
+}
+
+function defectPhysicalSize(pt, bbox, turbine, radialPct) {
+  if (!Array.isArray(bbox) || bbox.length < 4) return null;
+  const values = bbox.map(Number);
+  if (!values.every(Number.isFinite)) return null;
+  const [x1, y1, x2, y2] = values;
+  const width = Math.max(0, Math.min(1, Math.max(x1, x2)) - Math.max(0, Math.min(1, Math.min(x1, x2))));
+  const height = Math.max(0, Math.min(1, Math.max(y1, y2)) - Math.max(0, Math.min(1, Math.min(y1, y2))));
+  const radial = stationRadialBand(pt.pointIndex, turbine);
+  const chordM = lerpKnots(G97_CHORD_M, radialPct);
+  const acrossM = (pt.surface === 'LE' || pt.surface === 'TE') ? chordM * 0.24 : chordM;
+  const axialM = height * radial.bandM;
+  const chordWidthM = width * acrossM;
+  const format = metres => metres >= 1 ? `${metres.toFixed(2)} m` : `${Math.round(metres * 1000)} mm`;
+  return {
+    axialM,
+    chordWidthM,
+    label: `${format(axialM)} × ${format(chordWidthM)}`
   };
 }
 
@@ -2848,30 +2864,43 @@ function renderDefectsTable(turbine) {
     const findings = findingsForStation(blade, pt.surface, pt.pointIndex);
     if (findings.length) {
       const span = bladeSpanM(turbine);
-      const html = findings.map(d => {
+      const stationBoxes = boxesForPocPoint(pt);
+      const html = findings.flatMap(d => {
         const metres = pointMetres(d.index, span);
         const pct = Math.round((metres / span) * 100);
         const prio = findingPriority(d);
         const onStation = d.surface === pt.surface && d.index === pt.pointIndex;
         const isSel = STATE.pocSelectedDefectId ? STATE.pocSelectedDefectId === d.id : onStation;
         const point = 'P' + String(d.index).padStart(2, '0');
-        const code = (d.finding.match(/^C\d+/) || [point])[0];
+        const code = findingCode(d) || point;
         const typeName = String(d.finding || '').replace(/^C\d+\s+/, '');
-        return `
+        const matchedBoxes = findingCode(d)
+          ? stationBoxes.filter(box => String(box.code || '').toUpperCase() === findingCode(d) && Array.isArray(box.bbox_norm))
+          : [];
+        const marks = matchedBoxes.length ? matchedBoxes : [null];
+        return marks.map((box, markIndex) => {
+          const geo = box ? defectRadialMetrics(pt, box, turbine) : null;
+          const physicalSize = box ? defectPhysicalSize(pt, box.bbox_norm, turbine, geo.pct) : null;
+          const rowCode = matchedBoxes.length > 1 ? `${code} · ${markIndex + 1}/${matchedBoxes.length}` : code;
+          const radialLabel = geo ? `~${geo.pct.toFixed(1)}%` : `~${pct}%`;
+          const rootLabel = geo ? `~${geo.distRoot}` : `~${metres.toFixed(1)} m`;
+          const locationLabel = geo ? geo.location : `${d.surface} · ${point} · station estimate`;
+          return `
         <tr class="defect-row ${d.cat >= DOT_MIN_CAT ? 'is-critical' : ''} ${isSel ? 'is-selected' : ''}"
           data-surface="${d.surface}" data-point="${d.index}" data-finding-id="${escHtml(d.id)}" tabindex="0">
-          <td data-col="id"><span style="font-family:var(--font-mono);font-size:0.73rem;color:${d.color}">${escHtml(d.surface)}-${point}-${escHtml(code)}</span></td>
+          <td data-col="id"><span style="font-family:var(--font-mono);font-size:0.73rem;color:${d.color}">${escHtml(d.surface)}-${point}-${escHtml(rowCode)}</span></td>
           <td data-col="surface">${escHtml(d.surface)}</td>
-          <td data-col="location" style="font-size:0.75rem">${escHtml(d.surface)} · ${point}</td>
+          <td data-col="location" style="font-size:0.75rem" title="${geo ? 'Estimated from the annotation box and station calibration.' : 'No matching annotation box; showing the station midpoint estimate.'}">${escHtml(locationLabel)}</td>
           <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(typeName)}</td>
-          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${pct}%</span></td>
-          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
+          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${radialLabel}</span></td>
+          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem" title="${geo ? 'Estimated from the annotated box within the calibrated station band.' : 'No matching annotation box; station midpoint estimate.'}">${rootLabel}</span></td>
           <td data-col="intensity"><span class="sev-pill" style="background:${d.color}22;color:${d.color};border:1px solid ${d.color}">CAT ${d.cat}${d.verify ? ' · Verify' : ''}</span></td>
-          <td data-col="size" style="font-size:0.72rem">—</td>
+          <td data-col="size" style="font-size:0.72rem" title="${physicalSize ? 'Approximate radial span × chord width from the annotation box and station/chord calibration; image perspective is not corrected.' : 'No matching annotation box available.'}">${physicalSize ? `~${physicalSize.label} (est.)` : '—'}</td>
           <td data-col="priority"><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
           <td data-col="status"><span class="stat-dot-pill pending">Open</span></td>
           <td data-col="review"><button type="button" class="review-btn">Review</button></td>
         </tr>`;
+        });
       }).join('');
       fill(tbody, html);
       bindFindingTable(tbody);
@@ -2887,7 +2916,7 @@ function renderDefectsTable(turbine) {
     const html = defects.map(d => {
       const prio = priorityFromSeverity(d.severity);
       const geo = defectRadialMetrics(pt, d, turbine);
-      const size = defectSizeFromBbox(d.bbox_norm);
+      const size = defectSizeFromBbox(d.bbox_norm, pt, turbine);
       const intensity = `S${d.severity} · ${d.severity_label || priorityFromSeverity(d.severity)}`;
       const isSel = selectedId === d.id;
       return `
@@ -2958,22 +2987,38 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
     });
     return;
   }
+  if (!STATION_BOXES.ready) {
+    loadStationBoxes().then(() => {
+      if (STATE.selectedPart === 'full') renderDefectsTable(turbine);
+    });
+  }
   const span = bladeSpanM(turbine);
   const selected = ensureOverviewAnomaly();
   const rows = overviewFindingRows();
-  const html = rows.map(row => {
+  const html = rows.flatMap(row => {
     const metres = pointMetres(row.index, span);
     const duty = findingDuty(row);
     const on = selected && selected.id === row.id;
-    return `<tr class="defect-row ${on ? 'is-selected' : ''}" data-anomaly-id="${escHtml(row.id)}">
-      <td style="font-family:var(--font-mono);font-size:0.73rem;color:${row.color || DUTY_COLOR[duty]}">${escHtml(anomalyLabel(row))}</td>
+    const pt = { blade: row.blade, surface: row.surface, pointIndex: row.index, metres };
+    const code = findingCode(row);
+    const boxes = code
+      ? boxesForPocPoint(pt).filter(box => String(box.code || '').toUpperCase() === code && Array.isArray(box.bbox_norm))
+      : [];
+    const marks = boxes.length ? boxes : [null];
+    return marks.map((box, markIndex) => {
+      const geo = box ? defectRadialMetrics(pt, box, turbine) : null;
+      const location = geo ? `~${geo.metres.toFixed(1)} m · ${geo.pct.toFixed(1)}%` : `~${metres.toFixed(1)} m · station estimate`;
+      const label = boxes.length > 1 ? `${anomalyLabel(row)} · ${markIndex + 1}/${boxes.length}` : anomalyLabel(row);
+      return `<tr class="defect-row ${on ? 'is-selected' : ''}" data-anomaly-id="${escHtml(row.id)}">
+      <td style="font-family:var(--font-mono);font-size:0.73rem;color:${row.color || DUTY_COLOR[duty]}">${escHtml(label)}</td>
       <td>${escHtml(row.finding)}</td>
       <td>${escHtml(bladeDisplayName(row.blade, turbine))}</td>
       <td>${escHtml(SIDE_NAME[row.surface] || row.surface)}</td>
-      <td style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</td>
+      <td style="font-family:var(--font-mono);font-size:0.72rem" title="${geo ? 'Approximate distance from annotation box and station calibration; image perspective is not corrected.' : 'No matching annotation box; station midpoint estimate.'}">${location}</td>
       <td><span class="sev-pill" style="background:${DUTY_COLOR[duty]}22;color:${DUTY_COLOR[duty]};border:1px solid ${DUTY_COLOR[duty]}">${DUTY_LABEL[duty]} · ${row.cat}</span></td>
       <td><button type="button" class="review-btn">Open</button></td>
     </tr>`;
+    });
   }).join('') || '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">No findings are recorded for this turbine.</td></tr>';
   if (tbodyAlt) tbodyAlt.innerHTML = html;
   if (tbodyAlt && !tbodyAlt.dataset.overviewBound) {
@@ -6283,8 +6328,13 @@ function formatRadial(pt, turbine) {
   return pt.metres.toFixed(1) + ' m / ' + span + ' m (' + pt.pct + ')';
 }
 
-function defectSizeFromBbox(bbox) {
+function defectSizeFromBbox(bbox, pt, turbine) {
   if (!Array.isArray(bbox) || bbox.length < 4) return '—';
+  if (pt && turbine) {
+    const geo = defectRadialMetrics(pt, { bbox_norm: bbox }, turbine);
+    const physical = defectPhysicalSize(pt, bbox, turbine, geo.pct);
+    return physical ? `${physical.label} (span × chord, est.)` : '—';
+  }
   const w = Math.abs(bbox[2] - bbox[0]);
   const h = Math.abs(bbox[3] - bbox[1]);
   const area = w * h * 100;
