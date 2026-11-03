@@ -363,13 +363,14 @@ function setupNav() {
 function renderMetrics() {
   const db = STATE.db;
   const avgHealth = db.turbines.reduce((s,t) => s + t.health, 0) / db.turbines.length;
-  const totalAnomalies = db.turbines.reduce((s,t) => s + t.anomalies, 0);
+  const analyticsDefects = getAnalyticsDefects();
+  const totalAnomalies = analyticsDefects.length;
   const avgCoverage = db.turbines.reduce((s,t) => s + t.inspCoverage, 0) / db.turbines.length;
 
   animateNumber('m-health', avgHealth.toFixed(1) + '%');
   document.getElementById('m-health-sub').textContent = `${db.turbines.filter(t=>t.status==='normal').length} nominal, ${db.turbines.filter(t=>t.status!=='normal').length} flagged`;
   animateNumber('m-anomalies', totalAnomalies);
-  document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
+  document.getElementById('m-anomalies-sub').textContent = `${analyticsDefects.filter(d=>Number(d.severity)>=4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
   const capacityMw = db.turbines.reduce((sum, turbine) => sum + (Number(turbine.power) || 0), 0);
