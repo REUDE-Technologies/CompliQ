@@ -3948,7 +3948,7 @@ function inspectionReportDownloadName() {
   const bladeTag = String(bladeDisplayName(blade)).replace(/[^\w\-]+/g, '_');
   const sideTag = selectedReportSides().join('-') || 'PS';
   const date = new Date().toISOString().slice(0, 10);
-  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${bladeTag}_${sideTag}_${date}.pdf`;
+  return `REUDE_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${bladeTag}_${sideTag}_${date}.pdf`;
 }
 
 function reportImageData(url, maxWidth = 1100) {
@@ -3966,6 +3966,18 @@ function reportImageData(url, maxWidth = 1100) {
   });
 }
 
+function reportPngData(url) {
+  return fetch(encodeURI(url)).then(res => {
+    if (!res.ok) throw new Error(`Image HTTP ${res.status}`);
+    return res.blob();
+  }).then(blob => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  }));
+}
+
 function pdfText(doc, text, x, y, width, size = 9, options = {}) {
   doc.setFontSize(size);
   const lines = doc.splitTextToSize(String(text ?? '—'), width);
@@ -3973,34 +3985,59 @@ function pdfText(doc, text, x, y, width, size = 9, options = {}) {
   return y + lines.length * size * 0.44;
 }
 
-function pdfPageFrame(doc, page, total, reportNo, date) {
+function reportCategory(row) {
+  const category = Number(row?.cat ?? row?.severity);
+  return Number.isInteger(category) && category >= 1 && category <= 5 ? category : null;
+}
+
+function reportPriority(category) {
+  if (category === 5) return 'Critical';
+  if (category === 4) return 'High';
+  if (category === 3) return 'Medium';
+  if (category === 1 || category === 2) return 'Low';
+  return 'Not set';
+}
+
+function pdfPageFrame(doc, page, total, reportNo, date, logo) {
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(15, 164, 175);
-  doc.setLineWidth(0.6);
-  doc.line(15, 18, w - 15, 18);
+  if (logo) doc.addImage(logo, 'PNG', 15, 4.5, 32, 8.8);
   doc.setTextColor(0, 49, 53);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text('COMPLIQ  |  WIND TURBINE INSPECTION', 15, 14);
-  doc.setTextColor(120, 120, 120);
+  doc.text('INSPECTION REPORT', w / 2, 13, { align: 'center' });
+  doc.setTextColor(100, 100, 100);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${reportNo}  ·  ${date}`, w - 15, 14, { align: 'right' });
+  doc.setFontSize(7);
+  doc.text(`Page ${page} of ${total}`, w - 15, 13, { align: 'right' });
+  doc.setDrawColor(15, 164, 175);
+  doc.setLineWidth(0.6);
+  doc.line(15, 18, w - 15, 18);
   doc.setDrawColor(210, 225, 226);
   doc.line(15, h - 15, w - 15, h - 15);
   doc.setFontSize(7);
   doc.setTextColor(180, 40, 40);
   doc.text('RESTRICTED', w / 2, h - 9, { align: 'center' });
   doc.setTextColor(100, 100, 100);
-  doc.text(`Page ${page} of ${total}`, w - 15, h - 9, { align: 'right' });
+  doc.text(`${reportNo}  ·  ${date}`, 15, h - 9);
 }
 
-function addPdfFindingTable(doc, rows, y, margin, contentWidth) {
+function reportDistanceFromRoot(row, turbine) {
+  if (Number.isFinite(Number(row?.index)) && Number(row.index) >= 1 && Number(row.index) <= 20) {
+    const span = bladeSpanM(turbine);
+    return `${pointMetres(Number(row.index), span).toFixed(1)} m`;
+  }
+  if (Number.isFinite(Number(row?.dist)) && row?.dist !== '' && row?.dist != null) return `${Number(row.dist).toFixed(1)} m`;
+  return 'Not recorded';
+}
+
+function addPdfFindingTable(doc, rows, y, margin, contentWidth, turbine) {
   const columns = [
-    { label: 'BLADE / POINT', width: 34, value: r => `${bladeDisplayName(r.blade || 'A')}${r.index ? ` / P${String(r.index).padStart(2, '0')}` : ''}` },
-    { label: 'FINDING', width: 57, value: r => r.finding || r.type || '—' },
-    { label: 'CATEGORY', width: 27, value: r => `CAT ${r.cat || r.severity || '—'}` },
-    { label: 'MARKS', width: 17, value: r => String(r.count || 1) },
+    { label: 'BLADE / POINT', width: 25, value: r => `${bladeDisplayName(r.blade || 'A')}${r.index ? ` / P${String(r.index).padStart(2, '0')}` : ''}` },
+    { label: 'FINDING', width: 45, value: r => r.finding || r.type || '—' },
+    { label: 'CAT (WEBSITE)', width: 20, value: r => { const cat = reportCategory(r); return cat ? `CAT ${cat}` : 'Not set'; } },
+    { label: 'PRIORITY', width: 20, value: r => reportPriority(reportCategory(r)) },
+    { label: 'DIST. FROM ROOT', width: 25, value: r => reportDistanceFromRoot(r, turbine) },
     { label: 'ACTION / NOTES', width: contentWidth - 135, value: r => r.action || r.notes || 'Review during scheduled maintenance.' }
   ];
   const rowHeight = 17;
@@ -4021,8 +4058,10 @@ function addPdfFindingTable(doc, rows, y, margin, contentWidth) {
     let x = margin + 2;
     columns.forEach((c, idx) => {
       const text = String(c.value(row));
-      doc.setFont('helvetica', idx === 2 ? 'bold' : 'normal');
-      doc.setFontSize(7); doc.setTextColor(idx === 2 ? 0 : 45, idx === 2 ? 110 : 55, idx === 2 ? 115 : 58);
+      const isCategory = idx === 2;
+      const isPriority = idx === 3;
+      doc.setFont('helvetica', isCategory || isPriority ? 'bold' : 'normal');
+      doc.setFontSize(7); doc.setTextColor(isCategory || isPriority ? 0 : 45, isCategory || isPriority ? 110 : 55, isCategory || isPriority ? 115 : 58);
       const lines = doc.splitTextToSize(text, c.width - 3).slice(0, 2);
       doc.text(lines, x, y);
       x += c.width;
@@ -4030,6 +4069,56 @@ function addPdfFindingTable(doc, rows, y, margin, contentWidth) {
     y += rowHeight;
   });
   return y;
+}
+
+function addPdfKeyValueTable(doc, entries, y, margin, contentWidth, labelWidth = 53) {
+  entries.forEach(([label, value], i) => {
+    const valueLines = doc.splitTextToSize(String(value ?? 'Not recorded'), contentWidth - labelWidth - 7).slice(0, 2);
+    const rowHeight = Math.max(9, valueLines.length * 3.6 + 4);
+    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.2);
+    doc.setFillColor(237, 240, 240); doc.rect(margin, y - 4, labelWidth, rowHeight, 'FD');
+    doc.setFillColor(i % 2 ? 255 : 250, i % 2 ? 255 : 250, i % 2 ? 255 : 250);
+    doc.rect(margin + labelWidth, y - 4, contentWidth - labelWidth, rowHeight, 'FD');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(35, 45, 47);
+    doc.text(label, margin + 2, y + 1);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35, 45, 47);
+    doc.text(valueLines, margin + labelWidth + 3, y + 1);
+    y += rowHeight;
+  });
+  return y;
+}
+
+function addPdfGlossaryPage(doc, margin, contentWidth) {
+  const w = doc.internal.pageSize.getWidth();
+  doc.addPage();
+  doc.setTextColor(0, 49, 53); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('GLOSSARY', margin, 31);
+  doc.setDrawColor(15, 164, 175); doc.line(margin, 35, w - margin, 35);
+  const terms = [
+    ['CAT', 'Defect category selected in the report settings.'],
+    ['Priority', 'Urgency mapped from category: CAT 5 Critical, CAT 4 High, CAT 3 Medium, CAT 1–2 Low.'],
+    ['WTG', 'Wind turbine generator.'],
+    ['Blade root', 'Blade section nearest the hub.'],
+    ['LE', 'Leading edge: the blade edge that meets the airflow first.'],
+    ['TE', 'Trailing edge: the blade edge where airflow leaves.'],
+    ['PS', 'Pressure side of the blade.'],
+    ['SS', 'Suction side of the blade.'],
+    ['Rotor diameter', 'Diameter of the circular area swept by the rotating blades.'],
+    ['Hub height', 'Height from ground level to the rotor hub center.']
+  ];
+  let y = 48;
+  doc.setFillColor(0, 49, 53); doc.rect(margin, y - 5, contentWidth, 9, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(255, 255, 255);
+  doc.text('TERM', margin + 3, y); doc.text('DEFINITION', margin + 55, y);
+  y += 8;
+  terms.forEach(([term, definition], i) => {
+    const lines = doc.splitTextToSize(definition, contentWidth - 61);
+    const rowHeight = Math.max(11, lines.length * 3.8 + 5);
+    doc.setFillColor(i % 2 ? 246 : 235, i % 2 ? 249 : 245, i % 2 ? 249 : 246);
+    doc.rect(margin, y - 5, contentWidth, rowHeight, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(35, 55, 57); doc.text(term, margin + 3, y + 1);
+    doc.setFont('helvetica', 'normal'); doc.text(lines, margin + 55, y + 1);
+    y += rowHeight;
+  });
 }
 
 async function generatePDFReport() {
@@ -4050,12 +4139,15 @@ async function generatePDFReport() {
     await loadBladeFindings();
     const sideLabels = Object.fromEntries(REPORT_SIDES);
     const sourceRows = reportFindings();
+    const activeCategory = Number(document.getElementById('report-review-cat')?.value);
     const selectedRows = sourceRows.filter(row =>
       String(row.blade ?? blade) === String(blade) && sides.some(side => {
         const surface = String(row.surface || '').toUpperCase();
         return surface === side || surface.startsWith(side + ' ') || surface.startsWith(side + '·');
       })
-    );
+    ).map(row => Number.isInteger(activeCategory) && activeCategory >= 1 && activeCategory <= 5
+      ? { ...row, cat: activeCategory, severity: activeCategory }
+      : row);
     const reportDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const reportNo = `${String(turbine?.assetId || 'WTG-001').replace(/[^\w-]/g, '')}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
     const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
@@ -4065,16 +4157,11 @@ async function generatePDFReport() {
     const contentWidth = w - margin * 2;
 
     let logo = null, cover = null;
-    try { logo = await reportImageData('images/reude-technologies-logo.png', 600); } catch (_) {}
+    try { logo = await reportPngData('images/reude-report-logo.png'); } catch (_) {}
     try { cover = await reportImageData('images/wind_farm_hero.png', 1200); } catch (_) {}
 
-    // Cover page follows the supplied report: restricted header, report identity, then a full-width site image.
-    if (logo) doc.addImage(logo, 'JPEG', margin, 23, 39, 13);
-    doc.setTextColor(180, 40, 40); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('Restricted', w / 2, 27, { align: 'center' });
-    doc.setTextColor(25, 25, 25); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('INSPECTION REPORT', w / 2, 33, { align: 'center' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(reportNo, w / 2, 38, { align: 'center' });
-    doc.setFontSize(7); doc.text(`Page 1  ·  ${reportDate}`, w - margin, 27, { align: 'right' });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('WIND TURBINE INSPECTION REPORT', margin, 72);
+    // Cover body follows the source template; the common header is applied to every page below.
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('INSPECTION REPORT', margin, 72);
     doc.setDrawColor(0, 49, 53); doc.setLineWidth(0.8); doc.line(margin, 77, w - margin, 77);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 30, 30);
     doc.text(`Report Number: ${reportNo}`, margin, 88);
@@ -4101,25 +4188,68 @@ async function generatePDFReport() {
       y += 13;
     });
     y += 7;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 49, 53); doc.text('Summary', margin, y); y += 6;
+    const priorityNames = ['Critical', 'High', 'Medium', 'Low', 'Not set'];
+    const prioritySummary = priorityNames
+      .map(name => `${name}: ${selectedRows.filter(row => reportPriority(reportCategory(row)) === name).length}`)
+      .join('  |  ');
+    y = pdfText(doc,
+      `This report contains ${selectedRows.length} findings for the selected blade and sides. Each category shown in the findings table is the value selected in the report settings. Priority is mapped from that selected category. ${prioritySummary}`,
+      margin, y, contentWidth, 8) + 4;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 49, 53); doc.text('Inspection details', margin, y); y += 7;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(45, 55, 58);
-    [
-      ['Manufacturer / model', (() => {
-        const manufacturer = turbine?.manufacturer || 'Gamesa';
-        const model = turbine?.model || 'G97 2MW';
-        const brandToken = manufacturer.split(/\s+/).pop();
-        const modelName = brandToken ? model.replace(new RegExp(`\\b${brandToken}\\b`, 'i'), '').trim() : model;
-        return `${manufacturer} ${modelName}`.trim();
-      })()],
-      ['Inspection campaign', turbine?.campaign || 'Kayathar inspection'],
-      ['Inspection coverage', turbine?.inspCoverage != null ? `${turbine.inspCoverage}%` : 'As recorded in source data'],
-      ['Selected sides', sides.map(s => sideLabels[s] || s).join(', ')],
-      ['Findings in this report', String(selectedRows.length)]
-    ].forEach(([label, value]) => {
-      doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, margin, y);
-      doc.setFont('helvetica', 'normal'); doc.text(String(value), margin + 46, y, { maxWidth: contentWidth - 46 });
-      y += 7;
-    });
+    const model = turbine?.model || 'Gamesa G97 2MW';
+    const gps = turbine?.gps && typeof turbine.gps === 'object'
+      ? `${Math.abs(Number(turbine.gps.lat)).toFixed(4)}°${Number(turbine.gps.lat) < 0 ? 'S' : 'N'}, ${Math.abs(Number(turbine.gps.lng)).toFixed(4)}°${Number(turbine.gps.lng) < 0 ? 'W' : 'E'}`
+      : turbine?.gps || 'Not recorded';
+    const lastInspection = turbine?.lastInspection && turbine.lastInspection !== '—'
+      ? turbine.lastInspection
+      : STATE.db?.defects?.filter(d => String(d.assetId) === String(turbine?.id)).map(d => d.inspDate).filter(Boolean).sort().at(-1) || 'Not recorded';
+    const metadata = [
+      ['Company / Organization', turbine?.company || 'REUDE Technologies Private Limited'],
+      ['Location', turbine?.location || turbine?.site || 'Kayathar, Tamil Nadu'],
+      ['Turbine', `${turbine?.assetId || '—'} · ${turbine?.name || model}`],
+      ['Blade serial #', bladeDisplayName(blade)],
+      ['Field work dates', turbine?.fieldWorkDates || 'Not recorded'],
+      ['Inspection date', lastInspection],
+      ['Included sides', sides.map(s => sideLabels[s] || s).join(', ')]
+    ];
+    y = addPdfKeyValueTable(doc, metadata, y, margin, contentWidth, 46);
+
+    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.25);
+    doc.rect(margin, 242, contentWidth, 30);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(35, 35, 35);
+    doc.text('Copyright Notice', margin + 3, 248);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(55, 55, 55);
+    pdfText(doc,
+      'Any and all images, visualizations, charts, diagrams, data collection, data synchronization patterns, and other materials contained in this inspection report are protected by copyright. All such copyrights are exclusively owned and controlled by REUDE Technologies Private Limited.',
+      margin + 3, 254, contentWidth - 6, 7.5);
+    // Profile data and glossary get dedicated pages to preserve readable, complete tables.
+    doc.addPage();
+    doc.setTextColor(0, 49, 53); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('WIND TURBINE PROFILE', margin, 31);
+    doc.setDrawColor(15, 164, 175); doc.line(margin, 35, w - margin, 35);
+    const profile = [
+      ['Asset ID', turbine?.assetId || 'Not recorded'],
+      ['Turbine name', turbine?.name || 'Not recorded'],
+      ['Manufacturer', turbine?.manufacturer || 'Not recorded'],
+      ['Model', model],
+      ['Rated power', turbine?.power != null ? `${turbine.power} MW` : 'Not recorded'],
+      ['Health', turbine?.health != null ? `${turbine.health}%` : 'Not recorded'],
+      ['Anomalies', turbine?.anomalies ?? selectedRows.length],
+      ['Status', turbine?.status || 'Not recorded'],
+      ['Location', turbine?.location || turbine?.site || 'Not recorded'],
+      ['GPS coordinates', gps],
+      ['Last inspection date', lastInspection],
+      ['Campaign', turbine?.campaign || 'Not recorded'],
+      ['Rotor diameter', turbine?.rotorDia != null ? `${turbine.rotorDia} m` : 'Not recorded'],
+      ['Blade length', turbine?.bladeLength != null ? `${turbine.bladeLength} m` : 'Not recorded'],
+      ['Hub height', turbine?.hubHeight != null ? `${turbine.hubHeight} m` : 'Not recorded'],
+      ['Commissioned', turbine?.commYear || 'Not recorded'],
+      ['Wind speed', turbine?.windSpeed != null ? `${turbine.windSpeed} m/s` : 'Not recorded'],
+      ['Rotor speed', turbine?.rpm != null ? `${turbine.rpm} RPM` : 'Not recorded'],
+      ['Inspection coverage', turbine?.inspCoverage != null ? `${turbine.inspCoverage}%` : 'Not recorded']
+    ];
+    addPdfKeyValueTable(doc, profile, 47, margin, contentWidth, 53);
+    addPdfGlossaryPage(doc, margin, contentWidth);
 
     for (const side of sides) {
       const rows = selectedRows.filter(row => {
@@ -4132,7 +4262,7 @@ async function generatePDFReport() {
       doc.setTextColor(50, 60, 62); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
       doc.text(`${bladeDisplayName(blade)}  ·  ${rows.length} finding${rows.length === 1 ? '' : 's'}  ·  ${reportDate}`, margin, 43);
       let tableY = 55;
-      if (rows.length) tableY = addPdfFindingTable(doc, rows, tableY, margin, contentWidth);
+      if (rows.length) tableY = addPdfFindingTable(doc, rows, tableY, margin, contentWidth, turbine);
       else {
         doc.setFillColor(239, 247, 247); doc.roundedRect(margin, tableY - 4, contentWidth, 18, 2, 2, 'F');
         pdfText(doc, 'No findings are recorded for this selected blade side.', margin + 4, tableY + 3, contentWidth - 8, 9);
@@ -4153,14 +4283,14 @@ async function generatePDFReport() {
       }
       if (rows.length && tableY < 254) {
         doc.setFontSize(7); doc.setTextColor(95, 95, 95);
-        doc.text('Finding locations and classifications are based on the inspection data available in CompliQ at report generation time.', margin, Math.min(268, tableY + 5), { maxWidth: contentWidth });
+        doc.text('Finding locations and classifications are based on the inspection data available at report generation time.', margin, Math.min(268, tableY + 5), { maxWidth: contentWidth });
       }
     }
 
     const totalPages = doc.getNumberOfPages();
-    for (let page = 2; page <= totalPages; page++) {
+    for (let page = 1; page <= totalPages; page++) {
       doc.setPage(page);
-      pdfPageFrame(doc, page, totalPages, reportNo, reportDate);
+      pdfPageFrame(doc, page, totalPages, reportNo, reportDate, logo);
     }
     doc.save(filename);
     showToast(`Report downloaded: ${filename}`, 'success');
