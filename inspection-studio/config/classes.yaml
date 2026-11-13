@@ -1,0 +1,40 @@
+# Defect classes — the six codes from the ML spec.
+# Codes must match the backend's defect_classes table exactly.
+#
+#   label      what the dashboard shows
+#   cat        allowed DNV CAT range [lowest, highest]
+#   threshold  confidence a detection needs to be kept (ML1 replaces 0.30 with tuned values)
+#   sides      optional: blade sides where the class is expected; anything else is flagged for the reviewer
+
+classes:
+  leading_edge_erosion:
+    label: Leading Edge Erosion
+    cat: [1, 4]
+    threshold: 0.30
+  coating_gelcoat_damage:
+    label: Coating & Gelcoat Damage
+    cat: [1, 3]
+    threshold: 0.30
+  crack:
+    label: Cracks
+    cat: [2, 5]
+    threshold: 0.30
+  trailing_edge_split:
+    label: Trailing Edge Split / Debonding
+    cat: [3, 5]
+    threshold: 0.30
+    sides: [TE]
+  lightning_damage:
+    label: Lightning Strike Damage
+    cat: [2, 5]
+    threshold: 0.30
+  delamination:
+    label: Delamination
+    cat: [3, 5]
+    threshold: 0.30
+
+# If model.pt uses other class names, map them to the codes above.
+# Names that already match a code or a label (ignoring case, spaces and "-") need no entry.
+model_name_map: {}
+#  LE_erosion: leading_edge_erosion
+#  te_split: trailing_edge_split

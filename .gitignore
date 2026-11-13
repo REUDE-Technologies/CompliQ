@@ -1,0 +1,14 @@
+**/node_modules/
+**/.wrangler/
+**/.vercel/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/output/
+**/samples/
+**/config/settings*.yaml
+**/*.pt
+**/*.onnx
+**/.dev.vars
+**/.env
+**/.env.*

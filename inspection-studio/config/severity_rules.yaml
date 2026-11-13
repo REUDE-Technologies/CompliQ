@@ -1,0 +1,24 @@
+# Suggested-severity rule (ML spec, "Classes and severity").
+# DRAFT — the blade engineer must approve these thresholds. Change them here, not in code.
+#
+#   1. Start at the class's lowest allowed CAT.
+#   2. Add by the defect's longest side (first matching step wins).
+#   3. Add the tip bonus for the listed classes when the point is in the tip zone.
+#   4. Cap at the class's highest allowed CAT.
+#   If the size is unknown, the class minimum is used and severity_reason says so.
+
+zones:              # blade points per zone (P01 = root, P20 = tip)
+  root: [1, 7]
+  mid: [8, 14]
+  tip: [15, 20]
+
+length_steps:       # checked top to bottom
+  - above_mm: 300   # longest side over 300 mm
+    add: 2
+  - from_mm: 50     # longest side 50–300 mm
+    add: 1
+
+tip_bonus:
+  zone: tip
+  add: 1
+  classes: [leading_edge_erosion, lightning_damage]

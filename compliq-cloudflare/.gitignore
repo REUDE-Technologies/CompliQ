@@ -1,0 +1,16 @@
+node_modules/
+.wrangler/
+.dev.vars
+*.env
+tools/migrate/out/
+tools/migrate/node_modules/
+*.csv
+.create-admin-*.sql
+.vercel/
+.env.*
+!.env.example
+*.mp4
+*.MP4
+__pycache__/
+*.py[cod]
+.reset-*.sql
