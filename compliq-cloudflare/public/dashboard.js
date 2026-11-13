@@ -375,13 +375,17 @@ function setupNav() {
 function renderMetrics() {
   const db = STATE.db;
   const avgHealth = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.health) || 0), 0) / db.turbines.length : 0;
-  const totalAnomalies = db.turbines.reduce((s,t) => s + (Number(t.anomalies) || 0), 0);
+  const activeDefects = db.defects.filter(defect =>
+    !['resolved', 'closed', 'rejected', 'dismissed', 'false positive', 'false_positive']
+      .includes(String(defect.status || '').trim().toLowerCase())
+  );
+  const totalAnomalies = activeDefects.length;
   const avgCoverage = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.inspCoverage) || 0), 0) / db.turbines.length : 0;
 
   animateNumber('m-health', avgHealth.toFixed(1) + '%');
   document.getElementById('m-health-sub').textContent = `${db.turbines.filter(t=>t.status==='normal').length} nominal, ${db.turbines.filter(t=>t.status!=='normal').length} flagged`;
   animateNumber('m-anomalies', totalAnomalies);
-  document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
+  document.getElementById('m-anomalies-sub').textContent = `${activeDefects.filter(defect => Number(defect.severity) >= 4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
   const capacityMw = db.turbines.reduce((sum, turbine) => sum + (Number(turbine.power) || 0), 0);
