@@ -57,7 +57,6 @@
         <span class="brand-by">BY</span>
         <img src="images/reude-logo.png" alt="Reude Technologies">
       </a>
-      <span class="topbar-product-name">Wind Turbine Inspector</span>
       <div id="page-heading" hidden>
         <h2 id="page-title">Analytics</h2>
         <p id="page-sub">Fleet performance trends & defect analysis charts</p>
@@ -659,7 +658,7 @@
     <section class="view active" id="view-analytics">
       <div class="metrics-row analytics-metrics">
         <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1.5"/><path d="M12 10.5V2.5M10.8 12.8 4 16.8M13.3 12.8l6.8 4M12 13.5V22"/></svg></div>
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div class="metric-body">
             <span class="metric-label">Fleet Health Index</span>
             <span class="metric-val" id="m-health">—</span>
@@ -690,21 +689,27 @@
       </div>
       <div class="analytics-grid">
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg>Fleet Health by Turbine</h3><span class="analytics-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg>Click a turbine to link the other charts</span></div>
+          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-hint">Click a turbine to link the other charts</span></div>
           <div class="panel-body chart-body">
             <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg>Defect Distribution by Type</h3></div>
-          <div class="panel-body chart-body chart-body-doughnut">
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
+          <div class="panel-body chart-body">
             <canvas id="chart-defects" aria-label="Defect type distribution"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 21 7v5c0 5-4 8-9 10-5-2-9-5-9-10V7l9-4Z"/><path d="m8 12 2.5 2.5L16 9"/></svg>Severity Distribution</h3></div>
+          <div class="panel-header"><h3>Severity Distribution</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-severity" aria-label="Severity distribution"></canvas>
+          </div>
+        </div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Inspections Timeline</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-timeline" aria-label="Inspections timeline"></canvas>
           </div>
         </div>
       </div>
