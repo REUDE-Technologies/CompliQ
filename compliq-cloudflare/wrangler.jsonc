@@ -45,8 +45,8 @@
 	],
 	"vars": {
 		"SESSION_TTL_HOURS": "24",
-		// Leave empty when the dashboard is served by this Worker (recommended). Comma-separated origins otherwise.
-		"ALLOWED_ORIGINS": ""
+		// Vercel frontend origins allowed to call this Worker. Keep in sync with assigned Vercel domains.
+		"ALLOWED_ORIGINS": "https://compliq-ai-git-sanjai-reudeintern-reude-soft-tech.vercel.app,https://compliq.reude.tech"
 	},
 	"triggers": {
 		"crons": [
