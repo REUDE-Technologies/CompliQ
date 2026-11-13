@@ -4,7 +4,7 @@ import { type Env, type C, type User, requireUser, isGlobalAdmin, canReview, now
 import { sha256 } from "./security";
 
 export const inspections = new Hono<Env>();
-for (const path of ["/classes", "/severity-levels", "/turbines", "/turbines/*", "/fleet/*", "/inspections",
+for (const path of ["/classes", "/severity-levels", "/turbines", "/turbines/*", "/analytics/*", "/fleet/*", "/inspections",
   "/inspections/*", "/points/*", "/detections/*"]) {
   inspections.use(path, requireUser);
   // Blade inspections belong to the wind dashboard; solar accounts get 404 here.
@@ -56,6 +56,27 @@ inspections.get("/turbines", async (c) => {
        FROM turbines t JOIN organizations o ON o.id = t.org_id LEFT JOIN inspections li ON li.id = ${LATEST}
       WHERE (? IS NULL OR t.org_id = ?) ORDER BY o.name, t.code`).bind(org, org).all();
   return c.json({ turbines: results.map((t) => ({ ...t, blade_serials: JSON.parse(String(t.blade_serials ?? "[]")) })) });
+});
+
+// Analytics uses the most recent published inspection per turbine so old inspections don't inflate active counts.
+// The organization scope comes from the authenticated user (global admins may request an org_id filter).
+inspections.get("/analytics/anomalies", async (c) => {
+  const org = orgScope(c, c.get("user"));
+  const { results } = await c.env.DB.prepare(
+    `SELECT d.id, d.class AS type, COALESCE(d.severity, d.severity_suggested, 1) AS severity,
+            d.review_status AS status, d.source, i.turbine_id AS turbineId, t.code AS assetCode,
+            i.inspection_date AS inspDate
+       FROM detections d
+       JOIN inspections i ON i.id = d.inspection_id
+       JOIN turbines t ON t.id = i.turbine_id
+      WHERE i.status = 'published'
+        AND i.id = (SELECT latest.id FROM inspections latest
+                     WHERE latest.turbine_id = i.turbine_id AND latest.status = 'published'
+                     ORDER BY latest.inspection_date DESC, latest.published_at DESC, latest.id DESC LIMIT 1)
+        AND COALESCE(d.review_status, 'pending') != 'rejected'
+        AND (? IS NULL OR i.org_id = ?)
+      ORDER BY i.inspection_date DESC, t.code, d.id`).bind(org, org).all();
+  return c.json({ defects: results });
 });
 
 inspections.get("/turbines/:id", async (c) => {

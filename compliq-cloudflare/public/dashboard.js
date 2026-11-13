@@ -268,7 +268,8 @@ let STATE = {
   pocPopupBoxIndex: null,
   assetEpoch: 0,
   activeTab: 'analytics',
-  analyticsTurbineId: null
+  analyticsTurbineId: null,
+  publishedInspectionDefects: []
 };
 
 let _profileFitRO = null;
@@ -375,10 +376,7 @@ function setupNav() {
 function renderMetrics() {
   const db = STATE.db;
   const avgHealth = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.health) || 0), 0) / db.turbines.length : 0;
-  const activeDefects = db.defects.filter(defect =>
-    !['resolved', 'closed', 'rejected', 'dismissed', 'false positive', 'false_positive']
-      .includes(String(defect.status || '').trim().toLowerCase())
-  );
+  const activeDefects = getAnalyticsDefects();
   const totalAnomalies = activeDefects.length;
   const avgCoverage = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.inspCoverage) || 0), 0) / db.turbines.length : 0;
 
@@ -4293,9 +4291,35 @@ function getChartTheme() {
   };
 }
 
-/** Live defect rows for analytics (fleet DB + published inspection findings when loaded). */
+const TERMINAL_ANOMALY_STATUSES = new Set([
+  'resolved', 'closed', 'rejected', 'dismissed', 'false_positive', 'duplicate', 'cancelled', 'canceled'
+]);
+
+function isActiveAnalyticsDefect(defect) {
+  const status = String(defect?.status || defect?.review_status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return !TERMINAL_ANOMALY_STATUSES.has(status);
+}
+
+/** One organization-scoped active set shared by the KPI, summary and distribution charts. */
 function getAnalyticsDefects() {
-  return Array.isArray(STATE.db?.defects) ? STATE.db.defects.slice() : [];
+  const fleetDefects = Array.isArray(STATE.db?.defects)
+    ? STATE.db.defects.filter(defect => defect.source !== 'inspection')
+    : [];
+  const inspectionDefects = Array.isArray(STATE.publishedInspectionDefects) ? STATE.publishedInspectionDefects : [];
+  const seen = new Set();
+  return [...fleetDefects, ...inspectionDefects].filter(defect => {
+    if (!isActiveAnalyticsDefect(defect)) return false;
+    const key = defect?.id == null ? null : String(defect.id);
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
+}
+
+async function loadPublishedAnalyticsDefects() {
+  if (!window.CompliQApi?.hasSession()) return;
+  const data = await window.CompliQApi.request('/analytics/anomalies');
+  STATE.publishedInspectionDefects = Array.isArray(data?.defects) ? data.defects : [];
 }
 
 function analyticsSelectedTurbine() {
@@ -4308,7 +4332,13 @@ function getLinkedAnalyticsDefects() {
   const all = getAnalyticsDefects();
   const turbine = analyticsSelectedTurbine();
   if (!turbine) return all;
-  return all.filter(d => Number(d.assetId) === Number(turbine.id));
+  const apiIds = new Set([turbine.dbId, turbine.id].filter(id => id != null).map(String));
+  const assetCode = String(turbine.assetId || '').toLowerCase();
+  return all.filter(defect =>
+    (defect.turbineId != null && apiIds.has(String(defect.turbineId))) ||
+    (defect.assetId != null && Number(defect.assetId) === Number(turbine.id)) ||
+    (defect.assetCode && String(defect.assetCode).toLowerCase() === assetCode)
+  );
 }
 
 function healthBarColor(turbine, selectedId) {
@@ -4389,7 +4419,7 @@ function renderAnalyticsSummary() {
   el.innerHTML = `
     <div class="analytics-kpi"><small>Turbines</small><strong>${turbines.length}</strong></div>
     <div class="analytics-kpi"><small>Avg Health</small><strong>${avgHealth}%</strong></div>
-    <div class="analytics-kpi"><small>Findings</small><strong>${defects.length}</strong></div>
+    <div class="analytics-kpi"><small>Active Anomalies</small><strong>${defects.length}</strong></div>
     <div class="analytics-kpi"><small>Critical / High</small><strong class="${crit ? 'kpi-crit' : ''}">${crit}</strong></div>
     <div class="analytics-kpi"><small>Assets Attention</small><strong class="${warn ? 'kpi-warn' : ''}">${warn}</strong></div>
   `;
@@ -6950,6 +6980,11 @@ async function initApp() {
   // Turbines the ML team added from CompliQ Inspection Studio live in the database; show them in the fleet too.
   try { await window.CompliQInspections?.mergeIntoFleet(STATE.db); }
   catch (error) { console.error('Could not merge inspection turbines:', error.message); }
+  try { await loadPublishedAnalyticsDefects(); }
+  catch (error) {
+    console.error('Could not load published inspection anomalies:', error.message);
+    showToast('Published inspection findings could not be loaded; analytics may be incomplete.', 'error');
+  }
   if (currentOrganizationKey() !== 'reudetechnologies') NOTIFICATIONS = [];
   initFleetToolbar();
   initBgCanvas();
