@@ -4805,6 +4805,65 @@ let CHARTS = {
   timeline: null
 };
 
+if (typeof Chart !== 'undefined') {
+  Chart.register({
+    id: 'compliqAnalyticsLabels',
+    afterDatasetsDraw(chart) {
+      const canvasId = chart.canvas?.id;
+      if (!['chart-health', 'chart-severity', 'chart-defects'].includes(canvasId)) return;
+      const ctx = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      const dataset = chart.data.datasets[0];
+      const total = dataset.data.reduce((sum, value) => sum + (Number(value) || 0), 0);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (canvasId === 'chart-health' || canvasId === 'chart-severity') {
+        ctx.font = '700 11px Outfit, sans-serif';
+        ctx.fillStyle = isLightTheme() ? '#102b31' : '#F0F4F4';
+        meta.data.forEach((bar, index) => {
+          const value = Number(dataset.data[index]) || 0;
+          if (!value) return;
+          const point = bar.tooltipPosition();
+          ctx.fillText(canvasId === 'chart-health' ? `${Math.round(value)}%` : String(value), point.x, point.y - 10);
+        });
+      } else {
+        ctx.font = '700 12px Outfit, sans-serif';
+        meta.data.forEach((arc, index) => {
+          const value = Number(dataset.data[index]) || 0;
+          if (!value || chart.data.labels[index] === 'No findings') return;
+          const point = arc.tooltipPosition();
+          ctx.fillStyle = index >= 3 ? '#003135' : '#ffffff';
+          ctx.fillText(`${Math.round(value / (total || 1) * 100)}%`, point.x, point.y);
+        });
+      }
+      ctx.restore();
+    },
+    afterDraw(chart) {
+      if (chart.canvas?.id !== 'chart-defects') return;
+      const chartArea = chart.chartArea;
+      if (!chartArea) return;
+      const dataset = chart.data.datasets[0];
+      const total = chart.data.labels[0] === 'No findings'
+        ? 0
+        : dataset.data.reduce((sum, value) => sum + (Number(value) || 0), 0);
+      const ctx = chart.ctx;
+      const centerX = (chartArea.left + chartArea.right) / 2;
+      const centerY = (chartArea.top + chartArea.bottom) / 2;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = getChartTheme().legend;
+      ctx.font = '500 10px Outfit, sans-serif';
+      ctx.fillText('Total Defects', centerX, centerY - 8);
+      ctx.fillStyle = isLightTheme() ? '#063235' : '#F0F4F4';
+      ctx.font = '800 21px Outfit, sans-serif';
+      ctx.fillText(String(total), centerX, centerY + 12);
+      ctx.restore();
+    }
+  });
+}
+
 function isLightTheme() {
   return document.documentElement.getAttribute('data-theme') === 'light';
 }
