@@ -1,0 +1,12 @@
+# CompliQ Inspection Studio
+# On Windows, pip installs the CPU build of PyTorch. To use an NVIDIA GPU, first install the CUDA build
+# from https://pytorch.org/get-started/locally/ and then run: pip install -r requirements.txt
+ultralytics>=8.3        # YOLO runtime; brings torch, torchvision, opencv
+fastapi>=0.110
+uvicorn>=0.29
+python-ulid>=2.0
+pyyaml>=6.0
+requests>=2.31
+boto3>=1.34          # Cloudflare R2 (S3-compatible API)
+pillow>=10.1
+numpy>=1.24

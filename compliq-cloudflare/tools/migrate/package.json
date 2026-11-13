@@ -1,0 +1,6 @@
+{
+  "name": "compliq-migrate-from-atlas",
+  "private": true,
+  "type": "module",
+  "dependencies": { "mongodb": "^7.0.0" }
+}

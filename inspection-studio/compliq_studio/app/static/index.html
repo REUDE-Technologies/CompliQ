@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CompliQ Inspection Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231e3a5f'/%3E%3Cpath d='M16 6v20M16 16l-8 5M16 16l8 5' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26"><rect width="32" height="32" rx="7" fill="#1e3a5f"/><path d="M16 6v20M16 16l-8 5M16 16l8 5" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+      </span>
+      <span class="brand-name">CompliQ <b>Inspection Studio</b></span>
+    </a>
+    <nav class="nav">
+      <a href="#/" data-nav="inspections">Inspections</a>
+      <a href="#/new" data-nav="new">New run</a>
+      <a href="#/settings" data-nav="settings">Settings</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="jobchip" id="jobchip" href="#/new" hidden></a>
+      <span class="reviewer" id="reviewer"></span>
+    </div>
+  </header>
+  <main id="main" class="main"><div class="loading">Loading…</div></main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="modal" class="modal" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

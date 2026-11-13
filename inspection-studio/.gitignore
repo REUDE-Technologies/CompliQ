@@ -1,0 +1,9 @@
+output/
+samples/
+.venv/
+__pycache__/
+.pytest_cache/
+config/settings.local.yaml
+tools/mock_worker_data/
+models/*.pt
+models/*.onnx
