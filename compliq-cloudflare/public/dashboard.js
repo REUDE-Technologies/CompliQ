@@ -4035,7 +4035,7 @@ function inspectionReportDownloadName() {
   return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${date}.pdf`;
 }
 
-async function generatePDFReport() {
+async function downloadStaticInspectionReport() {
   const filename = inspectionReportDownloadName();
   showToast('Preparing Gamesa G97 inspection report…', 'success');
   try {
