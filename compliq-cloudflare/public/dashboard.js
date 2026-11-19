@@ -2821,6 +2821,144 @@ function defectRadialMetrics(pt, defect, turbine) {
   };
 }
 
+/**
+ * Which way the blade tip points inside a G97 station frame.
+ * 'up' = tip toward the top of the image, 'down' = toward the bottom.
+ * Override per blade + surface, e.g. { 'A-PS': 'down' }.
+ */
+const STATION_TIP_DIRECTION = { default: 'up' };
+const STATION_ASPECT = {};
+
+function stationKey(pt) {
+  return `${pt.blade || activeBladeLetter()}-${pt.surface}-${pt.pointIndex}`;
+}
+
+/** Width / height of the station photo (cached once it has loaded). */
+function stationImageAspect(pt) {
+  const img = document.getElementById('asset-poc-annotated');
+  const cached = STATION_ASPECT[stationKey(pt)];
+  if (cached) return cached;
+  if (img?.naturalWidth && img?.naturalHeight && pt.pointIndex === STATE.pocPointIndex && pt.surface === STATE.pocSurface) {
+    return img.naturalWidth / img.naturalHeight;
+  }
+  return 1;
+}
+
+/**
+ * Blade axis inside the frame, as a unit vector pointing tipward.
+ * The direction comes from the longest run of same-code boxes (e.g. LE erosion
+ * tiled along the edge). With no such run, the blade is taken as vertical.
+ */
+function stationBladeAxis(boxes, pt, aspect) {
+  const groups = new Map();
+  boxes.forEach(b => {
+    const k = String(b.code || b.label || '');
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(b);
+  });
+  let run = null;
+  groups.forEach(list => { if (list.length >= 3 && (!run || list.length > run.length)) run = list; });
+  let ux = 0;
+  let uy = 1;
+  if (run) {
+    const pts = run.map(b => { const c = bboxCenterNorm(b.bbox_norm); return [c.cx * aspect, c.cy]; });
+    const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    const my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    pts.forEach(([x, y]) => { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); });
+    if (sxx + syy > 1e-6) {
+      const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+      ux = Math.cos(ang);
+      uy = Math.sin(ang);
+    }
+  }
+  const dir = STATION_TIP_DIRECTION[`${pt.blade || activeBladeLetter()}-${pt.surface}`] || STATION_TIP_DIRECTION.default;
+  if ((dir === 'up' && uy > 0) || (dir === 'down' && uy < 0)) { ux = -ux; uy = -uy; }
+  return { ux, uy };
+}
+
+/**
+ * Distance from root for every annotation box on a station photo.
+ * The photo centre is the station (e.g. P17 = 40.8 m). Each box is projected
+ * onto the blade axis and scaled with the same frame coverage the Dist tool uses.
+ */
+function stationBoxDistances(pt, turbine) {
+  if (!pt) return null;
+  const boxes = boxesForPocPoint(pt).filter(b => Array.isArray(b.bbox_norm) && b.bbox_norm.length >= 4);
+  if (!boxes.length) return null;
+  const span = bladeSpanM(turbine);
+  const station = Number.isFinite(pt.metres) ? pt.metres : pointMetres(pt.pointIndex, span);
+  const aspect = stationImageAspect(pt);
+  const { ux, uy } = stationBladeAxis(boxes, pt, aspect);
+  const halfW = aspect / 2;
+  const half = Math.min(
+    Math.abs(ux) > 1e-6 ? halfW / Math.abs(ux) : Infinity,
+    Math.abs(uy) > 1e-6 ? 0.5 / Math.abs(uy) : Infinity
+  );
+  const mPerUnit = stationRadialBand(pt.pointIndex, turbine).bandM / (2 * half);
+  const toM = (x, y) => Math.min(span, Math.max(0,
+    station + ((x - 0.5) * aspect * ux + (y - 0.5) * uy) * mPerUnit));
+  const findings = findingsForStation(pt.blade || activeBladeLetter(), pt.surface, pt.pointIndex);
+  const perBox = boxes.map(box => {
+    const [x1, y1, x2, y2] = box.bbox_norm.map(Number);
+    const corners = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]].map(([x, y]) => toM(x, y));
+    const c = bboxCenterNorm(box.bbox_norm);
+    const finding = matchFindingForBox(findings, box);
+    return { box, findingId: finding?.id || '', from: Math.min(...corners), to: Math.max(...corners), centre: toM(c.cx, c.cy) };
+  });
+  const byFinding = {};
+  perBox.forEach(b => {
+    if (!b.findingId) return;
+    const f = byFinding[b.findingId] || (byFinding[b.findingId] = { from: Infinity, to: -Infinity, centre: 0, boxes: 0 });
+    f.from = Math.min(f.from, b.from);
+    f.to = Math.max(f.to, b.to);
+    f.centre += b.centre;
+    f.boxes += 1;
+  });
+  Object.values(byFinding).forEach(f => { f.centre /= f.boxes; });
+  return { span, station, perBox, byFinding };
+}
+
+/** Table text for a finding: one box → its distance; several boxes → the range they cover. */
+function findingDistanceText(geo, span, fallbackM) {
+  const pct = m => Math.round((m / span) * 100);
+  if (!geo) return { dist: `${fallbackM.toFixed(1)} m`, radial: `${pct(fallbackM)}%`, metres: fallbackM };
+  if (geo.boxes > 1 && geo.to - geo.from >= 0.1) {
+    return {
+      dist: `${geo.from.toFixed(1)}–${geo.to.toFixed(1)} m`,
+      radial: pct(geo.from) === pct(geo.to) ? `${pct(geo.from)}%` : `${pct(geo.from)}–${pct(geo.to)}%`,
+      metres: geo.centre
+    };
+  }
+  return { dist: `${geo.centre.toFixed(1)} m`, radial: `${pct(geo.centre)}%`, metres: geo.centre };
+}
+
+/** Distance for a finding row anywhere in the app (table, overview, report detail). */
+function findingRowDistance(row, turbine) {
+  const span = bladeSpanM(turbine);
+  const station = pointMetres(row.index, span);
+  const pt = { blade: row.blade, surface: row.surface, pointIndex: row.index, metres: station };
+  const geo = stationBoxDistances(pt, turbine);
+  return findingDistanceText(geo?.byFinding[row.id], span, station);
+}
+
+/** Re-apply distances once the photo has loaded (its real aspect ratio is then known). */
+function refreshFindingDistances(pt, turbine) {
+  const tbody = document.getElementById('defects-tbody');
+  if (!tbody) return;
+  const geo = stationBoxDistances(pt, turbine);
+  if (!geo) return;
+  tbody.querySelectorAll('tr[data-finding-id]').forEach(tr => {
+    const g = geo.byFinding[tr.dataset.findingId];
+    if (!g) return;
+    const t = findingDistanceText(g, geo.span, geo.station);
+    const dist = tr.querySelector('td[data-col="dist"] span');
+    const radial = tr.querySelector('td[data-col="radial"] span');
+    if (dist) dist.textContent = t.dist;
+    if (radial) radial.textContent = t.radial;
+  });
+}
+
 function renderDefectsTable(turbine) {
   const tbody = document.getElementById('defects-tbody');
   const tbodyAlt = document.getElementById('defects-tbody-standalone');
@@ -2840,15 +2978,15 @@ function renderDefectsTable(turbine) {
     const findings = findingsForStation(blade, pt.surface, pt.pointIndex);
     if (findings.length) {
       const span = bladeSpanM(turbine);
+      const boxGeo = stationBoxDistances(pt, turbine);
       const html = findings.map(d => {
-        const metres = pointMetres(d.index, span);
-        const pct = Math.round((metres / span) * 100);
+        const where = findingDistanceText(boxGeo?.byFinding[d.id], span, pointMetres(d.index, span));
         const prio = findingPriority(d);
         const onStation = d.surface === pt.surface && d.index === pt.pointIndex;
         const isSel = STATE.pocSelectedDefectId ? STATE.pocSelectedDefectId === d.id : onStation;
         const point = 'P' + String(d.index).padStart(2, '0');
-        const code = (d.finding.match(/^C\d+/) || [point])[0];
-        const typeName = String(d.finding || '').replace(/^C\d+\s+/, '');
+        const code = findingCode(d) || point;
+        const typeName = String(d.finding || '').replace(/^(C\d+|H\d+|D\d+)\s+/i, '');
         return `
         <tr class="defect-row ${d.cat >= DOT_MIN_CAT ? 'is-critical' : ''} ${isSel ? 'is-selected' : ''}"
           data-surface="${d.surface}" data-point="${d.index}" data-finding-id="${escHtml(d.id)}" tabindex="0">
@@ -2856,8 +2994,8 @@ function renderDefectsTable(turbine) {
           <td data-col="surface">${escHtml(d.surface)}</td>
           <td data-col="location" style="font-size:0.75rem">${escHtml(d.surface)} · ${point}</td>
           <td data-col="type"><span class="radial-swatch" style="background:${d.color}"></span> ${escHtml(typeName)}</td>
-          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${pct}%</span></td>
-          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</span></td>
+          <td data-col="radial"><span style="font-family:var(--font-mono);font-size:0.72rem">${where.radial}</span></td>
+          <td data-col="dist"><span style="font-family:var(--font-mono);font-size:0.72rem">${where.dist}</span></td>
           <td data-col="intensity"><span class="sev-pill" style="background:${d.color}22;color:${d.color};border:1px solid ${d.color}">CAT ${d.cat}${d.verify ? ' · Verify' : ''}</span></td>
           <td data-col="size" style="font-size:0.72rem">—</td>
           <td data-col="priority"><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
@@ -2954,7 +3092,7 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
   const selected = ensureOverviewAnomaly();
   const rows = overviewAnomalyRows();
   const html = rows.map(row => {
-    const metres = pointMetres(row.index, span);
+    const where = findingRowDistance(row, turbine);
     const duty = findingDuty(row);
     const on = selected && selected.id === row.id;
     return `<tr class="defect-row ${on ? 'is-selected' : ''}" data-anomaly-id="${escHtml(row.id)}">
@@ -2962,7 +3100,7 @@ function renderOverviewDefectTable(turbine, tbodyAlt) {
       <td>${escHtml(row.finding)}</td>
       <td>${escHtml(bladeDisplayName(row.blade, turbine))}</td>
       <td>${escHtml(SIDE_NAME[row.surface] || row.surface)}</td>
-      <td style="font-family:var(--font-mono);font-size:0.72rem">${metres.toFixed(1)} m</td>
+      <td style="font-family:var(--font-mono);font-size:0.72rem">${where.dist}</td>
       <td><span class="sev-pill" style="background:${DUTY_COLOR[duty]}22;color:${DUTY_COLOR[duty]};border:1px solid ${DUTY_COLOR[duty]}">${DUTY_LABEL[duty]} · ${row.cat}</span></td>
       <td><button type="button" class="review-btn">Open</button></td>
     </tr>`;
@@ -5644,7 +5782,8 @@ function openFindingDetails() {
   const view = findingView(raw);
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const span = bladeSpanM(turbine);
-  const metres = pointMetres(view.index, span);
+  const where = findingRowDistance(view, turbine);
+  const metres = where.metres;
   STATE.pocSurface = view.surface;
   STATE.pocPointIndex = view.index;
   const pointLabel = 'P' + String(view.index).padStart(2, '0');
@@ -5658,8 +5797,8 @@ function openFindingDetails() {
     assetId: turbine?.id,
     blade: view.blade,
     location: `${view.surface} · ${pointLabel}`,
-    radialPos: `${metres.toFixed(1)} m / ${span} m (${Math.round((metres / span) * 100)}%)`,
-    dist: metres.toFixed(1),
+    radialPos: `${where.dist} / ${span} m (${where.radial})`,
+    dist: where.dist.replace(/ m$/, ''),
     intensity: `CAT ${view.cat}`,
     severity: view.cat,
     size: `${view.count} mark${view.count === 1 ? '' : 's'}`,
@@ -6537,6 +6676,7 @@ function renderPocBboxOverlay(pt, turbine) {
 
   const w = img.naturalWidth;
   const h = img.naturalHeight;
+  if (pt) STATION_ASPECT[stationKey(pt)] = w / h;
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('width', String(w));
   svg.setAttribute('height', String(h));
@@ -6568,6 +6708,7 @@ function renderPocBboxOverlay(pt, turbine) {
       </g>`;
     }).join('');
     bindPocBboxClicks();
+    refreshFindingDistances(pt, turbine);
     const popup = document.getElementById('asset-defect-popup');
     if (popup && !popup.hidden && STATE.pocPopupBoxIndex != null && boxes[STATE.pocPopupBoxIndex]) {
       placeDefectPopup(boxes[STATE.pocPopupBoxIndex]);
@@ -6670,7 +6811,9 @@ function showDefectPopup(finding, box, pt, turbine) {
   const popup = document.getElementById('asset-defect-popup');
   if (!popup) return;
   const span = bladeSpanM(turbine);
-  const metres = pt?.metres ?? pointMetres(finding?.index || pt?.pointIndex || 1, span);
+  let metres = pt?.metres ?? pointMetres(finding?.index || pt?.pointIndex || 1, span);
+  const boxGeo = box && pt ? stationBoxDistances(pt, turbine)?.perBox.find(b => b.box === box) : null;
+  if (boxGeo) metres = boxGeo.centre;
   const code = findingCode(finding) || box?.code || '';
   const typeName = String(finding?.finding || box?.label || 'Finding').replace(/^(C\d+|H\d+|D\d+)\s+/, '');
   const kicker = document.getElementById('asset-defect-popup-kicker');
@@ -6680,7 +6823,8 @@ function showDefectPopup(finding, box, pt, turbine) {
   if (title) title.textContent = typeName;
   if (meta) {
     const marks = finding?.count ? `${finding.count} mark${finding.count === 1 ? '' : 's'}` : '';
-    meta.textContent = [code, `${Number(metres).toFixed(1)} m from root`, marks].filter(Boolean).join(' · ');
+    const extent = boxGeo && boxGeo.to - boxGeo.from >= 0.5 ? ` (${boxGeo.from.toFixed(1)}–${boxGeo.to.toFixed(1)} m)` : '';
+    meta.textContent = [code, `${Number(metres).toFixed(1)} m from root${extent}`, marks].filter(Boolean).join(' · ');
   }
   popup.hidden = false;
   placeDefectPopup(box);
