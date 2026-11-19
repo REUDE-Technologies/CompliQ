@@ -4558,8 +4558,7 @@ function clearManualRecords() {
 let CHARTS = {
   health: null,
   defects: null,
-  severity: null,
-  timeline: null
+  severity: null
 };
 
 function isLightTheme() {
@@ -4666,7 +4665,6 @@ function applyAnalyticsFilter() {
   }
   renderDefectPieChart();
   renderSeverityChart();
-  renderTimelineChart();
 }
 
 function bindAnalyticsFilterBar() {
@@ -4703,7 +4701,6 @@ async function renderCharts() {
   renderHealthChart();
   renderDefectPieChart();
   renderSeverityChart();
-  renderTimelineChart();
 }
 
 function renderAnalyticsSummary() {

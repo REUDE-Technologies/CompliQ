@@ -1613,6 +1613,7 @@ input[type=range] { width: 90px; accent-color: var(--c-teal); }
   flex: 1 1 auto;
   min-height: 0;
 }
+.analytics-severity-panel { grid-column: 1 / -1; }
 .analytics-summary,
 .analytics-summary[hidden] {
   display: none !important;
