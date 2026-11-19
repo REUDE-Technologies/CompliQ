@@ -24,7 +24,6 @@
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
   <link rel="stylesheet" href="dashboard.css?v=spanFit2">
-  <link rel="stylesheet" href="inspections-view.css?v=insp1">
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -58,7 +57,6 @@
         <span class="brand-by">BY</span>
         <img src="images/reude-logo.png" alt="Reude Technologies">
       </a>
-      <span class="topbar-product-name">Wind Turbine Inspector</span>
       <div id="page-heading" hidden>
         <h2 id="page-title">Analytics</h2>
         <p id="page-sub">Fleet performance trends & defect analysis charts</p>
@@ -107,7 +105,6 @@
       <button class="nav-item" data-tab="fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Fleet</span></button>
       <button class="nav-item" data-tab="asset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><span>Asset</span></button>
       <button class="nav-item" data-tab="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Report</span></button>
-      <button class="nav-item" data-tab="inspections" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Inspections</span></button>
       <button class="nav-item is-unavailable" data-tab="ingest" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Ingest</span></button>
       <button class="nav-item is-unavailable" data-tab="manual" type="button" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Manual</span></button>
       <button class="nav-item" id="admin-nav-btn" data-tab="admin" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg><span>Admin</span></button>
@@ -375,41 +372,76 @@
         <aside class="panel report-settings" id="report-picker">
           <div class="panel-header"><h3>Inspection settings</h3></div>
           <div class="panel-body report-settings-body">
-            <div class="report-config-section">
-              <label>Turbine
-                <select id="report-turbine" class="styled-select"></select>
-              </label>
-              <div class="side-tabs" role="group" aria-label="Blade side">
-                <span class="side-tabs-label">Side</span>
-                <div class="side-tabs-row">
-                  <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
-                  <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
-                  <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
-                  <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
-                </div>
+            <label>Turbine
+              <select id="report-turbine" class="styled-select"></select>
+            </label>
+            <label class="report-blade-select">Blade
+              <select id="report-blade" class="styled-select" aria-label="Selected blade">
+                <option value="A">Blade A</option>
+                <option value="B">Blade B</option>
+                <option value="C">Blade C</option>
+              </select>
+            </label>
+            <div class="report-blade-tabs" role="group" aria-label="Blade">
+              <span class="side-tabs-label">Blades</span>
+              <div class="report-blade-row">
+                <button type="button" class="report-blade-tab is-on" data-blade="A" aria-pressed="true">Blade A</button>
+                <button type="button" class="report-blade-tab" data-blade="B" aria-pressed="false">Blade B</button>
+                <button type="button" class="report-blade-tab" data-blade="C" aria-pressed="false">Blade C</button>
               </div>
             </div>
-            <select id="report-blade" class="styled-select" hidden aria-hidden="true">
-              <option value="A">Blade A</option><option value="B">Blade B</option><option value="C">Blade C</option>
-            </select>
-            <div class="report-blades-section" id="report-filter-blades" role="group" aria-label="Select blades for report">
-              <span class="report-filter-section-label">Blades</span>
-              <div class="report-filter-options"></div>
+            <div class="side-tabs" role="group" aria-label="Blade side">
+              <span class="side-tabs-label">Side</span>
+              <div class="side-tabs-row">
+                <button type="button" class="side-tab" data-side="SS" aria-pressed="false">Suction SS</button>
+                <button type="button" class="side-tab" data-side="LE" aria-pressed="false">Leading LE</button>
+                <button type="button" class="side-tab is-on" data-side="PS" aria-pressed="true">Pressure PS</button>
+                <button type="button" class="side-tab" data-side="TE" aria-pressed="false">Trailing TE</button>
+              </div>
             </div>
             <div class="report-override-field" id="report-override-field" hidden>
-              <select id="report-review-cat" class="styled-select"><option value="1">CAT 1</option><option value="2">CAT 2</option><option value="3">CAT 3</option><option value="4">CAT 4</option><option value="5">CAT 5</option></select>
-              <select id="report-review-name" class="styled-select"></select>
+              <label>Category
+                <select id="report-review-cat" class="styled-select">
+                  <option value="1">CAT 1 – Cosmetic</option>
+                  <option value="2">CAT 2 – Minor</option>
+                  <option value="3">CAT 3 – Moderate</option>
+                  <option value="4">CAT 4 – Serious</option>
+                  <option value="5">CAT 5 – Critical</option>
+                </select>
+              </label>
+              <label>Defect class
+                <select id="report-review-name" class="styled-select"></select>
+              </label>
             </div>
-            <div class="report-pdf-filters" aria-label="Inspection report filters">
-              <span class="report-filter-heading">Report filters <small>Select categories and defect classes</small></span>
-              <div class="report-filter-menus">
-                <section class="report-filter-menu" id="report-filter-categories"><h4><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M5 10h10M7 15h6"/><circle cx="6" cy="5" r="1.5"/><circle cx="13" cy="10" r="1.5"/><circle cx="9" cy="15" r="1.5"/></svg>Categories</h4><div class="report-filter-options"></div></section>
-                <section class="report-filter-menu" id="report-filter-classes"><h4><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z"/><path d="M10 7v4m0 2.5h.01"/></svg>Defect classes</h4><div class="report-filter-options"></div></section>
-              </div>
+            <div class="report-filters-heading">
+              <strong>Report filters</strong>
+              <span>Select categories and defect classes</span>
             </div>
-            <div class="report-override-actions">
-              <button type="button" class="teal-btn report-download-btn" onclick="generatePDFReport()">Download report</button>
+            <div class="report-multiselects">
+              <section class="report-multiselect" aria-labelledby="report-categories-title">
+                <h4 id="report-categories-title"><span aria-hidden="true">☷</span> Categories</h4>
+                <div class="report-checkbox-list" id="report-category-filters">
+                  <label><input type="checkbox" value="1" checked><span>CAT 1 · Cosmetic</span></label>
+                  <label><input type="checkbox" value="2" checked><span>CAT 2 · Minor</span></label>
+                  <label><input type="checkbox" value="3" checked><span>CAT 3 · Moderate</span></label>
+                  <label><input type="checkbox" value="4" checked><span>CAT 4 · Serious</span></label>
+                  <label><input type="checkbox" value="5" checked><span>CAT 5 · Critical</span></label>
+                </div>
+              </section>
+              <section class="report-multiselect" aria-labelledby="report-defect-classes-title">
+                <h4 id="report-defect-classes-title"><span aria-hidden="true">⚠</span> Defect classes</h4>
+                <div class="report-checkbox-list" id="report-class-filters">
+                  <label><input type="checkbox" value="Coating &amp; Gelcoat Damage" checked><span>Coating &amp; Gelcoat Damage</span></label>
+                  <label><input type="checkbox" value="Corrosion" checked><span>Corrosion</span></label>
+                  <label><input type="checkbox" value="Cracks" checked><span>Cracks</span></label>
+                  <label><input type="checkbox" value="Delamination" checked><span>Delamination</span></label>
+                  <label><input type="checkbox" value="Leading Edge Erosion" checked><span>Leading Edge Erosion</span></label>
+                  <label><input type="checkbox" value="Lightning Strike Damage" checked><span>Lightning Strike Damage</span></label>
+                  <label><input type="checkbox" value="Trailing Edge Split / Debonding" checked><span>Trailing Edge Split / Debonding</span></label>
+                </div>
+              </section>
             </div>
+            <button type="button" class="teal-btn report-download-btn" onclick="generatePDFReport()">Download report</button>
           </div>
         </aside>
         <div class="panel report-photo-panel" id="report-viewer-panel">
@@ -658,7 +690,7 @@
     <section class="view active" id="view-analytics">
       <div class="metrics-row analytics-metrics">
         <div class="metric-card">
-          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="1.5"/><path d="M12 10.5V2.5M10.8 12.8 4 16.8M13.3 12.8l6.8 4M12 13.5V22"/></svg></div>
+          <div class="metric-icon teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div class="metric-body">
             <span class="metric-label">Fleet Health Index</span>
             <span class="metric-val" id="m-health">—</span>
@@ -689,30 +721,32 @@
       </div>
       <div class="analytics-grid">
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg>Fleet Health by Turbine</h3><span class="analytics-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3A5 5 0 0 0 11 21.1l1.7-1.7"/></svg>Click a turbine to link the other charts</span></div>
+          <div class="panel-header"><h3>Fleet Health by Turbine</h3><span class="analytics-hint">Click a turbine to link the other charts</span></div>
           <div class="panel-body chart-body">
             <canvas id="chart-health" aria-label="Fleet health bar chart"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg>Defect Distribution by Type</h3></div>
-          <div class="panel-body chart-body chart-body-doughnut">
+          <div class="panel-header"><h3>Defect Distribution by Type</h3></div>
+          <div class="panel-body chart-body">
             <canvas id="chart-defects" aria-label="Defect type distribution"></canvas>
           </div>
         </div>
         <div class="panel analytics-panel">
-          <div class="panel-header"><h3><svg class="analytics-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 21 7v5c0 5-4 8-9 10-5-2-9-5-9-10V7l9-4Z"/><path d="m8 12 2.5 2.5L16 9"/></svg>Severity Distribution</h3></div>
+          <div class="panel-header"><h3>Severity Distribution</h3></div>
           <div class="panel-body chart-body">
             <canvas id="chart-severity" aria-label="Severity distribution"></canvas>
+          </div>
+        </div>
+        <div class="panel analytics-panel">
+          <div class="panel-header"><h3>Inspections Timeline</h3></div>
+          <div class="panel-body chart-body">
+            <canvas id="chart-timeline" aria-label="Inspections timeline"></canvas>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ==========================================
-         VIEW: INSPECTIONS (published by the ML team from CompliQ Inspection Studio; inspections-view.js)
-    =========================================== -->
-    <section class="view" id="view-inspections"><div id="insp-root"></div></section>
   </main>
   </div><!-- /.app-body -->
 
@@ -769,10 +803,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="api-config.js"></script>
-<script src="api.js"></script>
-<script src="inspections-view.js?v=insp1"></script>
-<script src="dashboard.js?v=insp1"></script>
+<script src="dashboard.js?v=spanFit2"></script>
 </body>
 </html>
 

@@ -12,18 +12,6 @@
 const SESSION_KEY = 'compliq_session';
 const USERS_KEY = 'compliq_users';
 
-function currentOrganizationKey() {
-  try {
-    const user = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-    return user?.orgKey || String(user?.org || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '').replace(/^\d+/, '') || '';
-  } catch (_) { return ''; }
-}
-
-function organizationStorageKey(key) {
-  const orgKey = currentOrganizationKey();
-  return orgKey ? `${key}:${orgKey}` : key;
-}
-
 function avatarStoreKey(email) {
   return 'compliq_avatar:' + String(email || '').trim().toLowerCase();
 }
@@ -58,20 +46,15 @@ function applyUserAvatar(el, user) {
   el.setAttribute('aria-label', 'REUDE');
 }
 
-async function checkAuth() {
+function checkAuth() {
   const session = localStorage.getItem(SESSION_KEY);
-  if (!session || !window.CompliQApi?.hasSession()) {
+  if (!session) {
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app-wrap').style.display = 'none';
-    return;
-  }
-  try {
-    const user = await window.CompliQApi.request('/account');
-    if (user.sector === 'solar') { window.location.replace('solar-dashboard.html'); return; }
-    if (user.sector !== 'wind') throw new Error('This account cannot access the wind dashboard.');
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } else {
     document.getElementById('auth-gate').style.display = 'none';
     document.getElementById('app-wrap').style.display = 'flex';
+    const user = JSON.parse(session);
     const av = document.getElementById('user-av');
     const nameEl = document.getElementById('user-display-name');
     const roleEl = document.getElementById('user-display-role');
@@ -81,7 +64,7 @@ async function checkAuth() {
     
     // Show admin button if user is administrator
     const adminBtn = document.getElementById('admin-nav-btn');
-    if (user.globalAdmin) {
+    if (user.role === 'Administrator' || user.email === 'admin@reude.tech') {
       if (adminBtn) {
         adminBtn.style.display = 'flex';
         adminBtn.onclick = () => window.location.href = 'admin.html';
@@ -97,11 +80,6 @@ async function checkAuth() {
         localStorage.setItem('compliq_wind_session', windRaw);
       }
     }
-  } catch (_) {
-    localStorage.removeItem(SESSION_KEY);
-    window.CompliQApi?.logout();
-    document.getElementById('auth-gate').style.display = 'flex';
-    document.getElementById('app-wrap').style.display = 'none';
   }
 }
 
@@ -120,7 +98,6 @@ function handleLogout() {
   }
   
   localStorage.removeItem(SESSION_KEY);
-  window.CompliQApi?.logout();
   window.location.href = 'index.html';
 }
 
@@ -209,33 +186,21 @@ const DEFAULT_DEFECTS = [
 
 // Load from localStorage or use defaults
 function loadDB() {
-  const scopedKey = organizationStorageKey(DB_KEY);
-  let stored = localStorage.getItem(scopedKey);
-  const orgKey = currentOrganizationKey();
-  // Keep the existing sample fleet with its original REUDE tenant during migration.
-  if (!stored && orgKey === 'reudetechnologies') stored = localStorage.getItem(DB_KEY);
+  const stored = localStorage.getItem(DB_KEY);
   let db;
   if (stored) {
     try { db = JSON.parse(stored); }
     catch(e) { db = null; }
   }
   if (!db) {
-    db = window.CompliQApi?.hasSession() || (orgKey && orgKey !== 'reudetechnologies')
-      ? { turbines: [], defects: [], manualRecords: [], inspectionLogs: [] }
-      : { turbines: [...DEFAULT_TURBINES], defects: [...DEFAULT_DEFECTS], manualRecords: [], inspectionLogs: [] };
+    db = { turbines: [...DEFAULT_TURBINES], defects: [...DEFAULT_DEFECTS], manualRecords: [], inspectionLogs: [] };
   }
   migrateFleetDb(db);
-  localStorage.setItem(scopedKey, JSON.stringify(db));
+  saveDB(db);
   return db;
 }
 function saveDB(db) {
-  localStorage.setItem(organizationStorageKey(DB_KEY), JSON.stringify(db));
-  if (window.CompliQApi?.hasSession()) {
-    CompliQApi.request(`/data/${DB_KEY}`, { method: 'PUT', body: JSON.stringify(db) }).catch(error => {
-      console.error('Could not save fleet data to MongoDB:', error.message);
-      showToast('Fleet changes are saved in this browser but could not sync to MongoDB.', 'error');
-    });
-  }
+  localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
 function turbineLabel(t) {
@@ -246,8 +211,37 @@ function turbineLabel(t) {
 
 function migrateFleetDb(db) {
   if (!db?.turbines?.length) return;
+  const t1 = db.turbines.find(t => t.id === 1);
+  const template = DEFAULT_TURBINES[0];
+  if (t1 && (t1.model !== template.model || t1.bladeLength !== template.bladeLength || t1.name !== template.name || t1.site !== template.site)) {
+    Object.assign(t1, {
+      name: template.name,
+      site: template.site,
+      location: template.location,
+      manufacturer: template.manufacturer,
+      model: template.model,
+      rotorDia: template.rotorDia,
+      bladeLength: template.bladeLength,
+      power: template.power,
+      hubHeight: template.hubHeight,
+      campaign: template.campaign,
+      anomalies: template.anomalies,
+      health: template.health,
+      status: template.status,
+      blades: template.blades
+    });
+  }
   db.turbines.forEach(t => {
+    const src = DEFAULT_TURBINES.find(d => d.id === t.id || d.assetId === t.assetId);
+    if (src?.gps) {
+      t.gps = { lat: src.gps.lat, lng: src.gps.lng };
+      if (src.location) t.location = src.location;
+    }
     if (t.bladeLength == null && t.rotorDia) t.bladeLength = +(t.rotorDia / 2).toFixed(1);
+  });
+  db.defects?.forEach(d => {
+    const src = DEFAULT_DEFECTS.find(x => x.id === d.id);
+    if (src?.gps) d.gps = src.gps;
   });
 }
 
@@ -268,8 +262,7 @@ let STATE = {
   pocPopupBoxIndex: null,
   assetEpoch: 0,
   activeTab: 'analytics',
-  analyticsTurbineId: null,
-  publishedInspectionDefects: []
+  analyticsTurbineId: null
 };
 
 let _profileFitRO = null;
@@ -319,18 +312,13 @@ const PAGE_TITLES = {
   report: ['Report Viewer', 'CV inspection evidence & engineering assessment'],
   ingest: ['Ingest Data', 'Upload drone imagery, thermal scans & telemetry'],
   manual: ['Manual Entry', 'Record turbine data, defects & inspection events'],
-  analytics: ['Analytics', 'Fleet performance trends & defect analysis charts'],
-  inspections: ['Inspections', 'Drone inspections published by the ML team: blade map, photos and findings']
+  analytics: ['Analytics', 'Fleet performance trends & defect analysis charts']
 };
 
 function activateTab(tab) {
-  let next = tab || 'analytics';
+  const next = tab || 'analytics';
   const blocked = document.querySelector(`.nav-item[data-tab="${next}"]`);
   if (blocked && blocked.classList.contains('is-unavailable')) return;
-  if (!STATE.db?.turbines?.length && (next === 'asset' || next === 'report')) {
-    showToast('Add a turbine to this organization before opening asset inspections or reports.', 'error');
-    return;
-  }
   const leavingAsset = STATE.activeTab === 'asset' && next !== 'asset';
   if (leavingAsset) teardownAssetHeavyWork();
 
@@ -354,7 +342,6 @@ function activateTab(tab) {
     if (next === 'report') openReportForSelection();
     if (next === 'manual') populateManualSelects();
     if (next === 'ingest') populateIngestSelects();
-    if (next === 'inspections') window.CompliQInspections?.open();
   });
 }
 
@@ -375,15 +362,14 @@ function setupNav() {
 // ══════════════════════════════════════════════════
 function renderMetrics() {
   const db = STATE.db;
-  const avgHealth = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.health) || 0), 0) / db.turbines.length : 0;
-  const activeDefects = getAnalyticsDefects();
-  const totalAnomalies = activeDefects.length;
-  const avgCoverage = db.turbines.length ? db.turbines.reduce((s,t) => s + (Number(t.inspCoverage) || 0), 0) / db.turbines.length : 0;
+  const avgHealth = db.turbines.reduce((s,t) => s + t.health, 0) / db.turbines.length;
+  const totalAnomalies = db.turbines.reduce((s,t) => s + t.anomalies, 0);
+  const avgCoverage = db.turbines.reduce((s,t) => s + t.inspCoverage, 0) / db.turbines.length;
 
   animateNumber('m-health', avgHealth.toFixed(1) + '%');
   document.getElementById('m-health-sub').textContent = `${db.turbines.filter(t=>t.status==='normal').length} nominal, ${db.turbines.filter(t=>t.status!=='normal').length} flagged`;
   animateNumber('m-anomalies', totalAnomalies);
-  document.getElementById('m-anomalies-sub').textContent = `${activeDefects.filter(defect => Number(defect.severity) >= 4).length} critical / high severity`;
+  document.getElementById('m-anomalies-sub').textContent = `${db.defects.filter(d=>d.severity>=4).length} critical / high severity`;
   animateNumber('m-coverage', avgCoverage.toFixed(0) + '%');
   document.getElementById('m-cov-sub').textContent = `${db.turbines.length} assets monitored`;
   const capacityMw = db.turbines.reduce((sum, turbine) => sum + (Number(turbine.power) || 0), 0);
@@ -607,7 +593,7 @@ function initFleetToolbar() {
 }
 
 function turbineHasAssetView(t) {
-  return !!(t?.latestInspectionId || t?.latest_inspection_id);
+  return Number(t?.id) === 1 || t?.assetId === 'WTG-001';
 }
 
 function syncFleetSelection() {
@@ -645,9 +631,7 @@ function renderFleetGrid() {
   grid.innerHTML = '';
   const turbines = filteredFleetTurbines();
   if (!turbines.length) {
-    grid.innerHTML = STATE.db.turbines.length
-      ? '<p class="fleet-empty">No turbines match these filters.</p>'
-      : '<p class="fleet-empty">This organization has no turbine data yet. Add a turbine or import fleet data to get started.</p>';
+    grid.innerHTML = '<p class="fleet-empty">No turbines match these filters.</p>';
     renderFleetMap();
     return;
   }
@@ -884,10 +868,6 @@ function renderAssetList(filter = 'all') {
   if (filter === 'warn') turbines = turbines.filter(t => t.status !== 'normal');
   if (filter === 'ok') turbines = turbines.filter(t => t.status === 'normal');
   list.innerHTML = '';
-  if (!STATE.db.turbines.length) {
-    list.innerHTML = '<p class="fleet-empty">No asset records in this organization yet.</p>';
-    return;
-  }
   turbines.forEach(t => {
     const cls = t.status === 'critical' ? 'crit' : t.status === 'warning' ? 'warn' : 'good';
     const anomClass = t.anomalies >= 3 ? 'has-crit' : t.anomalies > 0 ? 'has-warn' : 'ok';
@@ -1008,6 +988,9 @@ function refreshBladeMenus(turbine) {
   document.querySelectorAll('#report-blade option').forEach(opt => {
     if (!['A', 'B', 'C'].includes(opt.value)) return;
     opt.textContent = bladeDisplayName(opt.value, current);
+  });
+  document.querySelectorAll('.report-blade-tab').forEach(btn => {
+    btn.textContent = bladeDisplayName(btn.dataset.blade, current);
   });
   const defectBlade = document.getElementById('md-blade');
   if (defectBlade) {
@@ -1150,7 +1133,7 @@ async function renderPartSchematic(turbine, part, epoch = STATE.assetEpoch) {
   if (part === 'full') {
     if (titleDefault) titleDefault.textContent = 'Full Turbine Overview';
     if (hint) hint.textContent = '';
-    await loadInspectionData(turbine);
+    await loadBladeFindings();
     if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch || STATE.selectedPart !== 'full') return;
     renderFullTurbineOverview(container, turbine);
     renderDefectsTable(turbine);
@@ -1264,7 +1247,7 @@ function applyOverviewSeverityTheme(cat) {
 }
 
 function anomalyBoxes() {
-  try { return JSON.parse(localStorage.getItem(organizationStorageKey(ANOMALY_BOX_KEY)) || '{}'); }
+  try { return JSON.parse(localStorage.getItem(ANOMALY_BOX_KEY) || '{}'); }
   catch { return {}; }
 }
 
@@ -1285,7 +1268,7 @@ function pruneEmptyAnomalyDrafts(exceptId) {
 }
 
 function writeAnomalyBoxes(map) {
-  localStorage.setItem(organizationStorageKey(ANOMALY_BOX_KEY), JSON.stringify(map));
+  localStorage.setItem(ANOMALY_BOX_KEY, JSON.stringify(map));
 }
 
 function defectFamily(row) {
@@ -2541,13 +2524,9 @@ function paintOverviewDetail(turbine) {
   sideInput.value = `${SIDE_NAME[row.surface] || row.surface} · ${bladeDisplayName(row.blade)}`;
   if (STATE.overviewCompareMetres == null) radiusInput.value = `${metres.toFixed(1)} m`;
   if (severity) severity.value = String(saved.severity || row.cat || 2);
+  const photos = g97StationCandidates(row.blade, row.surface, row.index);
   photo.alt = `${row.blade} ${row.surface}`;
-  const ip = inspectionPointForStation(row.blade, row.surface, row.index);
-  if (ip) {
-    resolvePointImage(ip.id).then(url => { if (url) photo.src = url; else photo.removeAttribute('src'); });
-  } else {
-    photo.removeAttribute('src');
-  }
+  useFirstExistingImage(photo, photos, () => photo.removeAttribute('src'));
   applyOverviewSeverityTheme(Number(severity?.value) || saved.severity || row.cat || 2);
   paintOverviewBox(saved.box || null);
   paintBladeComparison(turbine, row);
@@ -2587,6 +2566,30 @@ function comparisonPlace(selected, turbine) {
   return { surface, index, metres: pointMetres(index, span) };
 }
 
+function stationFileCandidates(blade, surface, index) {
+  const all = g97StationCandidates(blade, surface, index);
+  const local = [];
+  const remote = [];
+  [1, 7, 3, 5, 0, 6, 2, 4].forEach(slot => {
+    const url = all[slot];
+    if (!url) return;
+    if (/^https?:/i.test(url)) remote.push(url);
+    else local.push(url);
+  });
+  const here = typeof location !== 'undefined' && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  return here ? local.concat(remote) : remote.concat(local);
+}
+
+function compareCandidates(blade, surface, index) {
+  const list = [];
+  [0, 1, -1, 2, -2, 3, -3].forEach(delta => {
+    const station = index + delta;
+    if (station < 1 || station > 20) return;
+    list.push(...stationFileCandidates(blade, surface, station));
+  });
+  return list;
+}
+
 function paintBladeComparison(turbine, row) {
   const host = document.getElementById('overview-compare');
   if (!host) return;
@@ -2598,12 +2601,8 @@ function paintBladeComparison(turbine, row) {
       <img data-blade="${blade}" alt="Blade ${blade} ${escHtml(place.surface)}" draggable="false">
     </figure>`).join('');
   host.querySelectorAll('img').forEach(img => {
-    const ip = inspectionPointForStation(img.dataset.blade, place.surface, place.index);
-    if (ip) {
-      resolvePointImage(ip.id).then(url => { if (url) img.src = url; else img.removeAttribute('src'); });
-    } else {
-      img.removeAttribute('src');
-    }
+    const photos = compareCandidates(img.dataset.blade, place.surface, place.index);
+    useFirstExistingImage(img, photos, () => img.removeAttribute('src'));
   });
 }
 
@@ -2628,6 +2627,9 @@ function saveOverviewAnomaly(turbine) {
     box
   };
   writeAnomalyBoxes(map);
+  const overrides = defectOverrides();
+  overrides[row.id] = { ...(overrides[row.id] || {}), cat: severity, name: type };
+  writeDefectOverrides(overrides);
   STATE.overviewDraftBox = null;
   const draw = document.getElementById('overview-box-svg');
   draw?.classList.remove('is-drawing');
@@ -2733,6 +2735,47 @@ function priorityFromSeverity(sev) {
   return 'Low';
 }
 
+/** Radial % band covered by each PS station capture (root→tip within frame). */
+const STATION_RADIAL_PCT = {
+  2:  [0, 10],
+  5:  [8, 28],
+  7:  [28, 42],
+  10: [42, 62],
+  13: [62, 82],
+  18: [82, 95],
+  20: [92, 100]
+};
+
+/** Typical Gamesa G97 chord (m) vs radial %. */
+const G97_CHORD_M = [
+  [0, 3.94], [10, 3.72], [20, 3.45], [30, 2.98], [40, 2.52],
+  [50, 2.12], [60, 1.78], [70, 1.46], [80, 1.16], [90, 0.82], [100, 0.48]
+];
+
+function lerpKnots(table, t) {
+  const x = Math.min(100, Math.max(0, Number(t) || 0));
+  for (let i = 1; i < table.length; i += 1) {
+    if (x <= table[i][0]) {
+      const [x0, y0] = table[i - 1];
+      const [x1, y1] = table[i];
+      const u = (x - x0) / Math.max(1e-6, x1 - x0);
+      return y0 + (y1 - y0) * u;
+    }
+  }
+  return table[table.length - 1][1];
+}
+
+function stationRadialBand(pointIndex, turbine) {
+  const span = bladeSpanM(turbine);
+  const metres = pointMetres(pointIndex, span);
+  const pct = (metres / span) * 100;
+  const band = STATION_RADIAL_PCT[pointIndex] || [
+    Math.max(0, pct - 8),
+    Math.min(100, pct + 8)
+  ];
+  return { span, metres, pct, band, bandM: span * (band[1] - band[0]) / 100 };
+}
+
 const DEFECT_SEV_COLOR = {
   1: '#B9D896',
   2: '#FACD96',
@@ -2749,22 +2792,32 @@ function bboxCenterNorm(bbox) {
   };
 }
 
-/** Use the inspection point's measured distance; bbox coordinates remain image-relative. */
+/**
+ * Auto-calculate distance-from-root for a defect from its bbox within the
+ * station’s radial band. Frame Y increases tipward on Blade 5297 PS captures.
+ */
 function defectRadialMetrics(pt, defect, turbine) {
   const span = bladeSpanM(turbine);
-  const metres = Math.max(0, Number(pt.metres) || 0);
-  const pct = span > 0 ? Math.min(100, Math.max(0, metres / span * 100)) : 0;
+  const stationPct = Math.round((pt.metres / span) * 100);
+  const band = STATION_RADIAL_PCT[pt.pointIndex] || [
+    Math.max(0, stationPct - 8),
+    Math.min(100, stationPct + 8)
+  ];
   const { cx, cy } = bboxCenterNorm(defect.bbox_norm);
+  const t = Math.min(1, Math.max(0, cy));
+  const pct = band[0] + (band[1] - band[0]) * t;
+  const metres = +(span * pct / 100).toFixed(2);
   const chord =
     cx < 0.33 ? 'TE side' :
     cx > 0.67 ? 'LE side' : 'mid-chord';
   return {
-    metres: +metres.toFixed(2),
+    metres,
     pct: Math.round(pct * 10) / 10,
     radial: `${metres.toFixed(1)} m / ${span} m (${Math.round(pct)}%)`,
     distRoot: `${metres.toFixed(1)} m`,
     location: `${pt.surface} · ${Math.round(pct)}% · ${chord}`,
     pin: { cx, cy },
+    band
   };
 }
 
@@ -2776,6 +2829,13 @@ function renderDefectsTable(turbine) {
 
   if (STATE.pocMode && ['blade-A', 'blade-B', 'blade-C'].includes(STATE.selectedPart)) {
     const blade = activeBladeLetter();
+    if (!BLADE_FINDINGS.ready) {
+      fill(tbody, `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">Loading defect categories…</td></tr>`);
+      loadBladeFindings().then(() => {
+        if (STATE.pocMode) renderDefectsTable(turbine);
+      });
+      return;
+    }
     const pt = getSelectedPocPoint(turbine);
     const findings = findingsForStation(blade, pt.surface, pt.pointIndex);
     if (findings.length) {
@@ -2814,7 +2874,31 @@ function renderDefectsTable(turbine) {
       updateFindingsSheetMeta();
       return;
     }
-    fill(tbody, `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">No findings at this station (${formatRadial(pt, turbine)}).</td></tr>`);
+    const defects = defectsForPocPoint(pt);
+    const selectedId = STATE.pocSelectedDefectId;
+    const html = defects.map(d => {
+      const prio = priorityFromSeverity(d.severity);
+      const geo = defectRadialMetrics(pt, d, turbine);
+      const size = defectSizeFromBbox(d.bbox_norm);
+      const intensity = `S${d.severity} · ${d.severity_label || priorityFromSeverity(d.severity)}`;
+      const isSel = selectedId === d.id;
+      return `
+      <tr class="defect-row ${isSel ? 'is-selected' : ''}" data-defect-id="${d.id}" tabindex="0"
+        onclick="selectPocDefect('${d.id}')" onkeydown="if(event.key==='Enter')selectPocDefect('${d.id}')">
+        <td><span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--c-teal)">${pt.point}-${d.id}</span></td>
+        <td>${pt.surface}</td>
+        <td style="font-size:0.75rem">${geo.location}</td>
+        <td>${d.defect_class}</td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${Math.round(geo.pct)}%</span></td>
+        <td><span style="font-family:var(--font-mono);font-size:0.72rem">${geo.distRoot}</span></td>
+        <td><span class="sev-pill sev-${d.severity}">${intensity}</span></td>
+        <td style="font-size:0.72rem;max-width:160px;">${size}</td>
+        <td><span class="prio-pill prio-${prio.toLowerCase()}">${prio}</span></td>
+        <td><span class="stat-dot-pill pending">Pending</span></td>
+        <td><button class="review-btn" onclick="event.stopPropagation();reviewPocDefect('${pt.surface}',${pt.pointIndex},'${d.id}')">Review</button></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="11" style="text-align:center;padding:14px;color:var(--c-muted)">${pt.stationImage ? `Station ${pt.surface} ${pt.point} is linked (${formatRadial(pt, turbine)}). No boxed defects on this capture.` : `No station image for ${pt.surface} ${pt.point} (${formatRadial(pt, turbine)}).`}</td></tr>`;
+    fill(tbody, html);
     renderPocBboxOverlay(pt, turbine);
     updateFindingsSheetMeta();
     return;
@@ -2823,7 +2907,7 @@ function renderDefectsTable(turbine) {
   const defects = turbine
     ? STATE.db.defects.filter(d => d.assetId === turbine.id && d.blade === STATE.selectedBlade)
     : STATE.db.defects;
-  if (STATE.selectedPart === 'full') {
+  if (STATE.selectedPart === 'full' && isG97Turbine(turbine)) {
     renderOverviewDefectTable(turbine, tbodyAlt);
     return;
   }
@@ -2859,6 +2943,13 @@ function setStandaloneColumns(full) {
 
 function renderOverviewDefectTable(turbine, tbodyAlt) {
   setStandaloneColumns(true);
+  if (!BLADE_FINDINGS.ready) {
+    if (tbodyAlt) tbodyAlt.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:14px;color:var(--c-muted)">Loading anomalies…</td></tr>';
+    loadBladeFindings().then(() => {
+      if (STATE.selectedPart === 'full') renderDefectsTable(turbine);
+    });
+    return;
+  }
   const span = bladeSpanM(turbine);
   const selected = ensureOverviewAnomaly();
   const rows = overviewAnomalyRows();
@@ -2899,7 +2990,7 @@ function selectPocDefect(defectId) {
 }
 
 function exportAssetReport() {
-  // Static PDF report removed; inspection data comes from the API.
+  generatePDFReport();
 }
 
 // ══════════════════════════════════════════════════
@@ -2913,7 +3004,7 @@ function openReport(defectId) {
 }
 
 const REPORT_VIEW = { scale: 1, min: 0.05, max: 5, tx: 0, ty: 0, dragging: false, lx: 0, ly: 0, userZoom: false, pan: true };
-const REPORT_SLIDES = { items: [], index: 0, renderGeneration: 0 };
+const REPORT_SLIDES = { items: [], index: 0 };
 
 function sizeImageStage(stage, img) {
   if (!stage || !img?.naturalWidth) return;
@@ -2964,17 +3055,10 @@ function zoomImageInView(view, viewport, factor, cx, cy) {
   view.userZoom = true;
 }
 
-async function renderReport() {
-  const renderGeneration = ++REPORT_SLIDES.renderGeneration;
+function renderReport() {
   const d = STATE.activeDefect;
   if (!d) return;
   const turbine = STATE.db.turbines.find(t => t.id === d.assetId);
-  const renderTurbineId = String(turbine?.id ?? '');
-  if (turbine && window.CompliQApi?.hasSession()) {
-    await loadInspectionData(turbine);
-    if (renderGeneration !== REPORT_SLIDES.renderGeneration || STATE.activeDefect !== d ||
-        String(reportTurbineId() ?? renderTurbineId) !== renderTurbineId) return;
-  }
   const title = document.getElementById('report-viewer-title');
   if (title) title.textContent = `${d.type} · ${bladeDisplayName(d.blade, turbine)} · ${turbineLabel(turbine)}`;
 
@@ -3048,10 +3132,18 @@ function applyZoom() {
   applyReportZoom();
 }
 
+function reportStationCandidates(blade, side, index) {
+  const found = g97StationCandidates(blade, side, index);
+  if (!found.length) return [];
+  const preferred = [];
+  [0, 1, 6, 7].forEach(slot => { if (found[slot]) preferred.push(found[slot]); });
+  return preferred.length ? preferred : found;
+}
+
 function rebuildReportSlides(blade, sides, prefer) {
   /* One continuous L→R deck across every selected side: Side A stations, then Side B, … */
   const sideList = (sides && sides.length) ? sides : ['PS'];
-  const findings = findingsForBlade(blade).filter(row => sideList.includes(row.surface));
+  const findings = reportFilteredFindings(findingsForBlade(blade).filter(row => sideList.includes(row.surface)));
   const findingByStation = new Map();
   findings.forEach(row => {
     const key = `${row.surface}-${row.index}`;
@@ -3066,18 +3158,21 @@ function rebuildReportSlides(blade, sides, prefer) {
       const key = `${side}-${index}`;
       if (seen.has(key)) continue;
       const row = findingByStation.get(key);
-      const ip = inspectionPointForStation(blade, side, index);
-      if (!ip || ip.status !== 'inspected') continue;
+      const known = !G97_MISSING.has(`${blade}-${side}-${index}`);
+      if ((!known && !row) || (reportFilterIsActive() && !row)) continue;
+      const candidates = reportStationCandidates(blade, side, index);
+      if (!candidates.length && !(prefer?.candidates?.length && prefer.side === side && Number(prefer.index) === index)) continue;
       seen.add(key);
       items.push({
         blade,
         side,
         index,
-        pointId: ip.id,
         findingId: row?.id || null,
         finding: row?.finding || '',
         cat: row?.cat ?? null,
-        candidates: []
+        candidates: candidates.length
+          ? candidates
+          : (prefer?.side === side && Number(prefer.index) === index ? prefer.candidates : [])
       });
     }
   });
@@ -3171,7 +3266,7 @@ function showReportSlide(index, opts = {}) {
 
   if (!rgb) return;
   const photos = slide.candidates || [];
-  if (!photos.length && !slide.pointId) {
+  if (!photos.length) {
     rgb.hidden = true;
     rgb.removeAttribute('src');
     if (empty) {
@@ -3188,17 +3283,12 @@ function showReportSlide(index, opts = {}) {
     else applyReportZoom();
     syncMeasureLayer('report');
   };
-  const epoch = STATE.assetEpoch;
-  resolvePointImage(slide.pointId).then(url => {
-    if (!rgb.isConnected || epoch !== STATE.assetEpoch || REPORT_SLIDES.items[REPORT_SLIDES.index] !== slide) return;
-    if (url) { rgb.src = url; }
-    else {
-      rgb.hidden = true;
-      rgb.removeAttribute('src');
-      if (empty) {
-        empty.hidden = false;
-        empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
-      }
+  useFirstExistingImage(rgb, photos, () => {
+    rgb.hidden = true;
+    rgb.removeAttribute('src');
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = `No station photo for ${bladeDisplayName(slide.blade, turbine)} ${slide.side} ${pointLabel}.`;
     }
   });
 }
@@ -3305,6 +3395,13 @@ function measureViewState(which) {
   return which === 'asset' ? ANNO_VIEW : REPORT_VIEW;
 }
 
+function measureTurbine(which) {
+  if (which === 'report') {
+    return STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || selectedTurbine();
+  }
+  return selectedTurbine();
+}
+
 function measureStationIndex(which) {
   if (which === 'report') {
     return REPORT_SLIDES.items[REPORT_SLIDES.index]?.index || STATE.pocPointIndex || 1;
@@ -3322,18 +3419,19 @@ function measureSurface(which) {
 function measureScale(which) {
   const img = document.getElementById(measureIds(which).img);
   if (!img?.naturalWidth || !img.naturalHeight) return null;
-  const slide = which === 'report' ? REPORT_SLIDES.items[REPORT_SLIDES.index] : null;
-  const blade = slide?.blade || activeBladeLetter();
+  const turbine = measureTurbine(which);
+  const radial = stationRadialBand(measureStationIndex(which), turbine);
+  const chordM = lerpKnots(G97_CHORD_M, radial.pct);
   const surface = measureSurface(which);
-  const point = inspectionPointForStation(blade, surface, measureStationIndex(which));
-  const mmPerPx = Number(point?.mm_per_px);
-  if (!Number.isFinite(mmPerPx) || mmPerPx <= 0) return null;
-  const metresPerPixel = mmPerPx / 1000;
+  const acrossM = (surface === 'LE' || surface === 'TE') ? chordM * 0.24 : chordM;
   return {
     imgW: img.naturalWidth,
     imgH: img.naturalHeight,
-    mPerPxX: metresPerPixel,
-    mPerPxY: metresPerPixel
+    mPerPxX: acrossM / img.naturalWidth,
+    mPerPxY: radial.bandM / img.naturalHeight,
+    chordM,
+    acrossM,
+    bandM: radial.bandM
   };
 }
 
@@ -3342,14 +3440,12 @@ function quantizeMm(metres) {
 }
 
 function formatDistQuantized(metres) {
-  if (metres == null) return 'Scale unavailable';
   const mm = quantizeMm(metres);
   if (Math.abs(mm) >= 1000) return `${(mm / 1000).toFixed(2)} m`;
   return `${mm} mm`;
 }
 
 function formatAreaQuantized(m2) {
-  if (m2 == null) return 'Scale unavailable';
   const mm2 = Math.round((Number(m2) || 0) * 1e6);
   if (mm2 >= 1e5) return `${(mm2 / 1e6).toFixed(3)} m²`;
   if (mm2 >= 100) return `${Math.round(mm2 / 100)} cm²`;
@@ -3358,13 +3454,13 @@ function formatAreaQuantized(m2) {
 
 function measureSegmentM(which, a, b) {
   const scale = measureScale(which);
-  if (!scale || !a || !b) return null;
+  if (!scale || !a || !b) return 0;
   return Math.hypot((b.x - a.x) * scale.mPerPxX, (b.y - a.y) * scale.mPerPxY);
 }
 
 function measurePolygonM2(which, pts) {
   const scale = measureScale(which);
-  if (!scale || !pts || pts.length < 3) return null;
+  if (!scale || !pts || pts.length < 3) return 0;
   let areaPx = 0;
   for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
@@ -3677,6 +3773,53 @@ function bindMeasureAndShare() {
   window.addEventListener('hashchange', () => applyShareHash());
 }
 
+function isG97Turbine(turbine) {
+  return /g97/i.test(`${turbine?.model || ''} ${turbine?.name || ''}`) || turbine?.assetId === 'WTG-001';
+}
+
+function collectMajorFindings() {
+  const turbine = STATE.db.turbines.find(t => t.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
+  if (isG97Turbine(turbine) && BLADE_FINDINGS.rows.length) {
+    return BLADE_FINDINGS.rows.map(findingView)
+      .filter(row => row.cat >= DOT_MIN_CAT)
+      .sort((a, b) => (b.cat - a.cat) || (b.count - a.count) || (a.index - b.index));
+  }
+  return (STATE.db.defects || [])
+    .filter(d => d.assetId === turbine.id && Number(d.severity) >= 3)
+    .map(d => ({
+      blade: d.blade,
+      surface: d.location || '—',
+      index: 0,
+      finding: d.type,
+      cat: Number(d.severity) || 3,
+      count: 1,
+      demo: true
+    }));
+}
+
+function blobFingerprint(bytes) {
+  let hash = bytes.length >>> 0;
+  const step = Math.max(1, Math.floor(bytes.length / 48));
+  for (let i = 0; i < bytes.length; i += step) hash = Math.imul(hash, 33) + bytes[i];
+  return (hash >>> 0).toString(16) + ':' + bytes.length;
+}
+
+async function rasterizeStation(url) {
+  const res = await fetch(encodeURI(url));
+  if (!res.ok) throw new Error('missing');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const fingerprint = blobFingerprint(bytes);
+  const bmp = await createImageBitmap(new Blob([bytes]));
+  const maxW = 720;
+  const scale = Math.min(1, maxW / bmp.width);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bmp.width * scale));
+  canvas.height = Math.max(1, Math.round(bmp.height * scale));
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close?.();
+  return { data: canvas.toDataURL('image/jpeg', 0.62), width: canvas.width, height: canvas.height, fingerprint };
+}
+
 const REPORT_SIDES = [
   ['PS', 'Pressure side (PS)'],
   ['SS', 'Suction side (SS)'],
@@ -3691,9 +3834,91 @@ function rowsForSide(major, code) {
   }).sort((a, b) => String(a.blade).localeCompare(String(b.blade)) || (a.index - b.index) || (b.cat - a.cat));
 }
 
+function reportFindings() {
+  const turbine = STATE.db.turbines.find(t => t.id === STATE.selectedTurbineId) || STATE.db.turbines[0];
+  if (isG97Turbine(turbine) && BLADE_FINDINGS.rows.length) return BLADE_FINDINGS.rows.map(findingView);
+  return collectMajorFindings();
+}
+
+async function loadSideImages(rows, limit, seen) {
+  const picks = [];
+  const used = new Set();
+  const ranked = (list) => list
+    .filter(row => !row.demo && row.index)
+    .sort((a, b) => (b.cat - a.cat) || (b.count - a.count) || (a.index - b.index));
+  const tiers = [
+    ranked(rows.filter(row => row.cat >= DOT_MIN_CAT)),
+    ranked(rows.filter(row => row.cat < DOT_MIN_CAT))
+  ];
+
+  const take = async (pool, spaced) => {
+    for (const row of pool) {
+      if (picks.length >= limit) return;
+      const key = `${row.blade}|${row.surface}|${row.index}`;
+      if (used.has(key)) continue;
+      if (spaced && picks.some(shot => shot.blade === row.blade && Math.abs(shot.index - row.index) < 4)) continue;
+      let shot = null;
+      for (const url of g97StationCandidates(row.blade, row.surface, row.index)) {
+        try { shot = await rasterizeStation(url); break; }
+        catch (_) { /* next file name */ }
+      }
+      if (!shot || seen.has(shot.fingerprint)) {
+        if (shot) used.add(key);
+        continue;
+      }
+      const point = 'P' + String(row.index).padStart(2, '0');
+      shot.caption = `Blade ${row.blade}  ${row.surface}  ${point}  ·  CAT ${row.cat}  ·  ${row.finding}`;
+      shot.blade = row.blade;
+      shot.index = row.index;
+      seen.add(shot.fingerprint);
+      used.add(key);
+      picks.push(shot);
+    }
+  };
+
+  for (const pool of tiers) {
+    await take(pool, true);
+    await take(pool, false);
+    if (picks.length >= limit) break;
+  }
+  return picks;
+}
+
 // ══════════════════════════════════════════════════
 // 9. PDF REPORT GENERATION
 // ══════════════════════════════════════════════════
+const STATIC_INSPECTION_REPORT_URL = 'reports/Gamesa_2MW_Wind_Turbine_Inspection_Report.pdf';
+
+function inspectionReportDownloadName() {
+  const turbine = STATE.db?.turbines?.find(t => t.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  const site = String(turbine?.site || 'Kayathar').replace(/[^\w\-]+/g, '_');
+  const asset = String(turbine?.assetId || 'Gamesa_G97').replace(/[^\w\-]+/g, '_');
+  const date = new Date().toISOString().slice(0, 10);
+  return `CompliQ_${site}_Gamesa_G97_2MW_Inspection_Report_${asset}_${date}.pdf`;
+}
+
+async function generatePDFReport() {
+  const filename = inspectionReportDownloadName();
+  showToast('Preparing Gamesa G97 inspection report…', 'success');
+  try {
+    const res = await fetch(encodeURI(STATIC_INSPECTION_REPORT_URL));
+    if (!res.ok) throw new Error(`Report HTTP ${res.status}`);
+    const blob = await res.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 2500);
+    showToast(`Report downloaded: ${filename}`, 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Could not download the inspection report PDF.', 'error');
+  }
+}
+
 // ══════════════════════════════════════════════════
 // 10. INGEST DATA
 // ══════════════════════════════════════════════════
@@ -3920,8 +4145,8 @@ function storeFileToAsset(file) {
   // Store file metadata and blob reference for ingestion
   const FILES_KEY = 'compliq_ingest_files';
   const UPLOADS_REAL_KEY = 'compliq_uploads_real'; // New: track real uploads
-  let storedFiles = JSON.parse(localStorage.getItem(organizationStorageKey(FILES_KEY)) || '[]');
-  let realUploads = JSON.parse(localStorage.getItem(organizationStorageKey(UPLOADS_REAL_KEY)) || '[]');
+  let storedFiles = JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+  let realUploads = JSON.parse(localStorage.getItem(UPLOADS_REAL_KEY) || '[]');
   
   // Get current logged-in user
   const SESSION_KEY = 'compliq_session';
@@ -3942,7 +4167,7 @@ function storeFileToAsset(file) {
   };
   
   storedFiles.push(fileEntry);
-  localStorage.setItem(organizationStorageKey(FILES_KEY), JSON.stringify(storedFiles));
+  localStorage.setItem(FILES_KEY, JSON.stringify(storedFiles));
   
   // NEW: Track real upload for admin panel
   if (sess && sess.email) {
@@ -3961,11 +4186,7 @@ function storeFileToAsset(file) {
       organization: sess.org || 'Unknown'
     };
     realUploads.push(realUpload);
-    localStorage.setItem(organizationStorageKey(UPLOADS_REAL_KEY), JSON.stringify(realUploads));
-    window.CompliQApi?.request('/activity', {
-      method: 'POST',
-      body: JSON.stringify({ type: 'upload', fileName: file.name, fileType: file.type, fileSize: file.size, assetId: realUpload.assetId })
-    }).catch(error => console.warn('Upload activity could not be saved to MongoDB:', error.message));
+    localStorage.setItem(UPLOADS_REAL_KEY, JSON.stringify(realUploads));
   }
   
   // Show toast confirmation
@@ -4200,66 +4421,8 @@ let CHARTS = {
   health: null,
   defects: null,
   severity: null,
+  timeline: null
 };
-
-if (typeof Chart !== 'undefined') {
-  Chart.register({
-    id: 'compliqAnalyticsLabels',
-    afterDatasetsDraw(chart) {
-      const canvasId = chart.canvas?.id;
-      if (!['chart-health', 'chart-severity', 'chart-defects'].includes(canvasId)) return;
-      const ctx = chart.ctx;
-      const meta = chart.getDatasetMeta(0);
-      const dataset = chart.data.datasets[0];
-      const total = dataset.data.reduce((sum, value) => sum + (Number(value) || 0), 0);
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      if (canvasId === 'chart-health' || canvasId === 'chart-severity') {
-        ctx.font = '700 11px Outfit, sans-serif';
-        ctx.fillStyle = '#102b31';
-        meta.data.forEach((bar, index) => {
-          const value = Number(dataset.data[index]) || 0;
-          if (!value) return;
-          const point = bar.tooltipPosition();
-          ctx.fillText(canvasId === 'chart-health' ? `${Math.round(value)}%` : String(value), point.x, point.y - 10);
-        });
-      } else {
-        ctx.font = '700 12px Outfit, sans-serif';
-        meta.data.forEach((arc, index) => {
-          const value = Number(dataset.data[index]) || 0;
-          if (!value || chart.data.labels[index] === 'No findings') return;
-          const point = arc.tooltipPosition();
-          ctx.fillStyle = index >= 3 ? '#003135' : '#ffffff';
-          ctx.fillText(`${Math.round(value / (total || 1) * 100)}%`, point.x, point.y);
-        });
-      }
-      ctx.restore();
-    },
-    afterDraw(chart) {
-      if (chart.canvas?.id !== 'chart-defects') return;
-      const chartArea = chart.chartArea;
-      if (!chartArea) return;
-      const dataset = chart.data.datasets[0];
-      const total = chart.data.labels[0] === 'No findings'
-        ? 0
-        : dataset.data.reduce((sum, value) => sum + (Number(value) || 0), 0);
-      const ctx = chart.ctx;
-      const centerX = (chartArea.left + chartArea.right) / 2;
-      const centerY = (chartArea.top + chartArea.bottom) / 2;
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = getChartTheme().legend;
-      ctx.font = '500 10px Outfit, sans-serif';
-      ctx.fillText('Total Defects', centerX, centerY - 8);
-      ctx.fillStyle = getChartTheme().ink;
-      ctx.font = '800 21px Outfit, sans-serif';
-      ctx.fillText(String(total), centerX, centerY + 12);
-      ctx.restore();
-    }
-  });
-}
 
 function isLightTheme() {
   return document.documentElement.getAttribute('data-theme') === 'light';
@@ -4291,35 +4454,37 @@ function getChartTheme() {
   };
 }
 
-const TERMINAL_ANOMALY_STATUSES = new Set([
-  'resolved', 'closed', 'rejected', 'dismissed', 'false_positive', 'duplicate', 'cancelled', 'canceled'
-]);
-
-function isActiveAnalyticsDefect(defect) {
-  const status = String(defect?.status || defect?.review_status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  return !TERMINAL_ANOMALY_STATUSES.has(status);
-}
-
-/** One organization-scoped active set shared by the KPI, summary and distribution charts. */
+/** Live defect rows for analytics (fleet DB + Blade 5297 POC annotations when loaded). */
 function getAnalyticsDefects() {
-  const fleetDefects = Array.isArray(STATE.db?.defects)
-    ? STATE.db.defects.filter(defect => defect.source !== 'inspection')
-    : [];
-  const inspectionDefects = Array.isArray(STATE.publishedInspectionDefects) ? STATE.publishedInspectionDefects : [];
-  const seen = new Set();
-  return [...fleetDefects, ...inspectionDefects].filter(defect => {
-    if (!isActiveAnalyticsDefect(defect)) return false;
-    const key = defect?.id == null ? null : String(defect.id);
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
-}
+  const base = Array.isArray(STATE.db?.defects) ? STATE.db.defects.slice() : [];
+  const extra = [];
+  if (Array.isArray(BLADE_POC?.annotations) && BLADE_POC.annotations.length) {
+    BLADE_POC.annotations.forEach((a, i) => {
+      const cls = a.defect_class || a.type || 'Other';
+      // Normalize annotation classes into fleet-facing types
+      let type = 'Other';
+      const c = String(cls).toLowerCase();
+      if (c.includes('crack')) type = 'Crack';
+      else if (c.includes('delam')) type = 'Delamination';
+      else if (c.includes('erosion') || c.includes('coating') || c.includes('film')) type = 'Erosion';
+      else if (c.includes('lightning') || c.includes('thunder')) type = 'Lightning';
+      else if (c.includes('corrosion')) type = 'Corrosion';
+      else if (c.includes('oil')) type = 'Oil Leakage';
+      else if (c.includes('craze') || c.includes('stain') || c.includes('pinhole')) type = 'Surface';
+      else if (c.includes('local')) type = 'Localized Damage';
+      else type = cls.replace(/\b\w/g, ch => ch.toUpperCase()).slice(0, 28);
 
-async function loadPublishedAnalyticsDefects() {
-  if (!window.CompliQApi?.hasSession()) return;
-  const data = await window.CompliQApi.request('/analytics/anomalies');
-  STATE.publishedInspectionDefects = Array.isArray(data?.defects) ? data.defects : [];
+      extra.push({
+        id: `POC-${a.id || i}`,
+        assetId: 1,
+        type,
+        severity: Number(a.severity) || 1,
+        inspDate: '2026-04-12',
+        campaign: 'REU_WT_IR_003_2026'
+      });
+    });
+  }
+  return base.concat(extra);
 }
 
 function analyticsSelectedTurbine() {
@@ -4332,13 +4497,7 @@ function getLinkedAnalyticsDefects() {
   const all = getAnalyticsDefects();
   const turbine = analyticsSelectedTurbine();
   if (!turbine) return all;
-  const apiIds = new Set([turbine.dbId, turbine.id].filter(id => id != null).map(String));
-  const assetCode = String(turbine.assetId || '').toLowerCase();
-  return all.filter(defect =>
-    (defect.turbineId != null && apiIds.has(String(defect.turbineId))) ||
-    (defect.assetId != null && Number(defect.assetId) === Number(turbine.id)) ||
-    (defect.assetCode && String(defect.assetCode).toLowerCase() === assetCode)
-  );
+  return all.filter(d => Number(d.assetId) === Number(turbine.id));
 }
 
 function healthBarColor(turbine, selectedId) {
@@ -4369,6 +4528,7 @@ function applyAnalyticsFilter() {
   }
   renderDefectPieChart();
   renderSeverityChart();
+  renderTimelineChart();
 }
 
 function bindAnalyticsFilterBar() {
@@ -4399,11 +4559,13 @@ function chartTooltipOpts(theme) {
 
 async function renderCharts() {
   if (!STATE.db) return;
+  try { await loadBladePocAnnotations(); } catch (e) { /* optional POC layer */ }
   renderAnalyticsSummary();
   syncAnalyticsFilterUi();
   renderHealthChart();
   renderDefectPieChart();
   renderSeverityChart();
+  renderTimelineChart();
 }
 
 function renderAnalyticsSummary() {
@@ -4419,7 +4581,7 @@ function renderAnalyticsSummary() {
   el.innerHTML = `
     <div class="analytics-kpi"><small>Turbines</small><strong>${turbines.length}</strong></div>
     <div class="analytics-kpi"><small>Avg Health</small><strong>${avgHealth}%</strong></div>
-    <div class="analytics-kpi"><small>Active Anomalies</small><strong>${defects.length}</strong></div>
+    <div class="analytics-kpi"><small>Findings</small><strong>${defects.length}</strong></div>
     <div class="analytics-kpi"><small>Critical / High</small><strong class="${crit ? 'kpi-crit' : ''}">${crit}</strong></div>
     <div class="analytics-kpi"><small>Assets Attention</small><strong class="${warn ? 'kpi-warn' : ''}">${warn}</strong></div>
   `;
@@ -4644,6 +4806,106 @@ function renderSeverityChart() {
   });
 }
 
+function renderTimelineChart() {
+  const canvas = document.getElementById('chart-timeline');
+  if (!canvas) return;
+  if (CHARTS.timeline) CHARTS.timeline.destroy();
+
+  const theme = getChartTheme();
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const buckets = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      label: monthNames[d.getMonth()],
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      count: 0
+    });
+  }
+
+  const bump = (iso) => {
+    if (!iso) return;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return;
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    const b = buckets.find(x => x.key === key);
+    if (b) b.count += 1;
+  };
+
+  getLinkedAnalyticsDefects().forEach(d => bump(d.inspDate));
+  const turbines = STATE.db.turbines || [];
+  const scoped = STATE.analyticsTurbineId == null
+    ? turbines
+    : turbines.filter(t => Number(t.id) === Number(STATE.analyticsTurbineId));
+  scoped.forEach(t => bump(t.lastInspection));
+
+  // If sparse, keep zeros — still live. Avoid fabricating fake trends.
+  const data = buckets.map(b => b.count);
+  const labels = buckets.map(b => b.label);
+
+  CHARTS.timeline = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Inspections & findings',
+        data,
+        borderColor: theme.line,
+        backgroundColor: theme.fill,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.35,
+        pointBackgroundColor: theme.line,
+        pointBorderColor: theme.pieBorder,
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...chartTooltipOpts(theme),
+          callbacks: {
+            title: (items) => {
+              const i = items[0]?.dataIndex ?? 0;
+              const b = buckets[i];
+              return b ? `${b.label} ${b.year}` : '';
+            },
+            label: (ctx) => ` ${ctx.raw} logged event(s)`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: theme.grid },
+          ticks: {
+            stepSize: 1,
+            precision: 0,
+            color: theme.tick,
+            font: { family: 'JetBrains Mono', size: theme.font.tick }
+          }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: theme.tick,
+            font: { family: 'Outfit', size: theme.font.tick, weight: '600' }
+          }
+        }
+      }
+    }
+  });
+}
+
+
 // ══════════════════════════════════════════════════
 // 13. MQTT LIVE LOG SIMULATION
 // ══════════════════════════════════════════════════
@@ -4658,7 +4920,6 @@ function addMQTTLog(customData) {
   const log = document.getElementById('mqtt-log');
   if (!log) return;
   const turbine = STATE.db.turbines[Math.floor(Math.random() * STATE.db.turbines.length)];
-  if (!customData && !turbine) return;
   const evt = customData ? null : MQTT_EVENTS[Math.floor(Math.random() * MQTT_EVENTS.length)];
   const ts = new Date().toLocaleTimeString();
 
@@ -4885,7 +5146,7 @@ function showToast(msg, type = 'success') {
 // BLADE A POC — PROFILE + STATION IMAGERY
 // ══════════════════════════════════════════════════
 const POC_SURFACES = ['SS', 'LE', 'PS', 'TE'];
-/* Normalized turbine-blade profile viewBox; point distances come from each inspection. */
+/* Matches compliq_blade_profile.py integer data box — G97 2 MW, P1 root/hub → P20 tip */
 const POC_X_MIN = -8;
 const POC_X_MAX = 39;
 const POC_Y_MIN = -4;
@@ -4909,217 +5170,78 @@ function setBladeProfileBox(span) {
   return BLADE_PROFILE_BOX;
 }
 const POC_SURFACE_CX = { SS: 6.6, LE: 16, PS: 25.6, TE: 35.2 };
-
-// ── Inspection data adapter (D1 + R2) ──────────────────────
-// Loads the latest published inspection for a turbine from the API, caches it,
-// and adapts inspection findings to the dashboard's existing row shape.
-// Images come from /api/points/:id/image (auth required) as cached blob URLs.
-const INSPECTION_CACHE = { turbineId: null, assetId: null, inspectionId: null, loading: null, loaded: false, loadedAt: 0, generation: 0,
-  points: [], byKey: new Map(), detections: [], findings: [], blades: [],
-  inspectionDate: '' };
-const POINT_IMAGE_CACHE = new Map();   // pointId -> objectURL (revoked on turbine change)
-let _imageLoadInFlight = 0;
-const BLADE_OF = { 1: 'A', 2: 'B', 3: 'C' };
-
-function sameId(a, b) { return String(a) === String(b); }
-
-function activeTurbine() {
-  const id = STATE.activeTab === 'report'
-    ? reportTurbineId()
-    : STATE.selectedTurbineId;
-  return (STATE.db?.turbines || []).find(t => sameId(t.id, id)) || STATE.db?.turbines?.[0] || null;
-}
-
-function turbineApiId(turbine) {
-  return turbine?.dbId || String(turbine?.id || '');
-}
-
-function clearInspectionCache() {
-  INSPECTION_CACHE.generation += 1;
-  clearInspectionPayload();
-  INSPECTION_CACHE.turbineId = null;
-  INSPECTION_CACHE.assetId = null;
-  INSPECTION_CACHE.loading = null;
-  INSPECTION_CACHE.loaded = false;
-  INSPECTION_CACHE.loadedAt = 0;
-}
-
-function clearInspectionPayload(removeAssetId = INSPECTION_CACHE.assetId) {
-  POINT_IMAGE_CACHE.forEach(url => { try { URL.revokeObjectURL(url); } catch (_) {} });
-  POINT_IMAGE_CACHE.clear();
-  INSPECTION_CACHE.inspectionId = null;
-  INSPECTION_CACHE.points = [];
-  INSPECTION_CACHE.byKey = new Map();
-  INSPECTION_CACHE.detections = [];
-  INSPECTION_CACHE.findings = [];
-  INSPECTION_CACHE.blades = [];
-  INSPECTION_CACHE.inspectionDate = '';
-  // Reset merged source:'inspection' defect rows whenever the cache reloads
-  if (STATE.db && removeAssetId != null) {
-    STATE.db.defects = (STATE.db.defects || []).filter(d =>
-      !(d.source === 'inspection' && sameId(d.assetId, removeAssetId)));
-  }
-}
-
-async function loadInspectionData(turbine, { force = false } = {}) {
-  if (!turbine || !window.CompliQApi?.hasSession()) return INSPECTION_CACHE;
-  const tid = turbineApiId(turbine);
-  if (!tid) return INSPECTION_CACHE;
-  if (INSPECTION_CACHE.turbineId === tid && INSPECTION_CACHE.loading) {
-    return INSPECTION_CACHE.loading;
-  }
-  if (INSPECTION_CACHE.turbineId === tid && INSPECTION_CACHE.loaded && !force &&
-      Date.now() - INSPECTION_CACHE.loadedAt < 30000) {
-    return INSPECTION_CACHE;
-  }
-  if (INSPECTION_CACHE.turbineId !== tid) clearInspectionCache();
-  INSPECTION_CACHE.turbineId = tid;
-  INSPECTION_CACHE.assetId = turbine.id;
-  const generation = ++INSPECTION_CACHE.generation;
-  INSPECTION_CACHE.loading = (async () => {
-    try {
-      const inspRes = await window.CompliQApi.request(`/turbines/${encodeURIComponent(tid)}/inspections`);
-      const inspections = inspRes.inspections || [];
-      const published = inspections.find(i => i.status === 'published');
-      if (generation !== INSPECTION_CACHE.generation) return INSPECTION_CACHE;
-      if (!published) {
-        clearInspectionPayload();
-        mergeInspectionDefects(turbine);
-        INSPECTION_CACHE.loaded = true;
-        INSPECTION_CACHE.loadedAt = Date.now();
-        INSPECTION_CACHE.loading = null;
-        return INSPECTION_CACHE;
-      }
-      if (INSPECTION_CACHE.inspectionId !== published.id) {
-        clearInspectionPayload();
-        INSPECTION_CACHE.inspectionId = published.id;
-      }
-      INSPECTION_CACHE.inspectionDate = published.inspection_date || '';
-      const data = await window.CompliQApi.request(`/inspections/${encodeURIComponent(published.id)}/points`);
-      if (generation !== INSPECTION_CACHE.generation) return INSPECTION_CACHE;
-      INSPECTION_CACHE.points = (data.points || []).filter(p => (p.component || 'blade') === 'blade');
-      INSPECTION_CACHE.blades = data.blades || [];
-      INSPECTION_CACHE.detections = data.detections || [];
-      INSPECTION_CACHE.byKey = new Map();
-      INSPECTION_CACHE.findings = [];
-      const byPointId = new Map();
-      INSPECTION_CACHE.points.forEach(p => {
-        byPointId.set(p.id, p);
-        const blade = BLADE_OF[p.blade];
-        if (blade && p.side && Number.isInteger(Number(p.point))) {
-          INSPECTION_CACHE.byKey.set(`${blade}-${p.side}-${Number(p.point)}`, p);
-        }
-      });
-      INSPECTION_CACHE.detections.forEach(d => {
-        const p = byPointId.get(d.point_id);
-        if (!p) return;
-        const blade = BLADE_OF[p.blade] || 'A';
-        const cat = d.severity ?? d.severity_suggested ?? 1;
-        INSPECTION_CACHE.findings.push({
-          id: d.id,
-          blade,
-          surface: p.side,
-          index: p.point,
-          finding: d.class,
-          cat,
-          count: 1,
-          verify: false,
-          color: (typeof FINDING_COLOR !== 'undefined' && FINDING_COLOR[cat]) || '#888',
-          rank: cat,
-          bbox_norm: [d.x_min, d.y_min, d.x_max, d.y_max],
-          pointId: p.id,
-          review_status: d.review_status,
-          length_mm: d.length_mm,
-          width_mm: d.width_mm,
-          confidence: d.confidence,
-          distance_m: p.distance_m,
-          severity_reason: d.severity_reason,
-          trend: d.trend
-        });
-      });
-      mergeInspectionDefects(turbine);
-      INSPECTION_CACHE.loaded = true;
-      INSPECTION_CACHE.loadedAt = Date.now();
-    } catch (e) {
-      console.warn('Inspection data could not load:', e.message);
-    }
-    if (generation === INSPECTION_CACHE.generation) INSPECTION_CACHE.loading = null;
-    return INSPECTION_CACHE;
-  })();
-  return INSPECTION_CACHE.loading;
-}
-
-function mergeInspectionDefects(turbine) {
-  if (!STATE.db) return;
-  STATE.db.defects = (STATE.db.defects || []).filter(d => !(d.source === 'inspection' && sameId(d.assetId, turbine.id)));
-  INSPECTION_CACHE.findings.forEach(f => {
-    STATE.db.defects.push({
-      id: f.id,
-      assetId: turbine.id,
-      type: f.finding,
-      severity: f.cat,
-      inspDate: INSPECTION_CACHE.inspectionDate || '',
-      blade: f.blade,
-      source: 'inspection'
-    });
-  });
-}
-
-function inspectionRowsForBlade(blade) {
-  return INSPECTION_CACHE.findings.filter(f => f.blade === blade);
-}
-
-function inspectionRowsForStation(blade, surface, index) {
-  return inspectionRowsForBlade(blade).filter(f => f.surface === surface && f.index === index);
-}
-
-function inspectionPointForStation(blade, surface, index) {
-  return INSPECTION_CACHE.byKey.get(`${blade}-${surface}-${index}`) || null;
-}
-
-function inspectionOverviewRows() {
-  const seen = new Map();
-  INSPECTION_CACHE.findings.forEach(f => {
-    const key = `${f.blade}|${f.finding}`;
-    if (!seen.has(key) || seen.get(key).cat < f.cat) seen.set(key, f);
-  });
-  return [...seen.values()].sort((a, b) => (b.cat - a.cat) || (a.index - b.index));
-}
-
-function inspectionDetectionsForPoint(pt) {
-  if (!pt?.pointId) return [];
-  return INSPECTION_CACHE.detections.filter(d => d.point_id === pt.pointId && d.review_status !== 'rejected');
-}
-
-// Fetch /api/points/:id/image as a blob, cache the object URL.
-// NOTE: mm_per_px refers to the stored WebP, not the original drone frame.
-async function resolvePointImage(pointId) {
-  if (!pointId || !window.CompliQApi?.hasSession()) return null;
-  if (POINT_IMAGE_CACHE.has(pointId)) return POINT_IMAGE_CACHE.get(pointId);
-  while (_imageLoadInFlight >= 3) await new Promise(r => setTimeout(r, 50));
-  _imageLoadInFlight++;
-  try {
-    const base = String(window.COMPLIQ_API_BASE_URL || '').replace(/\/$/, '');
-    const tokenKey = window.CompliQApi?.tokenKey;
-    const token = tokenKey ? sessionStorage.getItem(tokenKey) : null;
-    const res = await fetch(`${base}/api/points/${pointId}/image`, {
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'X-Requested-With': 'compliq' },
-      credentials: 'same-origin'
-    });
-    if (!res.ok) return null;
-    const url = URL.createObjectURL(await res.blob());
-    POINT_IMAGE_CACHE.set(pointId, url);
-    return url;
-  } catch (e) {
-    return null;
-  } finally {
-    _imageLoadInFlight--;
-  }
-}
-
+const G97_REMOTE = 'https://pub-8e9091debbe04bb3a5c42871ef2e7bc8.r2.dev/Kayathar_Gamesa_G97';
+const G97_ROOT = 'INPUT/Kayathar_Gamesa_G97';
+const G97_FOLDERS = {
+  A: { SS: 'Blade_A/SS', PS: 'Blade_A/PS', LE: 'Blade_A/LE', TE: 'Blade_A/TE' },
+  B: { SS: 'Blade_B/SS', PS: 'Blade_B/PS', LE: 'Blade_B/LE', TE: 'Blade_B/TE' },
+  C: { SS: 'Blade_C/SS', PS: 'Blade_C/PS', LE: 'Blade_C/LE', TE: 'Blade_C/TE' }
+};
+const G97_BLADE_NUM = { A: '1', B: '2', C: '3' };
 /** Captures not present in INPUT (Blade A PS 11–14, Blade B LE 16). */
+const G97_MISSING = new Set(['A-PS-11', 'A-PS-12', 'A-PS-13', 'A-PS-14', 'B-LE-16']);
+const SEV_COLOR = { 1: '#B9D896', 2: '#FACD96', 3: '#F0A03C', 4: '#E15A5F', 5: '#AF373C' };
 /** Identified defects. Key is Blade-Surface-station. Add a row when a new image is reviewed. */
+const STATION_DEFECTS = {
+  'A-PS-2':  { severity: 4, label: 'Corrosion' },
+  'A-PS-5':  { severity: 2, label: 'Erosion' },
+  'A-PS-7':  { severity: 1, label: 'Surface stains' },
+  'A-PS-10': { severity: 2, label: 'Craze' },
+  'A-PS-13': { severity: 3, label: 'Localized damage' },
+  'A-PS-18': { severity: 3, label: 'Localized damage' },
+  'A-PS-20': { severity: 5, label: 'Lightning' }
+};
 /** Two comparison captures per surface. Append objects here to show more images later. */
+const COMPARE_SLOTS = [
+  { pointIndex: 1, label: 'Root / Hub' },
+  { pointIndex: 10, label: 'Midspan' }
+];
+const POC_STATION_MEDIA = {
+  2: {
+    short: 'Root / Hub', station: '0% Root / Hub',
+    annotated: 'Annotated Images/1_RootHub_annotated.jpg',
+    annotationImage: '1_PS_Blade5297_RootHUb.png'
+  },
+  5: {
+    short: 'Root → Inboard', station: '0-25% Root to inboard span',
+    annotated: 'Annotated Images/2_Root25_annotated.jpg',
+    annotationImage: '2_PS_Blade5297_Root25.png'
+  },
+  7: {
+    short: 'Midspan', station: '35% Midspan',
+    annotated: 'Annotated Images/3_Midspan35_annotated.jpg',
+    annotationImage: '3_PS_Blade5297_Midpsan35.png'
+  },
+  10: {
+    short: 'Midspan', station: '50% Midspan',
+    annotated: 'Annotated Images/4_Midspan_50_annotated.jpg',
+    annotationImage: '4_PS_Blade5297_Mispan_50.png'
+  },
+  13: {
+    short: 'Midspan', station: '75% Midspan',
+    annotated: 'Annotated Images/5_Midspan75_annotated.jpg',
+    annotationImage: '5_PS_Blade5297_Mispan75.png'
+  },
+  18: {
+    short: 'Outboard / Tip approach', station: '90% Outboard / tip approach',
+    annotated: 'Annotated Images/6_Tip90_annotated.jpg',
+    annotationImage: '6_PS_Blade5297_Tip90.png'
+  },
+  20: {
+    short: 'Blade tip', station: '100% Blade tip',
+    annotated: 'Annotated Images/7_Tip100_annotated.jpg',
+    annotationImage: '7_PS_Blade5297_Tip100.png'
+  }
+};
+
+const BLADE_POC = {
+  ready: false,
+  annotations: [],
+  profileSrc: 'blade_profile_after.png?v=g97scale',
+  pdfHref: 'reports/REU_WT_IR_003_2026_Blade5297_PS_Defect_Register.pdf'
+};
+const STATION_BOXES = { ready: false, loading: null, byKey: {} };
+
 function bladeSpanM(turbine) {
   if (!turbine) return 48.5;
   if (turbine.bladeLength) return Number(turbine.bladeLength);
@@ -5147,14 +5269,175 @@ function activeBladeLetter() {
   return STATE.selectedBlade || 'A';
 }
 
+function g97FileNumbers(blade, surface) {
+  /* Blade C suction-side files are stored as BLADE2. Never borrow another blade's file. */
+  const primary = (blade === 'C' && surface === 'SS') ? '2' : G97_BLADE_NUM[blade];
+  return [primary];
+}
+
+function useFirstExistingImage(img, candidates, onMiss) {
+  if (!img) return;
+  const epoch = STATE.assetEpoch;
+  let index = 0;
+  const tryNext = () => {
+    if (!img.isConnected || epoch !== STATE.assetEpoch) return;
+    if (index >= candidates.length) {
+      img.onerror = null;
+      if (onMiss) onMiss();
+      return;
+    }
+    img.onerror = tryNext;
+    img.src = encodeURI(candidates[index]);
+    index += 1;
+  };
+  tryNext();
+}
+
+function g97NamedStation(base, bladeNum, surface, n) {
+  return `${base}/GAMESA_G97_2MW_BLADE${bladeNum}_${surface}-${n}`;
+}
+
+function g97StationCandidates(blade, surface, index) {
+  const folder = G97_FOLDERS[blade]?.[surface];
+  if (!folder) return [];
+  const n = String(index).padStart(2, '0');
+  const base = `${G97_ROOT}/${folder}`;
+  const paths = [];
+  const numbers = g97FileNumbers(blade, surface);
+  const known = !G97_MISSING.has(`${blade}-${surface}-${index}`);
+  if (known) {
+    const stem = g97NamedStation(base, numbers[0], surface, n);
+    /* Annotated copy of the original name, then a JPG that replaced the PNG. */
+    paths.push(`${stem}_annotated.jpg`, `${stem}_annotated.png`, `${stem}.jpg`, `${stem}.png`);
+  }
+  ['annotated', 'corrected', ''].forEach(role => {
+    const stem = role ? `${base}/P${n}_${role}` : `${base}/P${n}`;
+    paths.push(`${stem}.jpg`, `${stem}.png`);
+  });
+  if (known) {
+    numbers.slice(1).forEach(num => {
+      const stem = g97NamedStation(base, num, surface, n);
+      paths.push(`${stem}.jpg`, `${stem}.png`);
+    });
+  }
+  const prefix = `${G97_ROOT}/`;
+  return paths.flatMap(path => {
+    const rel = path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    return [`${G97_REMOTE}/${rel}`, path];
+  });
+}
+
+function stationDefect(blade, surface, index) {
+  const hit = STATION_DEFECTS[`${blade}-${surface}-${index}`];
+  if (!hit) return null;
+  return { severity: hit.severity, label: hit.label, color: SEV_COLOR[hit.severity] || '#9BC4CA' };
+}
+
 /* Annotation paint: CAT 1 navy, CAT 2 green, verify red. Matches annotate scripts (OpenCV BGR). */
 const FINDING_COLOR = { 1: '#3B82F6', 2: '#F5B400', 3: '#F97316', 4: '#EF4444', 5: '#9F1239', verify: '#C80000' };
 /* Both categories color the station dot. CAT 2 is the higher of the two. */
 const DOT_MIN_CAT = 2;
+const FINDING_SOURCES = [
+  { blade: 'A', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/PS/findings_per_frame.csv' },
+  { blade: 'A', surface: 'LE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/LE/findings_per_frame_LE.csv' },
+  { blade: 'A', surface: 'SS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/SS/findings_per_frame_SS.csv' },
+  { blade: 'A', surface: 'TE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_A/TE/findings_per_frame_TE.csv' },
+  { blade: 'B', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_B/PS/findings_per_frame_B2_PS.csv' },
+  { blade: 'B', surface: 'LE', url: 'INPUT/Kayathar_Gamesa_G97/Blade_B/LE/findings_per_frame_B2_LE.csv' },
+  { blade: 'C', surface: 'PS', url: 'INPUT/Kayathar_Gamesa_G97/Blade_C/PS/Blade_C_PS_Findings_per_Frame.csv' }
+];
+const BLADE_FINDINGS = { ready: false, loading: null, rows: [] };
+
 function escHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
+}
+
+function parseFindingCsv(text, src) {
+  const lines = text.trim().split(/\r?\n/).filter(line => line.trim());
+  if (lines.length < 2) return [];
+  const header = lines[0].split(',').map(cell => cell.trim().toLowerCase());
+  const col = name => header.indexOf(name);
+  const frameCol = col('frame');
+  const findingCol = col('finding');
+  const catCol = col('cat');
+  const countCol = col('count') >= 0 ? col('count') : col('boxes in frame');
+  if (frameCol < 0 || findingCol < 0 || catCol < 0) return [];
+  const out = [];
+  lines.slice(1).forEach(line => {
+    const parts = line.split(',');
+    const frame = (parts[frameCol] || '').trim();
+    const finding = (parts[findingCol] || '').trim();
+    const cat = Number((parts[catCol] || '').trim());
+    const count = Number((parts[countCol] || '').trim()) || 1;
+    if (!frame || !finding || !Number.isFinite(cat) || cat < 1 || /no defect/i.test(finding)) return;
+    const index = stationIndexFromFrame(frame, src.surface);
+    if (!index || index > 20) return;
+    const verify = /verify/i.test(finding);
+    out.push({
+      blade: src.blade,
+      surface: src.surface,
+      index,
+      finding,
+      cat,
+      count,
+      verify,
+      color: FINDING_COLOR[cat] || FINDING_COLOR[2],
+      rank: cat
+    });
+  });
+  return out;
+}
+
+function aggregateFindings(rows) {
+  const map = new Map();
+  rows.forEach(row => {
+    const key = `${row.blade}|${row.surface}|${row.index}|${row.finding}|${row.cat}`;
+    const prev = map.get(key);
+    if (prev) prev.count += row.count;
+    else map.set(key, { ...row, id: `${row.blade}-${row.surface}-${row.index}-${map.size}` });
+  });
+  return [...map.values()];
+}
+
+async function loadBladeFindings() {
+  if (BLADE_FINDINGS.ready) return BLADE_FINDINGS.rows;
+  if (BLADE_FINDINGS.loading) return BLADE_FINDINGS.loading;
+  BLADE_FINDINGS.loading = (async () => {
+    const rows = [];
+    for (const src of FINDING_SOURCES) {
+      const prefix = `${G97_ROOT}/`;
+      const rel = src.url.startsWith(prefix) ? src.url.slice(prefix.length) : '';
+      const candidates = rel ? [`${G97_REMOTE}/${rel}`, src.url] : [src.url];
+      let text = '';
+      for (const candidate of candidates) {
+        try {
+          const res = await fetch(encodeURI(candidate));
+          if (!res.ok) continue;
+          text = await res.text();
+          break;
+        } catch (err) {
+          console.warn('Station findings unavailable:', candidate, err);
+        }
+      }
+      if (text) rows.push(...parseFindingCsv(text, src));
+    }
+    BLADE_FINDINGS.rows = aggregateFindings(rows).sort(compareFindings);
+    BLADE_FINDINGS.ready = true;
+    return BLADE_FINDINGS.rows;
+  })();
+  return BLADE_FINDINGS.loading;
+}
+
+function stationIndexFromFrame(frame, surface) {
+  const tagged = frame.match(/^(SS|LE|PS|TE)-(\d+)/i);
+  if (tagged) {
+    if (tagged[1].toUpperCase() !== surface) return 0;
+    return Number(tagged[2]);
+  }
+  const bare = frame.match(/^(\d{1,2})/);
+  return bare ? Number(bare[1]) : 0;
 }
 
 function compareFindings(a, b) {
@@ -5163,7 +5446,27 @@ function compareFindings(a, b) {
 }
 
 function findingsForBlade(blade) {
-  return inspectionRowsForBlade(blade);
+  return BLADE_FINDINGS.rows.filter(row => row.blade === blade).map(findingView);
+}
+
+function reportFilterIsActive() {
+  const cats = document.querySelectorAll('#report-category-filters input:checked').length;
+  const classes = document.querySelectorAll('#report-class-filters input:checked').length;
+  return cats < 5 || classes < 7;
+}
+
+function reportFilteredFindings(rows) {
+  const cats = new Set([...document.querySelectorAll('#report-category-filters input:checked')].map(input => Number(input.value)));
+  const classes = new Set([...document.querySelectorAll('#report-class-filters input:checked')].map(input => input.value));
+  if (!reportFilterIsActive()) return rows;
+  return rows.filter(row => {
+    const cat = Number(row.cat ?? row.severity);
+    const type = row.finding || row.type || '';
+    const className = /corrosion/i.test(type) ? 'Corrosion'
+      : (/erosion/i.test(type) ? 'Leading Edge Erosion'
+      : (matchDefectClass(type)?.name || 'Coating & Gelcoat Damage'));
+    return cats.has(cat) && classes.has(className);
+  });
 }
 
 const REPORT_COLUMNS = [
@@ -5179,20 +5482,39 @@ const REPORT_COLUMNS = [
   ['status', 'Status']
 ];
 
+function defectOverrides() {
+  try { return JSON.parse(localStorage.getItem('compliq_defect_overrides') || '{}'); }
+  catch { return {}; }
+}
+
+function writeDefectOverrides(map) {
+  localStorage.setItem('compliq_defect_overrides', JSON.stringify(map));
+}
+
 function visibleReportColumns() {
   try {
-    const saved = JSON.parse(localStorage.getItem(organizationStorageKey('compliq_report_columns')) || 'null');
+    const saved = JSON.parse(localStorage.getItem('compliq_report_columns') || 'null');
     if (Array.isArray(saved) && saved.length) return saved;
   } catch { /* keep the full table */ }
   return REPORT_COLUMNS.map(col => col[0]);
 }
 
 function rawFinding(id) {
-  return INSPECTION_CACHE.findings.find(row => row.id === id) || null;
+  return BLADE_FINDINGS.rows.find(row => row.id === id) || null;
 }
 
 function findingView(row) {
-  return row;
+  const saved = defectOverrides()[row.id];
+  if (!saved) return row;
+  const cat = Number(saved.cat) || row.cat;
+  const finding = (saved.name || '').trim() || row.finding;
+  return {
+    ...row,
+    cat,
+    finding,
+    rank: cat,
+    color: FINDING_COLOR[cat] || FINDING_COLOR[2]
+  };
 }
 
 function applyReportColumns() {
@@ -5220,7 +5542,7 @@ function renderColumnPicker(host) {
         input.checked = true;
         return;
       }
-      localStorage.setItem(organizationStorageKey('compliq_report_columns'), JSON.stringify(next));
+      localStorage.setItem('compliq_report_columns', JSON.stringify(next));
       applyReportColumns();
       const other = document.getElementById(host.id === 'defect-column-picker' ? 'report-column-picker' : 'defect-column-picker');
       if (other && !other.hidden) renderColumnPicker(other);
@@ -5268,29 +5590,23 @@ function openDefectReview(findingId) {
   showDefectReviewBar();
 }
 
-async function saveDefectOverrideFrom(catValue, nameValue) {
+function saveDefectOverrideFrom(catValue, nameValue) {
   const raw = rawFinding(STATE.reviewFindingId);
   if (!raw) return;
-  const change = { review_status: 'corrected' };
   const cat = Number(catValue);
-  if (cat >= 1 && cat <= 5) change.severity = cat;
   const name = String(nameValue || '').trim();
-  if (name) change.class = name;
-  try {
-    const res = await window.CompliQApi.request(`/detections/${encodeURIComponent(raw.id)}`,
-      { method: 'PATCH', body: JSON.stringify(change) });
-    const det = INSPECTION_CACHE.detections.find(d => d.id === raw.id);
-    if (det) Object.assign(det, { class: res.detection.class, severity: res.detection.severity, review_status: res.detection.review_status });
-    const f = INSPECTION_CACHE.findings.find(x => x.id === raw.id);
-    if (f) { f.cat = res.detection.severity ?? f.cat; f.finding = res.detection.class; f.color = (typeof FINDING_COLOR !== 'undefined' && FINDING_COLOR[f.cat]) || f.color; }
-    const turbine = activeTurbine();
-    renderDefectsTable(turbine);
-    repaintHotspotColors();
-    showDefectReviewBar();
-    showToast('Finding updated', 'success');
-  } catch (e) {
-    showToast(`Not saved: ${e.message}`, 'error');
-  }
+  const map = defectOverrides();
+  const entry = {};
+  if (cat >= 1 && cat <= 5 && cat !== raw.cat) entry.cat = cat;
+  if (name && name !== raw.finding) entry.name = name;
+  if (Object.keys(entry).length) map[raw.id] = entry;
+  else delete map[raw.id];
+  writeDefectOverrides(map);
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  renderDefectsTable(turbine);
+  repaintHotspotColors();
+  showDefectReviewBar();
+  showToast('Defect override saved', 'success');
 }
 
 function saveDefectOverride() {
@@ -5308,26 +5624,18 @@ function saveReportFindingOverride() {
   if (STATE.activeDefect?.findingId) openFindingDetails();
 }
 
-async function resetDefectOverride() {
+function resetDefectOverride() {
   const id = STATE.reviewFindingId || STATE.activeDefect?.findingId;
   if (!id) return;
-  const det = INSPECTION_CACHE.detections.find(d => d.id === id);
-  if (!det) return;
-  try {
-    const res = await window.CompliQApi.request(`/detections/${encodeURIComponent(id)}`,
-      { method: 'PATCH', body: JSON.stringify({ severity: det.severity_suggested, review_status: 'pending' }) });
-    Object.assign(det, { class: res.detection.class, severity: res.detection.severity, review_status: res.detection.review_status });
-    const f = INSPECTION_CACHE.findings.find(x => x.id === id);
-    if (f) { f.cat = res.detection.severity ?? det.severity_suggested ?? f.cat; f.finding = res.detection.class; f.color = (typeof FINDING_COLOR !== 'undefined' && FINDING_COLOR[f.cat]) || f.color; }
-    const turbine = activeTurbine();
-    renderDefectsTable(turbine);
-    repaintHotspotColors();
-    showDefectReviewBar();
-    if (STATE.activeDefect?.findingId === id) openFindingDetails();
-    showToast('Finding reset', 'success');
-  } catch (e) {
-    showToast(`Not reset: ${e.message}`, 'error');
-  }
+  const map = defectOverrides();
+  delete map[id];
+  writeDefectOverrides(map);
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
+  renderDefectsTable(turbine);
+  repaintHotspotColors();
+  showDefectReviewBar();
+  if (STATE.activeDefect?.findingId === id) openFindingDetails();
+  showToast('Defect override cleared', 'success');
 }
 
 function openFindingDetails() {
@@ -5341,6 +5649,7 @@ function openFindingDetails() {
   STATE.pocPointIndex = view.index;
   const pointLabel = 'P' + String(view.index).padStart(2, '0');
   STATE.reviewFindingId = raw.id;
+  const photos = g97StationCandidates(view.blade, view.surface, view.index);
   STATE.selectedPart = 'blade-' + view.blade;
   STATE.selectedBlade = view.blade;
   STATE.activeDefect = {
@@ -5354,19 +5663,19 @@ function openFindingDetails() {
     intensity: `CAT ${view.cat}`,
     severity: view.cat,
     size: `${view.count} mark${view.count === 1 ? '' : 's'}`,
-    confidence: view.confidence ?? 1,
+    confidence: 1,
     status: 'Open',
     priority: findingPriority(view),
     method: 'Station inspection',
-    inspDate: INSPECTION_CACHE.inspectionDate || '',
-    notes: `Finding: ${escHtml(raw.finding)}. Category CAT ${view.cat}.`,
+    inspDate: 'Kayathar Gamesa G97',
+    notes: `Recorded finding: ${raw.finding}. Shown name: ${view.finding}. Category CAT ${view.cat}.`,
     action: view.cat >= DOT_MIN_CAT ? 'Confirm the category and include this station in the repair scope.' : 'Log the finding and monitor at the next inspection.',
-    campaign: '',
+    campaign: 'Kayathar G97',
     gps: turbine?.gps ? `${turbine.gps.lat}°N, ${turbine.gps.lng}°E` : '',
     findingId: raw.id,
     fromFinding: true,
-    stationImage: '',
-    stationCandidates: []
+    stationImage: photos[0] || '',
+    stationCandidates: photos
   };
   navigateTo('report');
   renderReport();
@@ -5433,8 +5742,13 @@ function reportFindingOptions() {
   const blade = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
   const turbine = STATE.db?.turbines?.find(t => t.id === reportTurbineId()) || STATE.db?.turbines?.[0];
   if (!turbine) return [];
-  const sides = selectedReportSides();
-  return findingsForBlade(blade).filter(row => sides.includes(row.surface));
+  if (isG97Turbine(turbine)) {
+    const sides = selectedReportSides();
+    return reportFilteredFindings(findingsForBlade(blade).filter(row => sides.includes(row.surface)));
+  }
+  return (STATE.db.defects || [])
+    .filter(d => d.assetId === turbine.id && String(d.blade) === String(blade))
+    .map(d => ({ id: d.id, index: 0, cat: d.severity, finding: d.type, demo: true }));
 }
 
 function fillReportDefects(selectId) {
@@ -5470,7 +5784,7 @@ function clearReportViewer(blade, sides) {
 function applyReportDefect() {
   const bladeNow = document.getElementById('report-blade')?.value || STATE.selectedBlade || 'A';
   const sides = selectedReportSides();
-  const rows = findingsForBlade(bladeNow).filter(row => sides.includes(row.surface));
+  const rows = reportFilteredFindings(findingsForBlade(bladeNow).filter(row => sides.includes(row.surface)));
   const currentId = STATE.reviewFindingId || STATE.activeDefect?.findingId;
   const match = rows.find(row => row.id === currentId) || rows[0];
   STATE.selectedTurbineId = reportTurbineId();
@@ -5509,6 +5823,11 @@ function syncReportPicker() {
   const raw = d?.findingId ? rawFinding(d.findingId) : null;
   const bladeSel = document.getElementById('report-blade');
   if (bladeSel) bladeSel.value = raw?.blade || d?.blade || bladeSel.value;
+  document.querySelectorAll('.report-blade-tab').forEach(btn => {
+    const on = btn.dataset.blade === bladeSel?.value;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
   if (raw?.surface) ensureReportSide(raw.surface);
   fillReportDefects(raw?.id || d?.id);
   reportPickerLock = false;
@@ -5525,14 +5844,27 @@ function initReportPicker() {
   refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === reportTurbineId()));
   const bladeSel = document.getElementById('report-blade');
   if (bladeSel && STATE.selectedBlade) bladeSel.value = STATE.selectedBlade;
+  document.querySelectorAll('.report-blade-tab').forEach(btn => {
+    const on = btn.dataset.blade === (bladeSel?.value || STATE.selectedBlade || 'A');
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.addEventListener('click', () => {
+      if (!bladeSel) return;
+      bladeSel.value = btn.dataset.blade;
+      document.querySelectorAll('.report-blade-tab').forEach(item => {
+        const selected = item === btn;
+        item.classList.toggle('is-on', selected);
+        item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      });
+      onFilter(false);
+    });
+  });
   setReportSide(STATE.pocSurface || currentReportSide());
   fillDefectClassSelect(document.getElementById('report-review-name'), '');
-  initReportExportFilters();
   fillReportDefects(STATE.activeDefect?.findingId || STATE.activeDefect?.id);
   const onFilter = (keepSide) => {
     if (reportPickerLock) return;
     STATE.selectedTurbineId = reportTurbineId();
-    initReportExportFilters();
     refreshBladeMenus(STATE.db?.turbines?.find(item => item.id === STATE.selectedTurbineId));
     const blade = bladeSel?.value || STATE.selectedBlade || 'A';
     STATE.selectedBlade = blade;
@@ -5548,19 +5880,6 @@ function initReportPicker() {
   };
   turbineSel.addEventListener('change', () => onFilter(false));
   bladeSel?.addEventListener('change', () => onFilter(false));
-  const bladeOptions = document.querySelector('#report-filter-blades .report-filter-options');
-  if (bladeOptions && !bladeOptions.dataset.bound) {
-    bladeOptions.dataset.bound = '1';
-    bladeOptions.addEventListener('click', event => {
-      const button = event.target.closest('button[data-blade]');
-      if (!button) return;
-      const pressed = button.getAttribute('aria-pressed') === 'true';
-      button.setAttribute('aria-pressed', pressed ? 'false' : 'true');
-      const selected = [...bladeOptions.querySelectorAll('button[data-blade][aria-pressed="true"]')];
-      if (bladeSel) bladeSel.value = selected[0]?.dataset.blade || 'A';
-      onFilter(false);
-    });
-  }
   document.querySelectorAll('.side-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       if (reportPickerLock) return;
@@ -5571,425 +5890,14 @@ function initReportPicker() {
       onFilter(true);
     });
   });
+  document.querySelectorAll('#report-category-filters input, #report-class-filters input').forEach(input => {
+    input.addEventListener('change', () => onFilter(true));
+  });
   document.getElementById('report-defect')?.addEventListener('change', () => {
     if (!reportPickerLock) applyReportDefect();
   });
   if (STATE.activeDefect) syncReportPicker();
   else if (document.getElementById('view-report')?.classList.contains('active')) applyReportDefect();
-}
-
-function initReportExportFilters() {
-  const classMenu = document.querySelector('#report-filter-classes .report-filter-options');
-  if (!classMenu) return;
-  const turbineId = reportTurbineId();
-  const classes = [...new Set([
-    ...DEFECT_CLASSES.map(item => item.name),
-    ...(STATE.db?.defects || [])
-    .filter(row => String(row.assetId) === String(turbineId))
-    .map(row => String(row.type || '').trim()).filter(Boolean)
-  ])]
-    .sort((a, b) => a.localeCompare(b));
-  const makeOptions = (menuId, values, labelFor, keepSelection = false) => {
-    const menu = document.querySelector(`#${menuId} .report-filter-options`);
-    if (!menu) return;
-    const previous = menu.dataset.ready
-      ? new Set([...menu.querySelectorAll('input:checked, button[aria-pressed="true"]')].map(input => input.value || input.dataset.blade))
-      : null;
-    if (menuId === 'report-filter-blades') {
-      const activeBlade = previous ? null : (STATE.selectedBlade || document.getElementById('report-blade')?.value || 'A');
-      menu.innerHTML = values.map(value => {
-        const checked = previous ? previous.has(String(value)) : String(value) === String(activeBlade);
-        return `<button type="button" class="report-blade-choice${checked ? ' is-on' : ''}" data-blade="${escHtml(value)}" aria-pressed="${checked}">Blade ${escHtml(value)}</button>`;
-      }).join('');
-      menu.dataset.ready = '1';
-      return;
-    }
-    menu.innerHTML = values.map(value => {
-      const text = labelFor(value);
-      const checked = previous ? previous.has(String(value)) : true;
-      return `<label><input type="checkbox" value="${escHtml(value)}" ${checked ? 'checked' : ''}>${escHtml(text)}</label>`;
-    }).join('');
-    menu.dataset.ready = '1';
-  };
-  makeOptions('report-filter-blades', ['A', 'B', 'C'], value => `Blade ${value}`);
-  makeOptions('report-filter-categories', [1, 2, 3, 4, 5], value => `CAT ${value} · ${['', 'Cosmetic', 'Minor', 'Moderate', 'Serious', 'Critical'][value]}`);
-  makeOptions('report-filter-classes', classes, value => value);
-}
-
-async function reportImageData(pointId) {
-  const url = await resolvePointImage(pointId);
-  if (!url) return null;
-  return new Promise(resolve => {
-    const image = new Image();
-    image.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        canvas.getContext('2d').drawImage(image, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      } catch { resolve(null); }
-    };
-    image.onerror = () => resolve(null);
-    image.src = url;
-  });
-}
-
-async function generatePDFReport() {
-  const { jsPDF } = window.jspdf || {};
-  if (!jsPDF) { showToast('PDF library not loaded.', 'error'); return; }
-  const turbineId = reportTurbineId();
-  const turbine = STATE.db?.turbines?.find(item => String(item.id) === String(turbineId));
-  if (!turbine) { showToast('Select a turbine first.', 'error'); return; }
-  const button = document.querySelector('.report-download-btn');
-  if (button) { button.disabled = true; button.textContent = 'Preparing report…'; }
-  try {
-  await loadInspectionData(turbine);
-  const selectedValues = id => id === 'report-filter-blades'
-    ? [...document.querySelectorAll(`#${id} button[data-blade][aria-pressed="true"]`)].map(button => button.dataset.blade)
-    : [...document.querySelectorAll(`#${id} input:checked`)].map(input => input.value);
-  const blades = selectedValues('report-filter-blades');
-  const categories = selectedValues('report-filter-categories').map(Number);
-  const classes = selectedValues('report-filter-classes');
-  const inspectionRows = INSPECTION_CACHE.findings.map(row => ({
-    ...row,
-    assetId: turbine.id,
-    type: row.finding,
-    severity: row.cat,
-    station: row.index,
-    inspectionDate: INSPECTION_CACHE.inspectionDate
-  }));
-  const merged = new Map(inspectionRows.map(row => [String(row.id), row]));
-  (STATE.db?.defects || []).filter(row => String(row.assetId) === String(turbine.id)).forEach(row => {
-    merged.set(String(row.id), { ...row, ...(merged.get(String(row.id)) || {}) });
-  });
-  const findings = [...merged.values()].filter(row => {
-    if (String(row.assetId) !== String(turbine.id)) return false;
-    if (!blades.includes(String(row.blade || ''))) return false;
-    if (!categories.includes(Number(row.severity ?? row.cat))) return false;
-    if (!classes.includes(String(row.type || ''))) return false;
-    return true;
-  });
-  if (!findings.length) { showToast('No findings match the selected filters.', 'error'); return; }
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 14;
-  const ink = [0, 49, 53];
-  const teal = [15, 164, 175];
-  const muted = [83, 111, 116];
-  const reportDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const inspectionDate = INSPECTION_CACHE.inspectionDate || turbine.lastInspection || 'Not recorded';
-  const reportNumber = `CQ-${String(turbine.assetId || turbine.id).replace(/[^a-z0-9]/gi, '').toUpperCase()}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-  const sectionPages = new Map();
-  const severityLabel = value => ({ 1: 'Cosmetic', 2: 'Minor', 3: 'Moderate', 4: 'Serious', 5: 'Critical' })[Number(value)] || 'Unrated';
-  const text = (value, x, y, width, size = 9, color = ink, options = {}) => {
-    doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
-    doc.setFontSize(size);
-    doc.setTextColor(...color);
-    const lines = doc.splitTextToSize(String(value ?? '-'), width);
-    doc.text(lines, x, y, { lineHeightFactor: 1.3 });
-    return lines.length * size * 0.42;
-  };
-  const header = (section) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...teal);
-    doc.text('COMPLIQ  /  WIND TURBINE INSPECTION', margin, 12);
-    doc.setTextColor(...muted);
-    doc.setFont('helvetica', 'normal');
-    doc.text(section, pageWidth - margin, 12, { align: 'right' });
-    doc.setDrawColor(210, 228, 230);
-    doc.line(margin, 16, pageWidth - margin, 16);
-  };
-  let y = 24;
-  const newSection = (title, subtitle = '') => {
-    doc.addPage();
-    sectionPages.set(title, doc.internal.getNumberOfPages());
-    header(title);
-    y = 27;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(17);
-    doc.setTextColor(...ink);
-    doc.text(title, margin, y);
-    y += 8;
-    if (subtitle) y += text(subtitle, margin, y, pageWidth - margin * 2, 9, muted) + 5;
-    else y += 4;
-  };
-  const ensureSpace = (needed, section) => {
-    if (y + needed > pageHeight - 20) {
-      doc.addPage();
-      header(section);
-      y = 25;
-    }
-  };
-  const card = (label, value, x, top, width) => {
-    doc.setFillColor(244, 249, 249);
-    doc.setDrawColor(220, 234, 235);
-    doc.roundedRect(x, top, width, 23, 2, 2, 'FD');
-    text(label.toUpperCase(), x + 4, top + 7, width - 8, 7, muted, { bold: true });
-    text(value, x + 4, top + 16, width - 8, 10, ink, { bold: true });
-  };
-  const sectionNames = [...new Set(findings.map(row => `Blade ${row.blade} - ${row.surface || 'Side not recorded'}`))];
-  let coverImage = null;
-  let coverPoint = null;
-  const coverCandidates = INSPECTION_CACHE.points.filter(point =>
-    blades.includes(BLADE_OF[point.blade] || String(point.blade || '')) && point.id
-  ).slice(0, 8);
-  for (const point of coverCandidates) {
-    coverImage = await reportImageData(point.id);
-    if (coverImage) { coverPoint = point; break; }
-  }
-  if (!coverImage) {
-    const firstEvidence = findings.find(row => row.pointId);
-    if (firstEvidence) {
-      coverImage = await reportImageData(firstEvidence.pointId);
-      coverPoint = INSPECTION_CACHE.points.find(point => String(point.id) === String(firstEvidence.pointId)) || null;
-    }
-  }
-
-  // Cover page
-  doc.setFillColor(0, 49, 53);
-  doc.rect(0, 0, pageWidth, 77, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('COMPLIQ  /  REUDE TECHNOLOGIES', margin, 20);
-  doc.setFontSize(25);
-  doc.text('WIND TURBINE', margin, 43);
-  doc.text('INSPECTION REPORT', margin, 54);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text(reportNumber, margin, 66);
-  doc.setTextColor(...ink);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text(turbineLabel(turbine), margin, 96);
-  text(`${turbine.location || turbine.site || 'Location not recorded'}${turbine.state ? `, ${turbine.state}` : ''}`, margin, 105, pageWidth - margin * 2, 10, muted);
-  const gap = 7;
-  const cardWidth = (pageWidth - margin * 2 - gap) / 2;
-  card('Inspection date', inspectionDate, margin, 121, cardWidth);
-  card('Report date', reportDate, margin + cardWidth + gap, 121, cardWidth);
-  card('Manufacturer / model', [turbine.manufacturer, turbine.model].filter(Boolean).join(' ') || 'Not recorded', margin, 149, cardWidth);
-  card('Blade length', turbine.bladeLength ? `${turbine.bladeLength} m` : 'Not recorded', margin + cardWidth + gap, 149, cardWidth);
-  const photoX = margin;
-  const photoY = 180;
-  const photoW = pageWidth - margin * 2;
-  const photoH = 65;
-  doc.setFillColor(239, 246, 247);
-  doc.setDrawColor(214, 228, 230);
-  doc.roundedRect(photoX, photoY, photoW, photoH, 3, 3, 'FD');
-  if (coverImage) {
-    try {
-      const dimensions = doc.getImageProperties(coverImage);
-      const scale = Math.min((photoW - 4) / dimensions.width, (photoH - 4) / dimensions.height);
-      const imageW = dimensions.width * scale;
-      const imageH = dimensions.height * scale;
-      doc.addImage(coverImage, 'JPEG', photoX + (photoW - imageW) / 2, photoY + (photoH - imageH) / 2, imageW, imageH, undefined, 'FAST');
-    } catch { text('Blade inspection image could not be embedded.', photoX + 6, photoY + 34, photoW - 12, 9, muted); }
-  } else {
-    text('Blade inspection image is unavailable for the selected turbine.', photoX + 6, photoY + 34, photoW - 12, 9, muted);
-  }
-  const photoBlade = coverPoint ? (BLADE_OF[coverPoint.blade] || coverPoint.blade) : blades[0];
-  text(`Blade ${photoBlade || '-'} - ${coverPoint?.side || 'Inspection image'}`, photoX + 2, photoY + photoH + 5, photoW - 4, 7, muted);
-  doc.setFillColor(234, 247, 248);
-  doc.roundedRect(margin, 254, pageWidth - margin * 2, 25, 3, 3, 'F');
-  text(`Scope: Blades ${blades.join(', ')} - CAT ${categories.join(', ')} - ${classes.length} defect classes - ${findings.length} findings`, margin + 6, 264, pageWidth - margin * 2 - 12, 9, ink, { bold: true });
-  text(`${sectionNames.length} blade-side sections included`, margin + 6, 273, pageWidth - margin * 2 - 12, 8, muted);
-  doc.setTextColor(190, 70, 55);
-  doc.setFontSize(9);
-  doc.text('RESTRICTED', pageWidth / 2, 280, { align: 'center' });
-
-  // Inspection overview
-  newSection('Inspection overview', 'Report identity, asset information, selected scope, and finding summary.');
-  const overviewRows = [
-    ['Company / organization', turbine.organization || turbine.orgName || 'Not recorded'],
-    ['Location', [turbine.site, turbine.location, turbine.state].filter(Boolean).join(', ') || 'Not recorded'],
-    ['Wind turbine', [turbine.manufacturer, turbine.model].filter(Boolean).join(' ') || turbine.name || turbine.assetId || 'Not recorded'],
-    ['Blade serials', [turbine.bladeA, turbine.bladeB, turbine.bladeC].filter(Boolean).join(', ') || turbine.bladeSerials || 'Not recorded'],
-    ['Inspection date', inspectionDate],
-    ['Blade span', turbine.bladeLength ? `${turbine.bladeLength} m` : 'Not recorded']
-  ];
-  overviewRows.forEach(([label, value]) => {
-    doc.setDrawColor(205, 219, 221);
-    doc.rect(margin, y, 48, 12);
-    doc.rect(margin + 48, y, pageWidth - margin * 2 - 48, 12);
-    text(label, margin + 3, y + 8, 42, 8, ink, { bold: true });
-    text(value, margin + 51, y + 8, pageWidth - margin * 2 - 54, 8);
-    y += 12;
-  });
-  y += 9;
-  text('Summary', margin, y, pageWidth - margin * 2, 12, ink, { bold: true });
-  y += 7;
-  const severityCounts = [1, 2, 3, 4, 5].map(cat => findings.filter(row => Number(row.severity ?? row.cat) === cat).length);
-  const highest = Math.max(0, ...findings.map(row => Number(row.severity ?? row.cat) || 0));
-  const summary = `${findings.length} findings match the selected report criteria. The highest recorded category is CAT ${highest || '-'} (${severityLabel(highest)}). The selected scope covers ${blades.map(b => `Blade ${b}`).join(', ')}. Findings are grouped below by blade and side.`;
-  y += text(summary, margin, y, pageWidth - margin * 2, 9, ink) + 8;
-  const statGap = 4;
-  const statW = (pageWidth - margin * 2 - statGap * 4) / 5;
-  severityCounts.forEach((count, index) => card(`CAT ${index + 1}`, `${count} findings`, margin + index * (statW + statGap), y, statW));
-  y += 31;
-  y += text('Selected criteria', margin, y, pageWidth - margin * 2, 10, ink, { bold: true }) + 2;
-  y += text(`Blades: ${blades.map(b => `Blade ${b}`).join(', ')}\nCategories: ${categories.map(cat => `CAT ${cat} - ${severityLabel(cat)}`).join(', ')}\nDefect classes: ${classes.join(', ')}`, margin, y, pageWidth - margin * 2, 9, muted) + 4;
-
-  // Report contents
-  newSection('Contents', '');
-  const contents = ['Inspection overview', 'Severity classification', ...sectionNames, 'Consolidated findings', 'Conclusion and recommendations'];
-  const contentsPage = doc.internal.getNumberOfPages();
-  contents.forEach((item, index) => {
-    text(`${String(index + 1).padStart(2, '0')}   ${item}`, margin, y, pageWidth - margin * 2 - 15, 10, ink);
-    doc.setDrawColor(220, 230, 231);
-    doc.line(margin + 30, y + 1, pageWidth - margin - 15, y + 1);
-    doc.text('-', pageWidth - margin, y, { align: 'right' });
-    y += 12;
-  });
-
-  // Severity classification
-  newSection('Severity classification', 'Finding categories follow the CAT scale recorded by the inspection system.');
-  const severityGuidance = [
-    ['CAT 5 - Critical', 'Critical damage requiring immediate engineering review and operational controls.'],
-    ['CAT 4 - Serious', 'Serious damage requiring prompt repair planning and close monitoring.'],
-    ['CAT 3 - Moderate', 'Damage requiring planned maintenance and review at the next inspection.'],
-    ['CAT 2 - Minor', 'Minor condition; track and address through routine maintenance.'],
-    ['CAT 1 - Cosmetic', 'Cosmetic condition; document and monitor for change.']
-  ];
-  severityGuidance.forEach(([label, description]) => {
-    ensureSpace(26, 'Severity classification');
-    doc.setFillColor(242, 248, 248);
-    doc.roundedRect(margin, y, pageWidth - margin * 2, 22, 2, 2, 'F');
-    text(label, margin + 4, y + 7, 48, 9, teal, { bold: true });
-    text(description, margin + 53, y + 7, pageWidth - margin * 2 - 58, 8, ink);
-    y += 27;
-  });
-
-  // Findings grouped by selected blade and inspected side
-  const imageDataCache = new Map();
-  for (const blade of blades) {
-    for (const side of ['PS', 'SS', 'LE', 'TE']) {
-      const group = findings.filter(row => String(row.blade) === blade && (row.surface === side || (!row.surface && side === 'PS')));
-      if (!group.length) continue;
-      newSection(`Blade ${blade} - ${({ PS: 'Pressure side', SS: 'Suction side', LE: 'Leading edge', TE: 'Trailing edge' })[side]}`, `${group.length} selected finding${group.length === 1 ? '' : 's'} - categories and defect classes filtered as requested.`);
-      group.sort((a, b) => Number(a.station ?? a.index ?? 0) - Number(b.station ?? b.index ?? 0) || Number(b.severity ?? b.cat) - Number(a.severity ?? a.cat));
-      for (const row of group) {
-        const station = Number(row.station ?? row.index);
-        const cat = Number(row.severity ?? row.cat);
-        const details = [
-          `Category: CAT ${cat} - ${severityLabel(cat)}`,
-          `Defect class: ${row.type || row.finding || 'Not recorded'}`,
-          `Finding ID: ${row.id || 'Not recorded'}`,
-          `Station: ${Number.isFinite(station) ? `P${String(station).padStart(2, '0')} (${Math.round((station - 1) / 19 * 100)}% span)` : row.location || 'Not recorded'}`,
-          row.confidence != null ? `Confidence: ${(Number(row.confidence) * 100).toFixed(1)}%` : null,
-          row.length_mm != null ? `Measured length: ${Number(row.length_mm).toFixed(1)} mm` : null,
-          row.width_mm != null ? `Measured width: ${Number(row.width_mm).toFixed(1)} mm` : null,
-          row.review_status ? `Review status: ${row.review_status}` : null,
-          row.trend ? `Trend: ${row.trend}` : null
-        ].filter(Boolean);
-        const description = `${row.type || row.finding || 'Finding'} recorded at ${Number.isFinite(station) ? `station P${String(station).padStart(2, '0')}` : 'an unnumbered location'} on Blade ${blade}, ${side}.`;
-        const imageUrl = row.pointId ? await resolvePointImage(row.pointId) : null;
-        let imageData = imageDataCache.get(row.pointId);
-        if (imageUrl && imageData === undefined) {
-          imageData = await reportImageData(row.pointId);
-          imageDataCache.set(row.pointId, imageData);
-        }
-        const textWidth = imageData ? 112 : pageWidth - margin * 2 - 10;
-        const detailText = details.join('\n');
-        const detailLines = doc.splitTextToSize(`${description}\n${detailText}`, textWidth - 5);
-        const blockHeight = Math.max(imageData ? 43 : 31, 12 + detailLines.length * 4.3);
-        ensureSpace(blockHeight + 7, `Blade ${blade} · ${side}`);
-        doc.setFillColor(248, 251, 251);
-        doc.setDrawColor(215, 230, 231);
-        doc.roundedRect(margin, y, pageWidth - margin * 2, blockHeight, 2, 2, 'FD');
-        doc.setFillColor(...teal);
-        doc.roundedRect(margin, y, 2.2, blockHeight, 1, 1, 'F');
-        text(`P${Number.isFinite(station) ? String(station).padStart(2, '0') : '-'}  -  CAT ${cat} ${severityLabel(cat)}`, margin + 6, y + 7, textWidth, 9, ink, { bold: true });
-        text(`${row.type || row.finding || 'Finding'}  -  ID ${row.id || '-'}`, margin + 6, y + 14, textWidth, 8, teal, { bold: true });
-        text(detailText, margin + 6, y + 21, textWidth, 7.5, muted);
-        if (imageData) {
-          try { doc.addImage(imageData, 'JPEG', pageWidth - margin - 55, y + 4, 49, 35, undefined, 'FAST'); } catch { /* omit unsupported image */ }
-        }
-        y += blockHeight + 5;
-      }
-    }
-  }
-
-  // Consolidated findings table
-  newSection('Consolidated findings', `${findings.length} findings included by the selected report criteria.`);
-  const cols = [margin, margin + 23, margin + 43, margin + 70, margin + 112, margin + 145, pageWidth - margin];
-  const tableHeaders = ['ID', 'Blade', 'Side', 'Station', 'Defect class', 'Category'];
-  const drawTableHeader = () => {
-    doc.setFillColor(...ink);
-    doc.rect(margin, y - 5, pageWidth - margin * 2, 10, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(255, 255, 255);
-    tableHeaders.forEach((label, i) => doc.text(label, cols[i] + 1, y + 1));
-    y += 10;
-  };
-  drawTableHeader();
-  findings.forEach((row, index) => {
-    ensureSpace(11, 'Consolidated findings');
-    if (y === 25) drawTableHeader();
-    const values = [String(row.id || '-'), `Blade ${row.blade || '-'}`, row.surface || '-', row.station ?? row.index ?? '-', row.type || row.finding || '-', `CAT ${row.severity ?? row.cat ?? '-'}`];
-    if (index % 2 === 0) { doc.setFillColor(242, 248, 248); doc.rect(margin, y - 5, pageWidth - margin * 2, 9, 'F'); }
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...ink);
-    values.forEach((value, i) => doc.text(doc.splitTextToSize(String(value), cols[i + 1] - cols[i] - 2)[0] || '', cols[i] + 1, y + 1));
-    y += 9;
-  });
-
-  // Conclusions and follow-up guidance are driven by included severity levels.
-  newSection('Conclusion and recommendations', 'This section reflects only findings included by the report filters.');
-  const conclusion = highest >= 4
-    ? `The filtered findings include CAT ${highest} (${severityLabel(highest)}) items. Arrange engineering review and determine appropriate operating controls before closing the findings.`
-    : `The highest filtered finding is CAT ${highest || '-'} (${severityLabel(highest)}). Review the listed conditions and track them through the turbine maintenance and inspection cycle.`;
-  y += text(conclusion, margin, y, pageWidth - margin * 2, 10, ink) + 8;
-  const recommendations = [
-    `Review each CAT ${highest || '1'} or higher finding against its source image and the applicable maintenance procedure.`,
-    'Record corrective actions and verification evidence against each finding ID.',
-    'Re-inspect the selected blade stations during the next scheduled inspection to assess change.'
-  ];
-  recommendations.forEach((item, index) => {
-    ensureSpace(18, 'Conclusion and recommendations');
-    text(`${index + 1}.`, margin, y, 8, 9, teal, { bold: true });
-    const h = text(item, margin + 8, y, pageWidth - margin * 2 - 8, 9, ink);
-    y += Math.max(9, h) + 4;
-  });
-
-  // Consistent report header and restricted footer, including final page numbers.
-  const pageCount = doc.internal.getNumberOfPages();
-  doc.setPage(contentsPage);
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 18, pageWidth, pageHeight - 32, 'F');
-  header('Contents');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(...ink);
-  doc.text('Contents', margin, 27);
-  let contentsY = 39;
-  contents.forEach(item => {
-    const page = sectionPages.get(item);
-    text(item, margin, contentsY, pageWidth - margin * 2 - 15, 9, ink);
-    doc.setDrawColor(220, 230, 231);
-    doc.line(margin + 30, contentsY + 1, pageWidth - margin - 15, contentsY + 1);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...muted);
-    doc.text(page ? String(page) : '-', pageWidth - margin, contentsY, { align: 'right' });
-    contentsY += 11;
-  });
-  for (let page = 2; page <= pageCount; page++) {
-    doc.setPage(page);
-    doc.setDrawColor(220, 230, 231);
-    doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...muted);
-    doc.text(reportNumber, margin, pageHeight - 8);
-    doc.setTextColor(185, 65, 52);
-    doc.text('RESTRICTED', pageWidth / 2, pageHeight - 8, { align: 'center' });
-    doc.setTextColor(...muted);
-    doc.text(`Page ${page} of ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
-  }
-  const safeName = String(turbine.assetId || turbine.name || 'turbine').replace(/[^a-z0-9_-]+/gi, '_');
-  doc.save(`CompliQ_${safeName}_inspection_report.pdf`);
-  } catch (error) {
-    console.error('Could not generate inspection report:', error);
-    showToast('Could not generate the report. Please try again.', 'error');
-  } finally {
-    if (button) { button.disabled = false; button.textContent = 'Download report'; }
-  }
 }
 
 function clearCompareHost() {
@@ -6040,14 +5948,14 @@ function applyFindingsSheetHeight(sheet, px) {
   const h = Math.max(min, Math.min(max, Math.round(px)));
   sheet.style.height = h + 'px';
   sheet.style.maxHeight = h + 'px';
-  try { localStorage.setItem(organizationStorageKey(SHEET_HEIGHT_KEY), String(h)); } catch (_) {}
+  try { localStorage.setItem(SHEET_HEIGHT_KEY, String(h)); } catch (_) {}
   return h;
 }
 
 function restoreFindingsSheetHeight(sheet) {
   if (!sheet?.classList.contains('is-open')) return;
   let saved = 0;
-  try { saved = Number(localStorage.getItem(organizationStorageKey(SHEET_HEIGHT_KEY))) || 0; } catch (_) {}
+  try { saved = Number(localStorage.getItem(SHEET_HEIGHT_KEY)) || 0; } catch (_) {}
   if (saved) applyFindingsSheetHeight(sheet, saved);
 }
 
@@ -6162,12 +6070,14 @@ function buildPocPoints(turbine) {
   const points = [];
   POC_SURFACES.forEach(surface => {
     for (let i = 1; i <= 20; i++) {
-      const ip = inspectionPointForStation(blade, surface, i);
-      const metres = ip?.distance_m != null ? +Number(ip.distance_m).toFixed(2) : +pointMetres(i, span).toFixed(2);
+      const metres = +pointMetres(i, span).toFixed(2);
       const pctVal = Math.round((metres / span) * 100);
+      const legacy = blade === 'A' && surface === 'PS' ? POC_STATION_MEDIA[i] : null;
       const stationFindings = findingsForStation(blade, surface, i);
       const marked = dotFinding(stationFindings);
       const worst = worstFinding(stationFindings);
+      const stationCandidates = g97StationCandidates(blade, surface, i);
+      const stationImage = stationCandidates[0] || null;
       points.push({
         key: surface + '-' + i,
         blade,
@@ -6184,16 +6094,13 @@ function buildPocPoints(turbine) {
         severity: marked?.cat || 0,
         color: marked?.color || 'transparent',
         defectLabel: worst ? stationFindings.map(row => `${row.finding} · CAT ${row.cat}`).join(' | ') : '',
-        short: surface + ' station',
-        station: pctVal + '% ' + surface + ' · root/hub → tip',
-        stationImage: null,
-        stationCandidates: [],
-        annotated: null,
-        pointId: ip?.id || null,
-        status: ip?.status || null,
-        mmPerPx: ip?.mm_per_px || null,
-        legacyAnnotated: null,
-        annotationImage: null
+        short: legacy?.short || (surface + ' station'),
+        station: legacy?.station || (pctVal + '% ' + surface + ' · root/hub → tip'),
+        stationImage,
+        stationCandidates,
+        annotated: stationImage || legacy?.annotated || null,
+        legacyAnnotated: legacy?.annotated || null,
+        annotationImage: legacy?.annotationImage || null
       });
     }
   });
@@ -6220,8 +6127,68 @@ function defectSizeFromBbox(bbox) {
   return Math.round(w * 100) + '×' + Math.round(h * 100) + '% frame (~' + area.toFixed(1) + '% area)';
 }
 
+async function loadBladePocAnnotations() {
+  if (BLADE_POC.ready) return BLADE_POC.annotations;
+  try {
+    const res = await fetch('Annotated%20Images/defect_annotations.json');
+    if (!res.ok) throw new Error('Failed to load annotations');
+    BLADE_POC.annotations = await res.json();
+  } catch (err) {
+    console.warn('Blade POC annotations unavailable:', err);
+    BLADE_POC.annotations = [];
+  }
+  BLADE_POC.ready = true;
+  return BLADE_POC.annotations;
+}
+
+async function loadStationBoxes() {
+  if (STATION_BOXES.ready) return STATION_BOXES.byKey;
+  if (STATION_BOXES.loading) return STATION_BOXES.loading;
+  STATION_BOXES.loading = (async () => {
+    try {
+      const res = await fetch('station_boxes.json?v=defectHit1');
+      STATION_BOXES.byKey = res.ok ? await res.json() : {};
+    } catch (err) {
+      console.warn('Station boxes unavailable:', err);
+      STATION_BOXES.byKey = {};
+    }
+    STATION_BOXES.ready = true;
+    return STATION_BOXES.byKey;
+  })();
+  return STATION_BOXES.loading;
+}
+
+function boxesForPocPoint(pt) {
+  if (!pt) return [];
+  const blade = pt.blade || activeBladeLetter();
+  return STATION_BOXES.byKey[`${blade}-${pt.surface}-${pt.pointIndex}`] || [];
+}
+
 function findingCode(row) {
   return (String(row?.finding || '').match(/^(C\d+|H\d+|D\d+)/i) || [])[0]?.toUpperCase() || '';
+}
+
+function matchFindingForBox(findings, box) {
+  const rows = findings || [];
+  const code = String(box?.code || '').toUpperCase();
+  if (code) {
+    const hit = rows.find(row => findingCode(row) === code || String(row.finding || '').toUpperCase().startsWith(code));
+    if (hit) return hit;
+  }
+  const label = String(box?.label || '').toLowerCase();
+  if (label) {
+    const hit = rows.find(row => {
+      const name = String(row.finding || '').toLowerCase();
+      return name.includes(label.slice(0, 18)) || label.includes(name.slice(0, 18));
+    });
+    if (hit) return hit;
+  }
+  return rows[0] || null;
+}
+
+function defectsForPocPoint(pt) {
+  if (!pt?.annotationImage) return [];
+  return BLADE_POC.annotations.filter(d => d.image === pt.annotationImage);
 }
 
 /** Editable blade-profile schematic (data units match POC_X/Y box). */
@@ -6376,11 +6343,13 @@ function syncBladeRulerCursor(pt) {
 }
 
 async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
-  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
-  await loadInspectionData(turbine);
+  await loadBladePocAnnotations();
+  await loadBladeFindings();
+  await loadStationBoxes();
   if (STATE.activeTab !== 'asset' || epoch !== STATE.assetEpoch) return;
   const container = document.getElementById('blade-schematic');
   if (!container) return;
+  const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const span = bladeSpanM(turbine);
   focusCriticalFinding(activeBladeLetter());
   const points = buildPocPoints(turbine);
@@ -6388,7 +6357,7 @@ async function renderBladeAPocProfile(epoch = STATE.assetEpoch) {
 
   container.innerHTML = `
     <div class="asset-bp-wrap">
-      <div class="asset-bp-meta">${escHtml(turbine?.manufacturer || '')} ${escHtml(turbine?.model || '')} · <strong>${span} m</strong> · ${escHtml(bladeDisplayName(activeBladeLetter()))} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
+      <div class="asset-bp-meta">Gamesa G97 2 MW · <strong>${span} m</strong> · ${escHtml(bladeDisplayName(activeBladeLetter()))} · P1 root/hub → P20 tip · SS / LE / PS / TE</div>
       <div class="asset-bp-profile" id="asset-bp-profile">
         <div class="asset-bp-stage">
           ${bladeProfileSvgMarkup(span, points, turbine)}
@@ -6498,28 +6467,13 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
   const label = document.getElementById('asset-poc-station-label');
   const viewport = document.getElementById('asset-poc-viewport');
   const src = pt.stationImage || pt.legacyAnnotated || pt.annotated;
-  const hasInspectionPhoto = !!(pt.pointId && pt.status === 'inspected');
-  const requestedPointId = pt.pointId;
-  const requestedTurbineId = String(turbine?.id ?? '');
-  const requestedEpoch = STATE.assetEpoch;
-  const isCurrentSelection = () => {
-    if (!hasInspectionPhoto) return true;
-    const currentTurbine = STATE.db?.turbines?.find(x => sameId(x.id, STATE.selectedTurbineId));
-    const currentPoint = currentTurbine && getSelectedPocPoint(currentTurbine);
-    return annotated?.isConnected && requestedEpoch === STATE.assetEpoch &&
-      sameId(currentTurbine?.id, requestedTurbineId) && currentPoint?.pointId === requestedPointId;
-  };
 
-  if (src || hasInspectionPhoto) {
+  if (src) {
     if (viewport) viewport.classList.remove('empty');
     if (annotated) {
       annotated.style.display = '';
       annotated.dataset.fallback = '0';
-      annotated.onload = null;
-      annotated.onerror = null;
-      annotated.removeAttribute('src');
       annotated.onload = () => {
-        if (!isCurrentSelection()) return;
         fitAnnotatedImage();
         renderPocBboxOverlay(pt, turbine);
         clearMeasure('asset');
@@ -6531,14 +6485,6 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
         : [src];
       let candidateIndex = 0;
       annotated.onerror = () => {
-        if (hasInspectionPhoto) {
-          if (!isCurrentSelection()) return;
-          annotated.style.display = 'none';
-          if (viewport) viewport.classList.add('empty');
-          if (label) label.textContent = pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine) + ' — station image missing';
-          clearPocBboxOverlay();
-          return;
-        }
         candidateIndex += 1;
         if (candidateIndex < candidates.length) {
           annotated.src = encodeURI(candidates[candidateIndex]);
@@ -6554,33 +6500,14 @@ function selectAssetPocPoint(surface, pointIndex, findingId) {
         if (label) label.textContent = pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine) + ' — station image missing';
         clearPocBboxOverlay();
       };
+      annotated.src = encodeURI(candidates[0]);
       annotated.alt = pt.surface + ' ' + pt.point + ' ' + pt.station;
-      if (hasInspectionPhoto) {
-        resolvePointImage(requestedPointId).then(url => {
-          if (!url || !isCurrentSelection()) {
-            if (!url && isCurrentSelection()) {
-              annotated.style.display = 'none';
-              if (viewport) viewport.classList.add('empty');
-              if (label) label.textContent = pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine) + ' — station image missing';
-              clearPocBboxOverlay();
-            }
-            return;
-          }
-          annotated.src = url;
-          if (annotated.complete && annotated.naturalWidth) {
-            fitAnnotatedImage();
-            renderPocBboxOverlay(pt, turbine);
-          }
-        });
-      } else {
-        annotated.src = encodeURI(candidates[0]);
-        if (annotated.complete && annotated.naturalWidth) {
-          fitAnnotatedImage();
-          renderPocBboxOverlay(pt, turbine);
-        }
+      if (annotated.complete && annotated.naturalWidth) {
+        fitAnnotatedImage();
+        renderPocBboxOverlay(pt, turbine);
       }
     }
-    if (label) label.textContent = bladeSerial(pt.blade, turbine) + ' · ' + pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine) + (hasInspectionPhoto ? ' · loading photo…' : '');
+    if (label) label.textContent = bladeSerial(pt.blade, turbine) + ' · ' + pt.surface + ' ' + pt.point + ' · ' + formatRadial(pt, turbine);
   } else {
     if (annotated) {
       annotated.removeAttribute('src');
@@ -6605,30 +6532,68 @@ function clearPocBboxOverlay() {
 function renderPocBboxOverlay(pt, turbine) {
   const svg = document.getElementById('asset-poc-bbox-overlay');
   const img = document.getElementById('asset-poc-annotated');
+  const stage = document.getElementById('asset-poc-stage');
   if (!svg || !img || !img.naturalWidth) return;
+
   const w = img.naturalWidth;
   const h = img.naturalHeight;
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('width', String(w));
   svg.setAttribute('height', String(h));
-  const stage = document.getElementById('asset-poc-stage');
-  if (stage) { stage.style.width = w + 'px'; stage.style.height = h + 'px'; }
+  if (stage) {
+    stage.style.width = w + 'px';
+    stage.style.height = h + 'px';
+  }
+
   const selectedId = STATE.pocSelectedDefectId;
-  const detections = inspectionDetectionsForPoint(pt);
-  svg.classList.remove('isolating');
-  if (!detections.length) { svg.innerHTML = ''; return; }
+  const boxes = boxesForPocPoint(pt);
   const findings = findingsForStation(pt.blade || activeBladeLetter(), pt.surface, pt.pointIndex);
-  svg.innerHTML = detections.map(d => {
-    const x1 = Number(d.x_min), y1 = Number(d.y_min), x2 = Number(d.x_max), y2 = Number(d.y_max);
+  svg.classList.remove('isolating');
+
+  if (boxes.length) {
+    const painted = boxes.map((box, i) => ({
+      box,
+      i,
+      area: Math.abs((box.bbox_norm[2] - box.bbox_norm[0]) * (box.bbox_norm[3] - box.bbox_norm[1]))
+    })).sort((a, b) => b.area - a.area);
+    svg.innerHTML = painted.map(({ box, i }) => {
+      const finding = matchFindingForBox(findings, box);
+      const col = finding?.color || FINDING_COLOR[box.cat] || '#0FA4AF';
+      const fid = finding?.id || '';
+      const on = !!(fid && selectedId === fid && (STATE.pocPopupBoxIndex == null || STATE.pocPopupBoxIndex === i));
+      const pts = (box.poly || []).map(([x, y]) => `${(x * w).toFixed(1)},${(y * h).toFixed(1)}`).join(' ');
+      const title = `${box.code || ''} ${finding?.finding || box.label || ''}`.trim();
+      return `<g class="bbox-hit${on ? ' is-on' : ''}" data-box="${i}" data-finding-id="${escHtml(fid)}" data-code="${escHtml(box.code || '')}" style="--finding:${col}">
+        <polygon points="${pts}"><title>${escHtml(title)}</title></polygon>
+      </g>`;
+    }).join('');
+    bindPocBboxClicks();
+    const popup = document.getElementById('asset-defect-popup');
+    if (popup && !popup.hidden && STATE.pocPopupBoxIndex != null && boxes[STATE.pocPopupBoxIndex]) {
+      placeDefectPopup(boxes[STATE.pocPopupBoxIndex]);
+    }
+    return;
+  }
+
+  const defects = defectsForPocPoint(pt);
+  if (!defects.length) {
+    svg.innerHTML = '';
+    return;
+  }
+  svg.innerHTML = defects.map(d => {
+    if (!Array.isArray(d.bbox_norm) || d.bbox_norm.length < 4) return '';
+    const [x1, y1, x2, y2] = d.bbox_norm.map(Number);
     const X = x1 * w, Y = y1 * h, WW = (x2 - x1) * w, HH = (y2 - y1) * h;
-    const finding = findings.find(f => f.id === d.id);
-    const cat = finding?.cat || d.severity || d.severity_suggested || 1;
-    const col = (typeof FINDING_COLOR !== 'undefined' && FINDING_COLOR[cat]) || '#0FA4AF';
+    const col = DEFECT_SEV_COLOR[d.severity] || '#0FA4AF';
+    const geo = defectRadialMetrics(pt, d, turbine);
     const on = selectedId === d.id;
-    return `<g class="bbox-all${on ? ' is-on' : ''}" data-id="${escHtml(d.id)}" onclick="selectPocDefect('${escHtml(d.id)}')">
-      <rect x="${X.toFixed(1)}" y="${Y.toFixed(1)}" width="${WW.toFixed(1)}" height="${HH.toFixed(1)}" fill="transparent"
-        stroke="${col}" stroke-width="${Math.max(2, w * 0.0025)}" opacity="${on ? 1 : 0.85}"/>
-    </g>`;
+    return `
+      <g class="bbox-all${on ? ' is-on' : ''}" data-id="${d.id}" onclick="selectPocDefect('${d.id}')">
+        <rect x="${X}" y="${Y}" width="${WW}" height="${HH}" fill="transparent"
+          stroke="${col}" stroke-width="${Math.max(2, w * 0.0025)}" opacity="${on ? 1 : 0.85}"/>
+        <circle cx="${geo.pin.cx * w}" cy="${geo.pin.cy * h}" r="${Math.max(4, w * 0.006)}"
+          fill="${col}" stroke="#041018" stroke-width="1.5"/>
+      </g>`;
   }).join('');
 }
 
@@ -6652,18 +6617,15 @@ function bindPocBboxClicks() {
 function pickPocDefectBox(findingId, boxIndex) {
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const pt = getSelectedPocPoint(turbine);
-  const detections = inspectionDetectionsForPoint(pt);
-  const det = detections[boxIndex] || detections.find(d => d.id === findingId);
+  const boxes = boxesForPocPoint(pt);
+  const box = boxes[boxIndex];
   const findings = findingsForStation(pt.blade || activeBladeLetter(), pt.surface, pt.pointIndex);
-  const finding = (findingId && findings.find(row => row.id === findingId)) || (det ? findings.find(f => f.id === det.id) : null);
+  const finding = (findingId && findings.find(row => row.id === findingId)) || (box ? matchFindingForBox(findings, box) : null);
   STATE.pocSelectedDefectId = finding?.id || findingId || null;
   STATE.pocPopupBoxIndex = Number.isFinite(boxIndex) ? boxIndex : null;
   STATE.reviewFindingId = finding?.id || null;
   renderDefectsTable(turbine);
-  if (det) {
-    const box = { bbox_norm: [Number(det.x_min), Number(det.y_min), Number(det.x_max), Number(det.y_max)] };
-    showDefectPopup(finding, box, pt, turbine);
-  }
+  showDefectPopup(finding, box, pt, turbine);
 }
 
 function openFindingsSheet() {
@@ -6746,14 +6708,13 @@ function initDefectPopup() {
 function focusPocDefectInView(pt, turbine) {
   const img = document.getElementById('asset-poc-annotated');
   const viewport = document.getElementById('asset-poc-viewport');
-  const d = inspectionDetectionsForPoint(pt).find(x => x.id === STATE.pocSelectedDefectId);
+  const d = defectsForPocPoint(pt).find(x => x.id === STATE.pocSelectedDefectId);
   if (!d || !img?.naturalWidth || !viewport) {
     renderPocBboxOverlay(pt, turbine);
     return;
   }
-  const det = { ...d, bbox_norm: [Number(d.x_min), Number(d.y_min), Number(d.x_max), Number(d.y_max)] };
-  const geo = defectRadialMetrics(pt, det, turbine);
-  const x1 = Number(d.x_min), y1 = Number(d.y_min), x2 = Number(d.x_max), y2 = Number(d.y_max);
+  const geo = defectRadialMetrics(pt, d, turbine);
+  const [x1, y1, x2, y2] = d.bbox_norm.map(Number);
   const bw = Math.max(0.04, x2 - x1);
   const bh = Math.max(0.04, y2 - y1);
   const fit = Math.min(
@@ -6783,11 +6744,10 @@ function reviewPocDefect(surface, pointIndex, defectId) {
   }
   renderDefectsTable(turbine);
   focusPocDefectInView(pt, turbine);
-  const d = inspectionDetectionsForPoint(pt).find(x => x.id === defectId);
+  const d = defectsForPocPoint(pt).find(x => x.id === defectId);
   if (d) {
-    const det = { ...d, bbox_norm: [Number(d.x_min), Number(d.y_min), Number(d.x_max), Number(d.y_max)] };
-    const geo = defectRadialMetrics(pt, det, turbine);
-    showToast(`${pt.point}-${escHtml(d.id)}: ${escHtml(d.class)} · ${geo.distRoot} from root · ${geo.location}`, 'success');
+    const geo = defectRadialMetrics(pt, d, turbine);
+    showToast(`${pt.point}-${d.id}: ${d.defect_class} · ${geo.distRoot} from root · ${geo.location}`, 'success');
   }
 }
 
@@ -6813,8 +6773,7 @@ const ANNO_VIEW = { scale: 1, min: 0.05, max: 5, tx: 0, ty: 0, dragging: false, 
 function stepAssetPocPoint(delta) {
   const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
   const surface = STATE.pocSurface || 'PS';
-  const points = buildPocPoints(turbine).filter(p => p.surface === surface &&
-    ((p.pointId && p.status === 'inspected') || p.stationImage || p.annotated));
+  const points = buildPocPoints(turbine).filter(p => p.surface === surface && (p.stationImage || p.annotated));
   if (!points.length) return;
   let idx = points.findIndex(p => p.pointIndex === STATE.pocPointIndex);
   if (idx < 0) idx = delta > 0 ? 0 : points.length - 1;
@@ -6838,12 +6797,8 @@ function bindAnnotatedViewerControls() {
     const popup = document.getElementById('asset-defect-popup');
     if (popup && !popup.hidden && STATE.pocPopupBoxIndex != null) {
       const turbine = STATE.db?.turbines?.find(x => x.id === STATE.selectedTurbineId) || STATE.db?.turbines?.[0];
-      const detections = inspectionDetectionsForPoint(getSelectedPocPoint(turbine));
-      const det = detections[STATE.pocPopupBoxIndex];
-      if (det) {
-        const box = { bbox_norm: [Number(det.x_min), Number(det.y_min), Number(det.x_max), Number(det.y_max)] };
-        placeDefectPopup(box);
-      }
+      const box = boxesForPocPoint(getSelectedPocPoint(turbine))[STATE.pocPopupBoxIndex];
+      if (box) placeDefectPopup(box);
     }
   };
 
@@ -6961,31 +6916,8 @@ function fitAnnotatedImage() {
 // ══════════════════════════════════════════════════
 // 19. MAIN INIT
 // ══════════════════════════════════════════════════
-async function initApp() {
+function initApp() {
   STATE.db = loadDB();
-  if (window.CompliQApi?.hasSession()) {
-    try {
-      const remote = await CompliQApi.request(`/data/${DB_KEY}`);
-      if (remote && Array.isArray(remote.turbines) && Array.isArray(remote.defects)) {
-        STATE.db = remote;
-        localStorage.setItem(organizationStorageKey(DB_KEY), JSON.stringify(remote));
-      } else {
-        await CompliQApi.request(`/data/${DB_KEY}`, { method: 'PUT', body: JSON.stringify(STATE.db) });
-      }
-    } catch (error) {
-      console.error('Could not load fleet data from MongoDB:', error.message);
-      showToast('MongoDB is unavailable. Showing this browser’s saved fleet data.', 'error');
-    }
-  }
-  // Turbines the ML team added from CompliQ Inspection Studio live in the database; show them in the fleet too.
-  try { await window.CompliQInspections?.mergeIntoFleet(STATE.db); }
-  catch (error) { console.error('Could not merge inspection turbines:', error.message); }
-  try { await loadPublishedAnalyticsDefects(); }
-  catch (error) {
-    console.error('Could not load published inspection anomalies:', error.message);
-    showToast('Published inspection findings could not be loaded; analytics may be incomplete.', 'error');
-  }
-  if (currentOrganizationKey() !== 'reudetechnologies') NOTIFICATIONS = [];
   initFleetToolbar();
   initBgCanvas();
   setupNav();
@@ -6994,6 +6926,8 @@ async function initApp() {
   renderFleetGrid();
   renderAssetList();
   renderNotifications();
+  loadBladePocAnnotations();
+  loadStationBoxes();
   initDefectPopup();
   initSidebarCollapse();
   initProfileMenu();
@@ -7005,13 +6939,12 @@ async function initApp() {
   activateTab('analytics');
 
   // Start MQTT simulation
-  if (STATE.db.turbines.length) {
+  loadBladeFindings().then(() => {
     initReportPicker();
     applyShareHash();
-  }
+  });
   setInterval(() => {
     // Randomly fluctuate wind speeds
-    if (!STATE.db.turbines.length) return;
     STATE.db.turbines.forEach(t => {
       t.windSpeed = Math.max(5, Math.min(20, t.windSpeed + (Math.random() - 0.5) * 0.5));
       t.windSpeed = parseFloat(t.windSpeed.toFixed(1));
